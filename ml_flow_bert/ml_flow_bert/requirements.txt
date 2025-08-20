@@ -1,6 +1,0 @@
-tensorflow
-transformers
-mlflow
-scikit-learn
-pandas
-numpy
