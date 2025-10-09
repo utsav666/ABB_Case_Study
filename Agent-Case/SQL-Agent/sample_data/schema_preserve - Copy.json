@@ -1,0 +1,155 @@
+{
+  "tables": {
+    "Movie": {
+      "type": "table",
+      "columns": {
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": true },
+        "title": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "year": { "type": "INTEGER", "notnull": false, "default": null, "is_pk": false },
+        "rating": { "type": "REAL", "notnull": false, "default": null, "is_pk": false },
+        "num_votes": { "type": "INTEGER", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["MID"],
+      "foreign_keys": []
+    },
+    "Person": {
+      "type": "table",
+      "columns": {
+        "PID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": true },
+        "Name": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false },
+        "DOB": { "type": "DATE", "notnull": false, "default": null, "is_pk": false },
+        "Gender": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["PID"],
+      "foreign_keys": []
+    },
+    "Genre": {
+      "type": "table",
+      "columns": {
+        "GID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "Name": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["GID"],
+      "foreign_keys": []
+    },
+    "Language": {
+      "type": "table",
+      "columns": {
+        "LAID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "Name": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["LAID"],
+      "foreign_keys": []
+    },
+    "Country": {
+      "type": "table",
+      "columns": {
+        "CID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "Name": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["CID"],
+      "foreign_keys": []
+    },
+    "Location": {
+      "type": "table",
+      "columns": {
+        "LID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "Name": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
+      },
+      "primary_key": ["LID"],
+      "foreign_keys": []
+    },
+
+    "M_Producer": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "PID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["PID"], "to_table": "Person", "to_columns": ["PID"] }
+      ]
+    },
+    "M_Director": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "PID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["PID"], "to_table": "Person", "to_columns": ["PID"] }
+      ]
+    },
+    "M_Cast": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "PID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["PID"], "to_table": "Person", "to_columns": ["PID"] }
+      ]
+    },
+    "M_Genre": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "GID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["GID"], "to_table": "Genre", "to_columns": ["GID"] }
+      ]
+    },
+    "M_Language": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "LAID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["LAID"], "to_table": "Language", "to_columns": ["LAID"] }
+      ]
+    },
+    "M_Country": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "CID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["CID"], "to_table": "Country", "to_columns": ["CID"] }
+      ]
+    },
+    "M_Location": {
+      "type": "table",
+      "columns": {
+        "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
+        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
+        "LID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+      },
+      "primary_key": ["ID"],
+      "foreign_keys": [
+        { "from": ["MID"], "to_table": "Movie", "to_columns": ["MID"] },
+        { "from": ["LID"], "to_table": "Location", "to_columns": ["LID"] }
+      ]
+    }
+  }
+}
