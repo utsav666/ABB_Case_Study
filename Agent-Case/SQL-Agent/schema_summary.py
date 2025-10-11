@@ -24,7 +24,6 @@ openai.api_key = api_key
 # Define LLM
 llm = ChatOpenAI(model="gpt-4", temperature=0)
 
-
 # ---------- Pydantic Schema ----------
 class TableIdentification(BaseModel):
     user_question: str
