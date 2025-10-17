@@ -21,7 +21,8 @@ class Summarizer:
             if fks: summary += f" FK: {', '.join(fks)}"
             summaries.append(summary)
         return ' '.join(summaries)
-summ = Summarizer('SQL-Agent/sample_data/schema_preserve.json')
-res=summ.summarize_schema()
-print(res)
+    
+# summ = Summarizer('SQL-Agent/sample_data/schema_preserve.json')
+# res=summ.summarize_schema()
+# print(res)
     

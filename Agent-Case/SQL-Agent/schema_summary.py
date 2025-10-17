@@ -77,6 +77,8 @@ Below is a summary of the database schema. Each line describes a table and its k
 ---
 Now, analyze the user's question and list which tables are relevant for answering it.
 Only return a JSON list of table names. Do not include explanations.
+Please find the relevant table which is required as per user question 
+Do no return the table which are irrelevant
 User Question: "{user_question}"
     """)
     # Inject format instructions from parser (no need to instruct "return JSON")

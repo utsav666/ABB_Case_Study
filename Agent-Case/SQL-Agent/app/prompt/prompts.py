@@ -2,7 +2,7 @@ table_identify_prompts = """
 You are an expert data analyst who generates SQL queries from natural language questions.
 Below is a summary of the database schema. Each line describes a table and its key relationships.
 ---
-{res}
+{schema_summary}
 ---
 Now, analyze the user's question and list which tables are relevant for answering it.
 Only return a JSON list of table names. Do not include explanations.
