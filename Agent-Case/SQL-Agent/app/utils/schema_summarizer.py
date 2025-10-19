@@ -1,13 +1,10 @@
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import json
-
+from sampledata.data_loader import DataLoader
 class Summarizer:
-    def __init__(self,data_path):
-        self.data_path = data_path
-
-    def summarize_schema(self):
-        with open(self.data_path) as f:
-            data = json.load(f)
-        
+    def summarize_schema():
+        data = DataLoader.load_data()
         summaries = []
         for tname, tinfo in data["tables"].items():
             cols = [c for c in tinfo["columns"].keys()]
@@ -21,8 +18,9 @@ class Summarizer:
             if fks: summary += f" FK: {', '.join(fks)}"
             summaries.append(summary)
         return ' '.join(summaries)
-    
-# summ = Summarizer('SQL-Agent/sample_data/schema_preserve.json')
-# res=summ.summarize_schema()
-# print(res)
+
+##### Unit 3 #######
+# if __name__ == "__main__":
+#     res=Summarizer.summarize_schema()
+#     print(res)
     

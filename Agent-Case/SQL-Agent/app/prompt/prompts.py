@@ -5,10 +5,15 @@ Below is a summary of the database schema. Each line describes a table and its k
 {schema_summary}
 ---
 Now, analyze the user's question and list which tables are relevant for answering it.
-Only return a JSON list of table names. Do not include explanations.
+Do not include explanations.
+Return the table name as it is . Don't modify the table name
 Please find the relevant table which is required as per user question 
-Do no return the table which are irrelevant
+Make sure the table are 100 percent relevant
+Don't generate any table name which are not present in the structure 
+Do not return the table which are irrelevant
 User Question: "{user_question}"
+Answer it in the following instruction
+{format_instructions}
     """
 sql_gen_prompts = """You are a world-class SQL engineer.
 Your task is to write the perfect SQL query based on the given **table structure (in JSON format)** and **user question**.
