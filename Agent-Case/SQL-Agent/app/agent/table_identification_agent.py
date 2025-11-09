@@ -34,7 +34,7 @@ class TableIdentiferAgent:
         parsed = parser.parse(response.content)
         return parsed
 ####### unit test ######
-if __name__ == "__main__":
-    TA = TableIdentiferAgent("list of all actor played in the movie 'Anand'")
-    result=TA.run()
-    print(result)
+# if __name__ == "__main__":
+#     TA = TableIdentiferAgent("list of all actor played in the movie 'Anand'")
+#     result=TA.run()
+#     print(result)
