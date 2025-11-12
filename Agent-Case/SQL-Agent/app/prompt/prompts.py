@@ -33,3 +33,33 @@ User Question:
 ------------------
 Now write the SQL query:
 """
+
+sample_router_prompt = """You are a routing assistant that decides whether a user's question 
+        requires running an SQL query on a database or can be answered directly 
+        from schema information.
+
+        -----------------------
+        Database Schema Summary:
+        {schema_summary}
+        -----------------------
+
+        Guidelines:
+        - If the question asks about specific data, counts, lists, or values (e.g., "top 5 movies", 
+          "how many users", "list all actors"), it REQUIRES an SQL query. 
+        - If the question is about structure, metadata, relationships, or descriptions 
+          (e.g., "what tables exist", "what does the Person table contain", "explain the schema"), 
+          it can be answered from schema_info.
+        - Return JSON with keys "route" and "reasoning".
+
+        Example 1:
+        Question: "How many employee joined in 2023?"
+        Output: {{"route": "sql_query", "reasoning": "User is asking for a count from data."}}
+
+        Example 2:
+        Question: "What columns are there in the person table?"
+        Output: {{"route": "schema_info", "reasoning": "This only needs schema details."}}
+
+        Now analyze this:
+        Question: 
+        {user_question}
+        """
