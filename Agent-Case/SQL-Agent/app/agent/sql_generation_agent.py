@@ -17,12 +17,10 @@ class SQLGenerationAgent:
         self.tab_struc_gen=TabStrucCreation(table_list).struc_creation()
 
     def run(self):
-        print()
         prompt = sql_gen_prompts.format(
             table_structure=self.tab_struc_gen,
             user_question=self.user_question
         )
-        print(prompt)
         response = openai.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -32,9 +30,9 @@ class SQLGenerationAgent:
         temperature=0
     )
         return response.choices[0].message.content.strip()
-if __name__ == "__main__":
-    user_question="list of all actor played in the movie 'Anand'"
-    table_list = ["Movie", "M_Cast", "Person"]
-    sql_gen =  SQLGenerationAgent(user_question,table_list)
-    res=sql_gen.run()
-    print(res)
+# if __name__ == "__main__":
+#     user_question="list of all actor played in the movie 'Anand'"
+#     table_list = ["Movie", "M_Cast", "Person"]
+#     sql_gen =  SQLGenerationAgent(user_question,table_list)
+#     res=sql_gen.run()
+#     print(res)

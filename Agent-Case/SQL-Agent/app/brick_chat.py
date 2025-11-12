@@ -1,35 +1,61 @@
 import streamlit as st
-from orch_app.chat_api import ChatAPI
+from orchestrator.orch_exec import Orchestrator
+import io, contextlib
 
-st.set_page_config(page_title="Chat with OpenAI", page_icon="🤖")
-st.title("🤖 Chat with OpenAI")
+st.set_page_config(page_title="Chat with SQL Orchestrator", page_icon="🧠")
+st.title("🧠 Natural Language → SQL Orchestrator")
 
-# Initialize ChatAPI once (loads from .env)
-if "chat_api" not in st.session_state:
-    st.session_state.chat_api = ChatAPI()
-
-# Store conversation
+# Keep message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Show history
-st.subheader("Chat History")
-for message in st.session_state.messages:
-    role = "🧑 You" if message["role"] == "user" else "🤖 Assistant"
-    st.markdown(f"**{role}:** {message['content']}")
+# Display past messages
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-# User input (old way, no chat_input)
-prompt = st.text_input("Type your message and press Enter:")
+# User input
+user_input = st.chat_input("Ask a question about your database...")
 
-if st.button("Send"):
-    if prompt:
-        # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.markdown(f"**🧑 You:** {prompt}")
+if user_input:
 
-        # Get reply from API
-        reply = st.session_state.chat_api.chat(st.session_state.messages)
+    # Save and display user message
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.write(user_input)
 
-        # Add assistant message
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-        st.markdown(f"**🤖 Assistant:** {reply}")
+    # ✅ Run Orchestrator
+    orch = Orchestrator(user_input)
+
+    # Capture logs (stdout) + returned result
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        result = orch.executor()    # <-- whatever executor RETURNS
+    logs = buffer.getvalue()        # <-- everything executor PRINTED
+
+    # ✅ Display assistant message (both result + logs)
+    with st.chat_message("assistant"):
+
+        # ✅ Display final result
+        if "DataFrame" in str(type(result)):
+            st.write("### ✅ Result:")
+            st.dataframe(result)
+
+        elif isinstance(result, (dict, list)):
+            st.write("### ✅ Result:")
+            st.json(result)
+
+        elif isinstance(result, str):
+            st.write("### ✅ Result:")
+            st.write(result)
+
+        # ✅ Display logs
+        if logs.strip():
+            st.write("### 📝 Logs:")
+            st.code(logs)
+
+    # ✅ Save assistant response in message history
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": f"Result:\n{result}\n\nLogs:\n{logs}"
+    })

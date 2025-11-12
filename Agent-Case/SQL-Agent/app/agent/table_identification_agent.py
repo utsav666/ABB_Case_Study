@@ -30,7 +30,6 @@ class TableIdentiferAgent:
             format_instructions=parser.get_format_instructions())
         # Run the model
         response = self.llm(formatted_prompt)
-        print(response)
         parsed = parser.parse(response.content)
         return parsed
 ####### unit test ######
