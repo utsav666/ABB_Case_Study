@@ -33,7 +33,6 @@ User Question:
 ------------------
 Now write the SQL query:
 """
-
 sample_router_prompt = """You are a routing assistant that decides whether a user's question 
         requires running an SQL query on a database or can be answered directly 
         from schema information.
@@ -63,3 +62,13 @@ sample_router_prompt = """You are a routing assistant that decides whether a use
         Question: 
         {user_question}
         """
+schema_info_gen_prompt ="""You are a Data expert . You will be provided a schema summary you need to answer
+User question based on the schema summary . Understand the user question then generate the answer
+You will be provided a context as well for your understanding 
+Below is a summary of the database schema. Each line describes a table and its key relationships.
+---
+{schema_summary}
+---
+context {context}
+User question {user_question}
+"""

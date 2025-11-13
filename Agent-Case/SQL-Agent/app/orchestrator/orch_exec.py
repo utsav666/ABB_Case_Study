@@ -3,6 +3,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent.sql_generation_agent import SQLGenerationAgent
 from agent.table_identification_agent import TableIdentiferAgent
+from router.route import Router
 from utils.sql_validator import validator
 from utils.sql_executor import SqlExec
 
@@ -11,6 +12,7 @@ class Orchestrator:
     def __init__(self,user_question):
         self.user_question = user_question
         self.TA= TableIdentiferAgent(self.user_question)
+        self.router = Router()
     def executor(self):
         print("user question .... "+self.user_question)
         print("\n.....Running the Table Identifier Agent ......")
