@@ -4,7 +4,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent.sql_generation_agent import SQLGenerationAgent
 from agent.table_identification_agent import TableIdentiferAgent
 from agent.schema_info_agent import SchemaInfoAgent
-from router.route import Router
+#from router.route import Router
+from router.route_improvisation import Router
 from utils.sql_validator import validator
 from utils.sql_executor import SqlExec
 
@@ -34,7 +35,7 @@ class Orchestrator:
                 return sql_exec
             else:
                 print("\nFailed to generate sql")
-        else:
+        elif decision_maker["route"] == "schema_info":
             schema_info_agent = SchemaInfoAgent(self.user_question,
                                                 decision_maker["reasoning"])
             res = schema_info_agent.run()
