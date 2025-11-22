@@ -3,27 +3,24 @@ The Data Model Insight Accelerator is an intelligent query-generation and data-u
 
 # Key Features
 1. Schema Knowledge Base
-
 Stores database metadata (tables, columns, relationships, constraints).
 Enhances contextual understanding and improves query accuracy.
 Allows the system to reason using actual database structures rather than pure text predictions.
 
 2. Dual Reasoning Layers
-a. Intent Reasoning Layer
 
-    Interprets what the user means.
-    Decides whether the question requires:
-    SQL generation
-    Insight retrieval
-    Data explanation
-Or LLM fallback for general requests
+    a. Intent Reasoning Layer
+        Interprets what the user means.
+        Decides whether the question requires:
+        SQL generation OR Insight retrieval OR Data explanation
+        OR LLM fallback for general requests
 
-b. Query Reasoning Layer
+    b. Query Reasoning Layer
 
-    Converts intent into structured actions.
-    Generates optimal SQL using schema information.
-    Applies query optimization strategies.
-    Ensures accuracy, joins correctness, and filter logic.
+    1.Converts intent into structured actions.
+    2.Generates optimal SQL using schema information.
+    3.Applies query optimization strategies.
+    4.Ensures accuracy, joins correctness, and filter logic.
 
 3. LLM Fallback
     If the question is too general, non-database-specific, or non-technical, the system delegates to an LLM to provide useful, conversational results.
@@ -50,4 +47,7 @@ The SQL is executed on the database.
 
 The result is enriched with explanations and returned to the user.
 
-If the question is not database-specific (e.g., “Explain regression vs classification”), the LLM provides a general explanation instead.
+If the question is not database-specific (e.g., “Explain regression vs classification”), the LLM provides a general explanation instead. 
+
+# Basic Flow Diagram
+![Image 1](DMIA_flow_diagram.png)
