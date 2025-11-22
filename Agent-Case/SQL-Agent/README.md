@@ -1,53 +1,66 @@
 # Data Model Insight Accelerator
-The Data Model Insight Accelerator is an intelligent query-generation and data-understanding framework that transforms natural-language questions into optimized database queries. It leverages schema-aware reasoning, multi-layered intent understanding, and LLM fallback to deliver accurate and meaningful insights from your database.
 
-# Key Features
-1. Schema Knowledge Base
-Stores database metadata (tables, columns, relationships, constraints).
-Enhances contextual understanding and improves query accuracy.
-Allows the system to reason using actual database structures rather than pure text predictions.
+The **Data Model Insight Accelerator** is an intelligent query-generation and data-understanding framework that transforms natural-language questions into optimized database queries. It leverages schema-aware reasoning, multi-layered intent understanding, and LLM fallback to deliver accurate and meaningful insights from your database.
 
-2. Dual Reasoning Layers
+---
 
-    a. Intent Reasoning Layer
-        Interprets what the user means.
-        Decides whether the question requires:
-        SQL generation OR Insight retrieval OR Data explanation
-        OR LLM fallback for general requests
+## Key Features
 
-    b. Query Reasoning Layer
+---
 
-    1.Converts intent into structured actions.
-    2.Generates optimal SQL using schema information.
-    3.Applies query optimization strategies.
-    4.Ensures accuracy, joins correctness, and filter logic.
+### 1. Schema Knowledge Base
 
-3. LLM Fallback
-    If the question is too general, non-database-specific, or non-technical, the system delegates to an LLM to provide useful, conversational results.
+- Stores database metadata (tables, columns, relationships, constraints).  
+- Enhances contextual understanding and improves query accuracy.  
+- Allows the system to reason using actual database structures instead of pure text predictions.  
 
-4. Execution + Post-Processing
+---
 
-    Executes the generated SQL on the database.
+### 2. Dual Reasoning Layers
 
-Enhances results with explanations and human-readable insights.
+#### a. Intent Reasoning Layer
+Interprets what the user *means* and decides whether the request requires:
 
-Returns a clean final response to the user.
+- SQL generation  
+- Insight retrieval  
+- Data explanation  
+- LLM fallback for general or non-database questions  
 
-# How It Works
+#### b. Query Reasoning Layer
 
-User asks a question (e.g., “What are the top 5 customers by revenue?”)
+- Converts intent into structured query actions  
+- Generates optimal SQL using schema information  
+- Applies query optimization strategies  
+- Ensures accuracy, correct joins, and valid filter logic  
 
-Intent Reasoning Layer determines this is database-specific.
+---
 
-The system queries the Schema Knowledge Base to understand available tables and relationships.
+### 3. LLM Fallback
 
-The Query Reasoning Layer generates and optimizes SQL.
+If the user question is **too general**, **not database-specific**, or **non-technical**, the system delegates to an LLM to produce a helpful conversational response.
 
-The SQL is executed on the database.
+---
 
-The result is enriched with explanations and returned to the user.
+### 4. Execution + Post-Processing
 
-If the question is not database-specific (e.g., “Explain regression vs classification”), the LLM provides a general explanation instead. 
+- Executes the generated SQL on the database  
+- Enhances results with explanations and human-readable insights  
+- Returns a clean, structured final response to the user  
+
+---
+
+## How It Works
+
+1. User asks a question (e.g., *“What are the top 5 customers by revenue?”*).  
+2. **Intent Reasoning Layer** determines whether it is database-specific.  
+3. The system queries the **Schema Knowledge Base** to understand tables and relationships.  
+4. The **Query Reasoning Layer** generates and optimizes SQL.  
+5. The SQL is executed on the target database.  
+6. Results are enriched with insights and returned to the user.  
+7. For general questions (e.g., *“Explain regression vs classification”*), the **LLM Fallback** generates the answer instead.
+
+---
+
 
 # Basic Flow Diagram
 ![Image 1](DMIA_flow_diagram.png)
