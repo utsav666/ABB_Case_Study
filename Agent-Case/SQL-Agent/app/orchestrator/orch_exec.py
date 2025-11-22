@@ -17,7 +17,7 @@ class Orchestrator:
         self.router = Router()
     def executor(self):
         print("user question .... "+self.user_question)
-        print("\n.....Running the Table Identifier Agent ......")
+        print("\n.....Intent identifcation......")
         decision_maker = self.router.route_question(self.user_question)
         print(decision_maker,"decision_maker")
         if decision_maker["route"]== "sql_query":
