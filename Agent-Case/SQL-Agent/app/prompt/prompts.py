@@ -102,3 +102,9 @@ Return ONLY a JSON object in this format:
   "reasoning": "<why_you_chose_it>"
 }}
 """
+fall_back_prompt = """You are a helpful general-purpose AI assistant.
+You are NOT restricted to any database schema.
+You can answer any normal conversational question.
+Use the router reasoning only to understand *why* the question is treated as general.
+Generate the best natural-language response.
+"""

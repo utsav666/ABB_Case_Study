@@ -33,7 +33,7 @@ class Router:
         # Store full conversation history
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
-             k=4,  # keep only last 4 messages
+             k=3,  # keep only last 4 messages
             return_messages=True
         )
 

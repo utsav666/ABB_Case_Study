@@ -27,8 +27,8 @@ class SchemaInfoAgent:
     )
         return response.choices[0].message.content.strip()
 
-if __name__ == "__main__":
-    schema_info_agent = SchemaInfoAgent("what are the columns of movie table ? ",
-                                        "This only need schema detail")
-    sample_Res = schema_info_agent.run()
-    print(sample_Res)
+# if __name__ == "__main__":
+#     schema_info_agent = SchemaInfoAgent("what are the columns of movie table ? ",
+#                                         "This only need schema detail")
+#     sample_Res = schema_info_agent.run()
+#     print(sample_Res)

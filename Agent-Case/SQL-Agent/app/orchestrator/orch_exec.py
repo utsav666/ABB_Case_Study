@@ -4,6 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent.sql_generation_agent import SQLGenerationAgent
 from agent.table_identification_agent import TableIdentiferAgent
 from agent.schema_info_agent import SchemaInfoAgent
+from agent.fall_back import GeneralAnswerAgent
 #from router.route import Router
 from router.route_improvisation import Router
 from utils.sql_validator import validator
@@ -19,6 +20,7 @@ class Orchestrator:
         print("user question .... "+self.user_question)
         print("\n.....Intent identifcation......")
         decision_maker = self.router.route_question(self.user_question)
+        #print(memory,"........mory........")
         print(decision_maker,"decision_maker")
         if decision_maker["route"]== "sql_query":
             ta_agent_result = self.TA.run()
@@ -41,10 +43,14 @@ class Orchestrator:
             res = schema_info_agent.run()
             print(res)
             return res
+        else:
+            gen_ans_agent = GeneralAnswerAgent()
+            res = gen_ans_agent.run('...',self.user_question,decision_maker['reasoning'])
+            return res
         
 #### Unite Test 3 #########    
 # if __name__ == "__main__":
-#     user_query = "what are the columns of movie table ?"
+#     user_query = "what is love ?"
 #     print("..Orchestration Started.....")
 #     orch_run = Orchestrator(user_query)
 #     orch_run.executor()
