@@ -3,10 +3,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from prompt.prompts import sample_router_prompt
 from envsetup.env_loader import load_env
 from utils.schema_summarizer import Summarizer
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import Literal
 
 # ------------------------
@@ -38,7 +38,7 @@ class Router:
             user_question=user_question
         )
 
-        response = self.llm(formatted_prompt)
+        response = self.llm.invoke(formatted_prompt)
         decision = parser.parse(response.content)
         return decision
 

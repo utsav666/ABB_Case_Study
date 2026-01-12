@@ -4,10 +4,9 @@ from prompt.prompts import sample_router_prompt_improvise
 from envsetup.env_loader import load_env
 from utils.schema_summarizer import Summarizer
 from langchain_openai import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import Literal
 
 
@@ -30,13 +29,6 @@ class Router:
 
         self.schema_summary = Summarizer.summarize_schema()
 
-        # Store full conversation history
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-             k=3,  # keep only last 4 messages
-            return_messages=True
-        )
-
         # LLM
         self.llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
@@ -54,16 +46,12 @@ class Router:
         # Prepare full prompt
         messages = self.prompt.format_messages(
             schema_summary=self.schema_summary,
-            chat_history=self.memory.load_memory_variables({})["chat_history"],
+            chat_history="",
             question=question
         )
 
         # LLM call
-        response = self.llm(messages)
-
-        # Save user AND agent messages to memory
-        self.memory.chat_memory.add_user_message(question)
-        self.memory.chat_memory.add_ai_message(response.content)
+        response = self.llm.invoke(messages)
 
         # Parse into RoutingDecision
         return self.parser.parse(response.content)

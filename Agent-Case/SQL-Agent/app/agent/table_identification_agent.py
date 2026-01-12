@@ -1,14 +1,12 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from prompt.prompts import table_identify_prompts
-#from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI
 from envsetup.env_loader import load_env 
 from utils.schema_summarizer import Summarizer
-#from pydantic import BaseModel, Field
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import List
 class TableIdentification(BaseModel):
     user_question: str= Field(user_question="question asked by the user")
@@ -29,7 +27,7 @@ class TableIdentiferAgent:
             user_question=self.user_question,
             format_instructions=parser.get_format_instructions())
         # Run the model
-        response = self.llm(formatted_prompt)
+        response = self.llm.invoke(formatted_prompt)
         parsed = parser.parse(response.content)
         return parsed
 ####### unit test ######

@@ -7,8 +7,7 @@ from langchain_openai import ChatOpenAI
 from envsetup.env_loader import load_env 
 from utils.schema_summarizer import Summarizer
 from utils.table_struc_creation import TabStrucCreation
-#from pydantic import BaseModel, Field
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import List
 load_env()
 class SQLGenerationAgent:
