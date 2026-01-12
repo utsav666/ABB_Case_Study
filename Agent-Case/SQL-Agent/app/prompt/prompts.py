@@ -82,9 +82,8 @@ You ONLY classify the query into predefined routes.
 
 Available routes:
 - sql_query: when user wants to retrieve data or run a DB query
-- schema_info: when user asks about tables, columns, schema structure
+- schema_info: when user asks about tables, columns,structure, metadata, conceptual explanation or relationships relevant to schema,
 - general_answer: when user asks general knowledge not related to DB
-- explanation: when user wants conceptual explanation or relationships
 - follow_up: when user asks something dependent on earlier context
 
 Schema Summary:
