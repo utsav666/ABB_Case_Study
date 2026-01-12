@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sql-agent-dev
+    volumes:
+      - ..:/workspace:cached
+      - /workspace/.venv
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8501:8501"
+      - "8502:8502"
+      - "8503:8503"
+      - "5000:5000"
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    networks:
+      - dev-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: sql-agent-postgres
+    environment:
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: sql_agent_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dev-network
+    profiles:
+      - db
+
+  sqlite:
+    image: nouchka/sqlite3:latest
+    container_name: sql-agent-sqlite
+    ports:
+      - "8080:8080"
+    volumes:
+      - sqlite_data:/root/db
+    networks:
+      - dev-network
+    profiles:
+      - db
+
+networks:
+  dev-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  sqlite_data:
