@@ -10,6 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
+    openssh-client \
     curl \
     wget \
     vim \
@@ -61,8 +62,12 @@ RUN pip install \
 # Switch to non-root user
 USER vscode
 
-# Set Git safe directory (useful for mounted volumes)
-RUN git config --global --add safe.directory /workspace
+# Configure SSH
+RUN mkdir -p ~/.ssh && \
+    chmod 700 ~/.ssh && \
+    ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null || true && \
+    chmod 644 ~/.ssh/known_hosts 2>/dev/null || true && \
+    git config --global --add safe.directory /workspace
 
 # Initialize shell
 RUN echo 'export PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "' >> ~/.bashrc

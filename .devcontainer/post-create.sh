@@ -8,14 +8,16 @@ cd /workspace
 
 # Setup SSH key
 echo "🔐 Setting up SSH key..."
-if [ -f "$HOME/.ssh/id_ed25519-gharista" ]; then
-    # Start SSH agent if not already running
-    eval "$(ssh-agent -s)"
-    # Add the SSH key
-    ssh-add "$HOME/.ssh/id_ed25519-gharista" || true
-    echo "✅ SSH key added successfully"
+SSH_KEY="$HOME/.ssh/id_ed25519-gharista"
+
+if [ -f "$SSH_KEY" ]; then
+    # Add the SSH key to the agent
+    ssh-add "$SSH_KEY" 2>/dev/null || true
+    echo "✅ SSH key configured: $SSH_KEY"
 else
-    echo "⚠️  SSH key not found at $HOME/.ssh/id_ed25519-gharista"
+    echo "⚠️  SSH key not found at: $SSH_KEY"
+    echo "   Please ensure your SSH key exists on your host machine at:"
+    echo "   ~/.ssh/id_ed25519-gharista"
 fi
 
 # Create Python virtual environment if it doesn't exist
