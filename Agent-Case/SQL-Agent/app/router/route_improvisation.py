@@ -18,7 +18,7 @@ load_env()
 # Output Model
 # ----------------------------
 class RoutingDecision(BaseModel):
-    route: Literal["sql_query", "schema_info", "general_answer", "explanation", "follow_up"]
+    route: Literal["sql_query","sql_and_chart" ,"schema_info", "general_answer", "explanation", "follow_up"]
     reasoning: str
 
 # ----------------------------
@@ -57,7 +57,7 @@ class Router:
         return self.parser.parse(response.content)
 
 # if __name__ == "__main__":
-#     user_question = "Write SQL to find items with low stock from an Inventory table.?"
+#     user_question = "can you show me year wise movie count ?"
 #     route =Router()
 #     response = route.route_question(user_question)
 #     print(response)

@@ -36,6 +36,14 @@ if user_input:
     # ✅ Display assistant message (both result + logs)
     with st.chat_message("assistant"):
 
+        # ✅ Chart response
+        if isinstance(result, dict) and result.get("type") == "chart":
+            st.write("### 📊 Chart")
+            st.pyplot(result["figure"])
+            if "data" in result:
+                st.write("### 📄 Data")
+                st.dataframe(result["data"])
+
         # ✅ Display final result
         if "DataFrame" in str(type(result)):
             st.write("### ✅ Result:")

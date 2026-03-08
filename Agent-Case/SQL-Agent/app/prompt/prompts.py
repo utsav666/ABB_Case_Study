@@ -83,6 +83,7 @@ You ONLY classify the query into predefined routes.
 Available routes:
 - sql_query: when user wants to retrieve data or run a DB query
 - schema_info: when user asks about tables, columns,structure, metadata, conceptual explanation or relationships relevant to schema,
+- sql_and_chart:  When the user wants to visualize, plot, chart, graph,compare trends, or display data visually from the database.
 - general_answer: when user asks general knowledge not related to DB
 - follow_up: when user asks something dependent on earlier context
 
@@ -106,4 +107,29 @@ You are NOT restricted to any database schema.
 You can answer any normal conversational question.
 Use the router reasoning only to understand *why* the question is treated as general.
 Generate the best natural-language response.
+"""
+sample_chart_prompt = """You are a data visualization expert.
+
+Choose the best chart for the dataset.
+
+Allowed chart types:
+- bar
+- line
+- scatter
+
+Return JSON ONLY in this format:
+
+{{
+  "chart_type": "line | bar | scatter",
+  "x_axis": "column_name",
+  "y_axis": "column_name",
+  "reasoning": "short explanation"
+}}
+
+Question:
+{question}
+
+Dataset Summary:
+{context}
+
 """
