@@ -70,6 +70,15 @@ class Orchestrator:
                         sql_exec[chart_gen_decision.x_axis],
                         sql_exec[chart_gen_decision.y_axis]
                     )
+                elif chart_gen_decision.chart_type == "histogram":
+                    ax.hist(chart_gen_decision.x_axis, bins=10)
+                elif chart_gen_decision.chart_type == "pie":
+                    ax.pie(sql_exec[chart_gen_decision.y_axis], labels=sql_exec[chart_gen_decision.x_axis], autopct="%1.1f%%")
+                elif chart_gen_decision.chart_type == "box":
+                    ax.boxplot(sql_exec[chart_gen_decision.y_axis])
+                elif chart_gen_decision.chart_type == "area":
+                    ax.fill_between(sql_exec[chart_gen_decision.x_axis], 
+                                    sql_exec[chart_gen_decision.y_axis])
                 ax.set_xlabel(chart_gen_decision.x_axis)
                 ax.set_ylabel(chart_gen_decision.y_axis)
                 return {

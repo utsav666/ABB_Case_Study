@@ -8,7 +8,15 @@ from envsetup.env_loader import load_env
 load_env()
 
 class ChartDecision(BaseModel):
-    chart_type: Literal["bar", "line", "scatter"]
+    chart_type: Literal[
+        "bar",
+        "line",
+        "scatter",
+        "histogram",
+        "pie",
+        "box",
+        "area"
+    ]
     x_axis: str
     y_axis: str
     reasoning: str

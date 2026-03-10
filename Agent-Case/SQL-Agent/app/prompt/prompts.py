@@ -108,28 +108,39 @@ You can answer any normal conversational question.
 Use the router reasoning only to understand *why* the question is treated as general.
 Generate the best natural-language response.
 """
-sample_chart_prompt = """You are a data visualization expert.
+sample_chart_prompt = """
+You are a data visualization expert.
 
 Choose the best chart for the dataset.
 
-Allowed chart types:
-- bar
-- line
-- scatter
+Supported chart types:
+- line (trend over time)
+- bar (compare categories)
+- scatter (correlation)
+- histogram (distribution)
+- pie (proportions)
+- box (distribution with outliers)
+- area (cumulative trends)
 
-Return JSON ONLY in this format:
+Rules:
+- Use only column names from the dataset summary
+- Do not invent columns
+- Return valid JSON only
+
+Return JSON:
 
 {{
-  "chart_type": "line | bar | scatter",
+  "chart_type": "line | bar | scatter | histogram | pie | box | area",
   "x_axis": "column_name",
   "y_axis": "column_name",
   "reasoning": "short explanation"
 }}
 
-Question:
+User Question:
 {question}
 
 Dataset Summary:
 {context}
-
 """
+
+
