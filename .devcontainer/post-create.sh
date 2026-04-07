@@ -11,6 +11,8 @@ echo "🔐 Setting up SSH key..."
 SSH_KEY="$HOME/.ssh/id_ed25519-gharista"
 
 if [ -f "$SSH_KEY" ]; then
+    # Start SSH agent if not running
+    eval "$(ssh-agent -s)" > /dev/null 2>&1
     # Add the SSH key to the agent
     ssh-add "$SSH_KEY" 2>/dev/null || true
     echo "✅ SSH key configured: $SSH_KEY"
@@ -18,6 +20,18 @@ else
     echo "⚠️  SSH key not found at: $SSH_KEY"
     echo "   Please ensure your SSH key exists on your host machine at:"
     echo "   ~/.ssh/id_ed25519-gharista"
+fi
+
+# Make SSH agent persistent in bash sessions
+if ! grep -q "SSH_AUTH_SOCK" ~/.bashrc 2>/dev/null; then
+    cat >> ~/.bashrc << 'SSHEOF'
+
+# Start SSH agent if not running
+if [ -z "$SSH_AUTH_SOCK" ]; then
+    eval "$(ssh-agent -s)" > /dev/null 2>&1
+    ssh-add ~/.ssh/id_ed25519-gharista 2>/dev/null || true
+fi
+SSHEOF
 fi
 
 # Create Python virtual environment if it doesn't exist

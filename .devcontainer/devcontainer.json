@@ -38,13 +38,8 @@
     "ghcr.io/devcontainers/features/git:1": {}
   },
   "mounts": [
-    "source=${env:HOME}/.ssh,target=/home/vscode/.ssh,readonly",
-    "source=/run/host-services/ssh-auth.sock,target=/ssh-agent-sock"
+    "source=${env:HOME}/.ssh,target=/home/vscode/.ssh,readonly"
   ],
-  "remoteEnv": {
-    "SSH_AUTH_SOCK": "/ssh-agent-sock"
-  },
-  "postCreateCommand": "chmod 666 /ssh-agent-sock 2>/dev/null || true",
   "remoteUser": "vscode",
   "forwardPorts": [
     8501
