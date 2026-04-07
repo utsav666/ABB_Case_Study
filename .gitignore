@@ -2,3 +2,4 @@
 *.env
 model_config.json
 *.pyc
+database_cred.json

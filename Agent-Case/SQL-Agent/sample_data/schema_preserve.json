@@ -64,8 +64,8 @@
       "type": "table",
       "columns": {
         "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
-        "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
-        "PID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false }
+        "MID": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false },
+        "PID": { "type": "TEXT", "notnull": false, "default": null, "is_pk": false }
       },
       "primary_key": ["ID"],
       "foreign_keys": [
@@ -130,7 +130,7 @@
       "columns": {
         "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
         "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
-        "CID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+        "CID": { "type": "INTEGER", "notnull": false, "default": null, "is_pk": false }
       },
       "primary_key": ["ID"],
       "foreign_keys": [
@@ -143,7 +143,7 @@
       "columns": {
         "ID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": true },
         "MID": { "type": "TEXT", "notnull": true, "default": null, "is_pk": false },
-        "LID": { "type": "INTEGER", "notnull": true, "default": null, "is_pk": false }
+        "LID": { "type": "INTEGER", "notnull": false, "default": null, "is_pk": false }
       },
       "primary_key": ["ID"],
       "foreign_keys": [
