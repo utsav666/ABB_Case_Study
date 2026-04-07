@@ -1,4 +1,4 @@
-.env*
+.env
 *.env
 model_config.json
 *.pyc
