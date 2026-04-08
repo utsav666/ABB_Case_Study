@@ -23,7 +23,8 @@ def load_env():
     if not env_path.exists():
         raise FileNotFoundError(f".env file not found at: {env_path}")
 
-    load_dotenv(dotenv_path=env_path)
+    # Override empty or stale process-level values with the project .env file.
+    load_dotenv(dotenv_path=env_path, override=True)
     _env_loaded = True
 
 

@@ -48,9 +48,9 @@ echo "🔄 Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
 # Install requirements if available
-if [ -f "Agent-Case/SQL-Agent/requirements.txt" ]; then
+if [ -f "./requirements.txt" ]; then
     echo "📥 Installing dependencies from requirements.txt..."
-    pip install -r Agent-Case/SQL-Agent/requirements.txt 2>&1 | tail -5
+    pip install -r ./requirements.txt 2>&1 | tail -5
 fi
 
 # Install essential packages
@@ -79,16 +79,15 @@ pip install \
 
 # Create necessary directories
 echo "📁 Setting up directories..."
-mkdir -p Agent-Case/SQL-Agent/app/config
-mkdir -p Agent-Case/SQL-Agent/logs
+mkdir -p ./app/config
+mkdir -p ./logs
 
 # Check for .env file
-if [ ! -f "Agent-Case/SQL-Agent/app/config/.env" ]; then
-    echo "⚠️  Warning: .env file not found at Agent-Case/SQL-Agent/app/config/.env"
+if [ ! -f "./app/config/.env" ]; then
+    echo "⚠️  Warning: .env file not found at ./app/config/.env"
     echo "📝 Creating template .env file..."
-    cat > Agent-Case/SQL-Agent/app/config/.env << 'EOF'
+    cat > ./app/config/.env << 'EOF'
 # OpenAI Configuration
-OPENAI_API_KEY=your_api_key_here
 OPENAI_MODEL=gpt-4
 
 # Database Configuration
@@ -105,8 +104,8 @@ echo ""
 echo "✅ Dev container setup complete!"
 echo ""
 echo "📝 Next steps:"
-echo "1. Update your .env file with your OpenAI API key at: Agent-Case/SQL-Agent/app/config/.env"
-echo "2. Run Streamlit app: streamlit run Agent-Case/SQL-Agent/app/brick_chat.py"
+echo "1. Update your .env file with your OpenAI API key at: ./app/config/.env"
+echo "2. Run Streamlit app: streamlit run ./app/brick_chat.py"
 echo "3. Access at: http://localhost:8501"
 echo ""
 echo "🎯 Useful commands:"
