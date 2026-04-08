@@ -1,11 +1,15 @@
-import sys, os
-import openai
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from envsetup.env_loader import get_openai_api_key, load_env
 from langchain_openai import ChatOpenAI
 from prompt.prompts import fall_back_prompt
-from utils.schema_summarizer import Summarizer
-from envsetup.env_loader import load_env
+from pydantic import SecretStr
+
 load_env()
+
+
 class GeneralAnswerAgent:
     """
     A simple agent that answers general questions (not schema / SQL specific).
@@ -13,14 +17,19 @@ class GeneralAnswerAgent:
     """
 
     def __init__(self, model="gpt-4o", temperature=0.2):
-        self.llm = ChatOpenAI(model=model, temperature=temperature)
+        self.llm = ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            api_key=SecretStr(get_openai_api_key()),
+        )
+
     def run(self, conversation_history, user_question, router_reasoning):
         """
         conversation_history: list of {"role": "...", "content": "..."}
         user_question: str
         router_reasoning: str
         """
-        print(conversation_history,".....conv history.....")
+        print(conversation_history, ".....conv history.....")
         messages = [{"role": "system", "content": fall_back_prompt}]
 
         # Add conversation history
@@ -28,21 +37,19 @@ class GeneralAnswerAgent:
             messages.extend(conversation_history)
 
         # Add router reasoning context
-        messages.append({
-            "role": "system",
-            "content": f"Router reasoning: {router_reasoning}"
-        })
+        messages.append(
+            {"role": "system", "content": f"Router reasoning: {router_reasoning}"}
+        )
 
         # Add user question
-        messages.append({
-            "role": "user",
-            "content": user_question
-        })
+        messages.append({"role": "user", "content": user_question})
 
         # Pass everything to the LLM
         response = self.llm.invoke(messages)
 
         return response.content
+
+
 # if __name__ == "__main__":
 #     gen_answer_agent = GeneralAnswerAgent()
 #     sample_Res = gen_answer_agent.run('what is love?',

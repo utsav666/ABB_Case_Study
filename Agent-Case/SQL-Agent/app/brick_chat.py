@@ -1,6 +1,11 @@
+import contextlib
+import io
+
 import streamlit as st
+from envsetup.env_loader import load_env
 from orchestrator.orch_exec import Orchestrator
-import io, contextlib
+
+load_env()
 
 st.set_page_config(page_title="Chat with SQL Orchestrator", page_icon="🧠")
 st.title("🧠 Natural Language → SQL Orchestrator")
@@ -18,7 +23,6 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Ask a question about your database...")
 
 if user_input:
-
     # Save and display user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
@@ -30,12 +34,11 @@ if user_input:
     # Capture logs (stdout) + returned result
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
-        result = orch.executor()    # <-- whatever executor RETURNS
-    logs = buffer.getvalue()        # <-- everything executor PRINTED
+        result = orch.executor()  # <-- whatever executor RETURNS
+    logs = buffer.getvalue()  # <-- everything executor PRINTED
 
     # ✅ Display assistant message (both result + logs)
     with st.chat_message("assistant"):
-
         # ✅ Chart response
         if isinstance(result, dict) and result.get("type") == "chart":
             st.write("### 📊 Chart")
@@ -63,7 +66,6 @@ if user_input:
             st.code(logs)
 
     # ✅ Save assistant response in message history
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": f"Result:\n{result}\n\nLogs:\n{logs}"
-    })
+    st.session_state.messages.append(
+        {"role": "assistant", "content": f"Result:\n{result}\n\nLogs:\n{logs}"}
+    )

@@ -19,10 +19,11 @@
         "python.linting.pylintEnabled": true,
         "python.formatting.provider": "black",
         "[python]": {
-          "editor.defaultFormatter": "ms-python.python",
+          "editor.defaultFormatter": "charliermarsh.ruff",
           "editor.formatOnSave": true,
           "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit"
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
           }
         },
         "python.analysis.typeCheckingMode": "basic",
@@ -35,8 +36,13 @@
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/git:1": {}
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    }
   },
+  "postCreateCommand": ".devcontainer/post-create.sh",
   "mounts": [
     "source=${env:HOME}/.ssh,target=/home/vscode/.ssh,readonly"
   ],

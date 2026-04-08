@@ -1,16 +1,33 @@
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import json
-import pandas as pd
-#from sampledata.data_loader import DataLoader
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+
+# from sampledata.data_loader import DataLoader
 class ChartContext:
+    def __init__(self):
+        pass
+
+    @staticmethod
     def build_chart_context(df):
+        if (
+            not hasattr(df, "columns")
+            or not hasattr(df, "dtypes")
+            or not hasattr(df, "head")
+        ):
+            raise TypeError(
+                "ChartContext.build_chart_context expects a pandas DataFrame."
+            )
+
         return {
             "columns": list(df.columns),
             "dtypes": df.dtypes.astype(str).to_dict(),
             "row_count": len(df),
-            "sample_rows": df.head(3).to_dict(orient="records")
-                }
+            "sample_rows": df.head(3).to_dict(orient="records"),
+        }
+
+
 ##### Unit 3 #######
 # if __name__ == "__main__":
 #     df = pd.DataFrame({
@@ -19,4 +36,3 @@ class ChartContext:
 #     })
 #     char_context =ChartContext.build_chart_context(df)
 #     print(char_context)
-    

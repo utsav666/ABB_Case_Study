@@ -9,6 +9,7 @@
             "type": "python",
             "request": "launch",
             "module": "streamlit",
+            "python": "/usr/local/python/current/bin/python",
             "args": [
                 "run",
                 "./Agent-Case/SQL-Agent/app/brick_chat.py",
