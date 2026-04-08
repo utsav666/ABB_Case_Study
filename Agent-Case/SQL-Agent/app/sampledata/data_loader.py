@@ -6,6 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class DataLoader:
+    @staticmethod
     def load_data():
         # Get the path to the schema file relative to this file's location
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,7 @@ class DataLoader:
 
 
 class DBLoader:
+    @staticmethod
     def db_loader():
         # Load database credentials from environment variables
         db_creds = {
