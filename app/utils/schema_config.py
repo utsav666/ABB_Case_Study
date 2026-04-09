@@ -11,7 +11,7 @@ COLUMN_CONFIG_FILE_PATH = PROJECT_ROOT / "config" / "db_column_config.json"
 
 
 class SchemaConfigManager:
-    """Load and persist DB column configuration from the UI."""
+    """Load and persist DB column configuration for the API."""
 
     @staticmethod
     def load_raw_schema() -> dict[str, Any]:
@@ -53,7 +53,7 @@ class SchemaConfigManager:
 
     @classmethod
     def get_table_editor_rows(cls, table_name: str) -> list[dict[str, Any]]:
-        """Build editable rows for the Streamlit data editor."""
+        """Build editable rows for the configuration API payload."""
         schema_data = cls.get_schema_with_column_configuration()
         table_details = schema_data.get("tables", {}).get(table_name, {})
         primary_keys = set(table_details.get("primary_key", []))
@@ -133,7 +133,7 @@ class SchemaConfigManager:
 
     @staticmethod
     def _clean_bool_value(value: Any, fallback_value: bool) -> bool:
-        """Return a safe boolean from Streamlit editor values."""
+        """Return a safe boolean from editable input values."""
         if value is None:
             return fallback_value
 

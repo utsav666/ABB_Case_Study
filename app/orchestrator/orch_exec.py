@@ -123,8 +123,8 @@ class Orchestrator:
 
         elif decision_maker.route == "configuration":
             return (
-                "Open the `DB Column Config` page in the Streamlit sidebar to "
-                "manage column labels, descriptions, and assistant visibility."
+                "Use the `/schema/config` FastAPI endpoints to manage column "
+                "labels, descriptions, and assistant visibility."
             )
         elif decision_maker.route == "schema_info":
             schema_info_agent = SchemaInfoAgent(

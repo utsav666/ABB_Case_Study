@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
-import streamlit as st
+APP_DIR = Path(__file__).resolve().parents[1]
+if str(APP_DIR) not in sys.path:
+    sys.path.append(str(APP_DIR))
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from main import app
 
-from utils.db_column_config_view import render_db_column_configuration_page
-
-st.set_page_config(page_title="DB Column Configuration", page_icon="⚙️")
-render_db_column_configuration_page()
+__all__ = ["app"]

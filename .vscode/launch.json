@@ -5,15 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Streamlit",
+            "name": "FastAPI",
             "type": "python",
             "request": "launch",
-            "module": "streamlit",
+            "module": "uvicorn",
             "python": "/usr/local/python/current/bin/python",
             "args": [
-                "run",
-                "./app/brick_chat.py",
-                "--server.runOnSave=true"
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload"
             ],
             "jinja": true,
             "justMyCode": true

@@ -66,7 +66,12 @@ If the user question is **too general**, **not database-specific**, or **non-tec
 ![Image 1](DMIA_flow_diagram.png)
 
 # How to run
-keep your open ai key in the .env files and put in the config folder 
+keep your open ai key in the `.env` file inside `app/config`.
 
-then run this command from root folder
-streamlit run .\SQL-Agent\app\brick_chat.py
+Then run this command from the project root:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for the interactive FastAPI docs.
