@@ -1,20 +1,15 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import matplotlib.pyplot as plt
-from agent.chart_gen_agent import ChartAgent
-from agent.fall_back import GeneralAnswerAgent
-from agent.schema_info_agent import SchemaInfoAgent
-from agent.sql_generation_agent import SQLGenerationAgent
-from agent.table_identification_agent import TableIdentiferAgent
 from pandas import DataFrame
 
-# from router.route import Router
-from router.route_improvisation import Router
-from utils.char_context import ChartContext
-from utils.sql_executor import SqlExec
-from utils.sql_validator import validator
+from app.agent.chart_gen_agent import ChartAgent
+from app.agent.fall_back import GeneralAnswerAgent
+from app.agent.schema_info_agent import SchemaInfoAgent
+from app.agent.sql_generation_agent import SQLGenerationAgent
+from app.agent.table_identification_agent import TableIdentiferAgent
+from app.router.route_improvisation import Router
+from app.utils.char_context import ChartContext
+from app.utils.sql_executor import SqlExec
+from app.utils.sql_validator import validator
 
 
 ######Simple Hardcoded Orchetrator########

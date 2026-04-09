@@ -7,24 +7,19 @@ from dotenv import load_dotenv
 _env_loaded = False  # simple flag to avoid loading multiple times
 
 
-def load_env():
-    """
-    Load environment variables from the central .env file
-    no matter which module calls it.
-    """
+def load_env() -> None:
+    """Load environment variables from the project `.env` file when available."""
     global _env_loaded
     if _env_loaded:
-        return  # prevent redundant loading
+        return
 
-    # Find project root (assuming this file lives in project/core/)
     root_dir = Path(__file__).resolve().parents[1]
     env_path = root_dir / "config" / ".env"
 
-    if not env_path.exists():
-        raise FileNotFoundError(f".env file not found at: {env_path}")
+    if env_path.exists():
+        # Keep deployment-provided environment variables as the source of truth.
+        load_dotenv(dotenv_path=env_path, override=False)
 
-    # Override empty or stale process-level values with the project .env file.
-    load_dotenv(dotenv_path=env_path, override=True)
     _env_loaded = True
 
 

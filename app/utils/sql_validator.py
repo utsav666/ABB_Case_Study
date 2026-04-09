@@ -1,14 +1,17 @@
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import json
-import sqlglot
+from __future__ import annotations
 
-def validator(sql_query):
+import sqlglot
+from sqlglot.errors import SqlglotError
+
+
+def validator(sql_query: str) -> bool | str:
     try:
-        tree = sqlglot.parse_one(sql_query)
+        sqlglot.parse_one(sql_query)
         return True
-    except Exception as e:
-        return str(e)
+    except SqlglotError as error:
+        return str(error)
+
+
 # if __name__ == "__main__":
 #     res = validator("""SELECT Person.Name
 # FROM Person

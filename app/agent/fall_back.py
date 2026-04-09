@@ -1,11 +1,8 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
 from langchain_openai import ChatOpenAI
-from prompt.prompts import fall_back_prompt
 from pydantic import SecretStr
+
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import fall_back_prompt
 
 load_env()
 

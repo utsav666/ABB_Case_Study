@@ -1,13 +1,9 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from typing import Union
 
 import pandas as pd
-from sampledata.data_loader import DBLoader
 from sqlalchemy import create_engine
+
+from app.sampledata.data_loader import DBLoader
 
 
 class SqlExec:

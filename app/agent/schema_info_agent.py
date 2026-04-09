@@ -1,12 +1,8 @@
-import os
-import sys
-
 import openai
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
-from prompt.prompts import schema_info_gen_prompt
-from utils.schema_summarizer import Summarizer
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import schema_info_gen_prompt
+from app.utils.schema_summarizer import Summarizer
 
 load_env()
 

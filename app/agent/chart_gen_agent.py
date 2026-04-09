@@ -1,11 +1,12 @@
 from typing import Literal
 
-from envsetup.env_loader import get_openai_api_key, load_env
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from prompt.prompts import sample_chart_prompt
 from pydantic import BaseModel, SecretStr
+
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import sample_chart_prompt
 
 load_env()
 

@@ -1,12 +1,8 @@
-import os
-import sys
-
 import openai
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
-from prompt.prompts import sql_gen_prompts
-from utils.table_struc_creation import TabStrucCreation
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import sql_gen_prompts
+from app.utils.table_struc_creation import TabStrucCreation
 
 load_env()
 

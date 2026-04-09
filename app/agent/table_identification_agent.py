@@ -1,16 +1,13 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from typing import List
 
-from envsetup.env_loader import get_openai_api_key, load_env
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from prompt.prompts import table_identify_prompts
 from pydantic import BaseModel, Field, SecretStr
-from utils.schema_summarizer import Summarizer
+
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import table_identify_prompts
+from app.utils.schema_summarizer import Summarizer
 
 
 class TableIdentification(BaseModel):

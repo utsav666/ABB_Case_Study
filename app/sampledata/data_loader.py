@@ -1,8 +1,6 @@
 import os
-import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.schema_config import SchemaConfigManager
+from app.utils.schema_config import SchemaConfigManager
 
 
 class DataLoader:

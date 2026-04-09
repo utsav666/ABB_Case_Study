@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from utils.schema_config import SchemaConfigManager
-from utils.schema_summarizer import Summarizer
+from app.utils.schema_config import SchemaConfigManager
+from app.utils.schema_summarizer import Summarizer
 
 
 def build_db_column_configuration_payload(
