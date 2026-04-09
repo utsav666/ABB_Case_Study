@@ -29,6 +29,21 @@ logger = logging.getLogger(__name__)
 
 load_env()
 
+
+def get_allowed_origins() -> list[str]:
+    """Return normalized CORS origins from the environment."""
+    configured_origins = os.getenv("ALLOWED_ORIGINS", "*").strip()
+    if not configured_origins:
+        return ["*"]
+
+    normalized_origins = [
+        origin.strip() for origin in configured_origins.split(",") if origin.strip()
+    ]
+    return normalized_origins or ["*"]
+
+
+allowed_origins = get_allowed_origins()
+
 app = FastAPI(
     title="Data Model Insight Accelerator API",
     version="1.0.0",
@@ -36,11 +51,12 @@ app = FastAPI(
         "FastAPI version of the natural-language-to-SQL orchestrator. "
         "Use `/chat` for questions and `/schema/config` to manage column metadata."
     ),
+    root_path=os.getenv("FASTAPI_ROOT_PATH", "").strip(),
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

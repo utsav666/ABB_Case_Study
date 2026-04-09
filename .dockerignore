@@ -1,0 +1,16 @@
+.git
+.gitignore
+.devcontainer/
+.vscode/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+.env
+*.env
+app/config/.env
+logs/
+tests/

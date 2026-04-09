@@ -75,3 +75,67 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Open `http://127.0.0.1:8000/docs` for the interactive FastAPI docs.
+
+---
+
+## AWS Lambda container deployment
+
+This project now includes a Lambda-ready container entrypoint using `Mangum`.
+
+### 1. Configure environment variables
+Set these in the Lambda function configuration or in your IaC stack:
+
+- `OPENAI_API_KEY`
+- `TAVILY_API_KEY`
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`
+- `ALLOWED_ORIGINS`
+- `FASTAPI_ROOT_PATH` (optional, only if your API is mounted behind a stage path)
+
+> Do not bake `app/config/.env` into the production image.
+
+### 2. Build the container image locally
+
+```bash
+docker build -t dmia-lambda .
+```
+
+### 3. Test the Lambda container locally
+
+```bash
+docker run --rm -p 9000:8080 --env-file app/config/.env dmia-lambda
+```
+
+In another terminal:
+
+```bash
+curl http://localhost:9000/2015-03-31/functions/function/invocations \
+  -d '{
+    "version": "2.0",
+    "routeKey": "GET /health",
+    "rawPath": "/health",
+    "rawQueryString": "",
+    "headers": {"host": "localhost"},
+    "requestContext": {"http": {"method": "GET", "path": "/health", "sourceIp": "127.0.0.1", "userAgent": "curl"}},
+    "isBase64Encoded": false
+  }'
+```
+
+### 4. Push to Amazon ECR and deploy to Lambda
+
+```bash
+aws ecr create-repository --repository-name dmia-lambda
+aws ecr get-login-password --region <aws-region> \
+  | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<aws-region>.amazonaws.com
+
+docker tag dmia-lambda:latest <account-id>.dkr.ecr.<aws-region>.amazonaws.com/dmia-lambda:latest
+docker push <account-id>.dkr.ecr.<aws-region>.amazonaws.com/dmia-lambda:latest
+
+aws lambda create-function \
+  --function-name dmia-api \
+  --package-type Image \
+  --code ImageUri=<account-id>.dkr.ecr.<aws-region>.amazonaws.com/dmia-lambda:latest \
+  --role <lambda-execution-role-arn> \
+  --timeout 120 \
+  --memory-size 1024
+```

@@ -1,3 +1,4 @@
+import json
 import sys
 import types
 
@@ -172,3 +173,32 @@ def test_auth_callback_endpoint_returns_user_details(monkeypatch) -> None:
     assert payload["user"]["email"] == "user@example.com"
     assert payload["user"]["name"] == "Demo User"
     assert payload["token"]["access_token"] == "demo-access-token"
+
+
+def test_lambda_handler_serves_health_endpoint() -> None:
+    from app.lambda_handler import handler
+
+    event = {
+        "version": "2.0",
+        "routeKey": "GET /health",
+        "rawPath": "/health",
+        "rawQueryString": "",
+        "headers": {
+            "host": "lambda.example.com",
+            "x-forwarded-proto": "https",
+        },
+        "requestContext": {
+            "http": {
+                "method": "GET",
+                "path": "/health",
+                "sourceIp": "127.0.0.1",
+                "userAgent": "pytest",
+            }
+        },
+        "isBase64Encoded": False,
+    }
+
+    response = handler(event, {})
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"]) == {"status": "ok"}

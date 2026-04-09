@@ -1,5 +1,8 @@
-import matplotlib.pyplot as plt
+import matplotlib
 from pandas import DataFrame
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from app.agent.chart_gen_agent import ChartAgent
 from app.agent.fall_back import GeneralAnswerAgent
