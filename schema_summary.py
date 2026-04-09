@@ -3,11 +3,11 @@ import os
 from typing import List
 
 import openai
-from langchain.prompts import ChatPromptTemplate
 
 # from langchain.output_parsers import PydanticOutputParser
 # from langchain.output_parsers import JsonOutputParser
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
@@ -101,7 +101,7 @@ User Question: "{user_question}"
     )
 
     # Run the model
-    response = llm(formatted_prompt)
+    response = llm.invoke(formatted_prompt)
 
     # Parse structured output directly into Pydantic object
     parsed = parser.parse(response.content)
@@ -135,7 +135,8 @@ Now write the SQL query:
         ],
         temperature=0,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content or ""
+    return content.strip()
 
 
 # Example usage:

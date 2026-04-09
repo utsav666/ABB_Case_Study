@@ -1,27 +1,35 @@
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from prompt.prompts import sample_router_prompt
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from typing import Literal
+
 from envsetup.env_loader import load_env
-from utils.schema_summarizer import Summarizer
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import JsonOutputParser
+from prompt.prompts import sample_router_prompt
 from pydantic import BaseModel, Field
-from typing import Literal
+from utils.schema_summarizer import Summarizer
 
 # ------------------------
 # Schema-aware Router Model
 # ------------------------
 load_env()
+
+
 class RoutingDecision(BaseModel):
     route: Literal["sql_query", "schema_info"] = Field(
         description="Decide whether to run an SQL query or answer directly from schema info."
     )
     reasoning: str = Field(description="Short reasoning why this route was chosen.")
 
+
 class Router:
-    def __init__(self, schema_summary: str = None):
-        self.schema_summary = Summarizer.summarize_schema() or "No schema summary provided."
+    def __init__(self, schema_summary: str | None = None):
+        self.schema_summary = (
+            Summarizer.summarize_schema() or "No schema summary provided."
+        )
         self.llm = ChatOpenAI(model="gpt-4", temperature=0)
 
     def route_question(self, user_question: str):
@@ -30,16 +38,19 @@ class Router:
         Returns a RoutingDecision object.
         """
         router_prompt = ChatPromptTemplate.from_template(sample_router_prompt)
-        
 
         parser = JsonOutputParser(pydantic_object=RoutingDecision)
         formatted_prompt = router_prompt.format_messages(
-            schema_summary=self.schema_summary,
-            user_question=user_question
+            schema_summary=self.schema_summary, user_question=user_question
         )
 
         response = self.llm.invoke(formatted_prompt)
-        decision = parser.parse(response.content)
+        content = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
+        decision = parser.parse(content)
         return decision
 
 
