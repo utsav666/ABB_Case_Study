@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 import types
 
@@ -52,6 +53,25 @@ def test_chat_endpoint_accepts_message_payload(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["question"] == "show me sales"
+
+
+def test_chat_endpoint_logs_failures(monkeypatch, caplog) -> None:
+    class DummyOrchestrator:
+        def __init__(self, question: str) -> None:
+            self.question = question
+
+        def executor(self) -> dict[str, str]:
+            raise ValueError("demo failure")
+
+    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
+    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+
+    with caplog.at_level(logging.ERROR):
+        response = client.post("/chat", json={"message": "show me sales"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "demo failure"
+    assert "Chat request failed" in caplog.text
 
 
 def test_chat_endpoint_handles_empty_payload_gracefully() -> None:

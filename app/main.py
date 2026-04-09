@@ -30,6 +30,26 @@ logger = logging.getLogger(__name__)
 load_env()
 
 
+def configure_logging() -> None:
+    """Configure application logging for local runs and Lambda CloudWatch."""
+    log_level_name = os.getenv("APP_LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_name, logging.INFO)
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        )
+    else:
+        root_logger.setLevel(log_level)
+
+    logger.setLevel(log_level)
+
+
+configure_logging()
+
+
 def get_allowed_origins() -> list[str]:
     """Return normalized CORS origins from the environment."""
     configured_origins = os.getenv("ALLOWED_ORIGINS", "*").strip()
@@ -631,12 +651,17 @@ async def chat(
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
             result = Orchestrator(normalized_question).executor()
-    except FileNotFoundError as error:
+    except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
+        logger.exception("Chat request failed for question: %s", normalized_question)
         raise HTTPException(status_code=500, detail=str(error)) from error
-    except ModuleNotFoundError as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
-    except ValueError as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    captured_logs = buffer.getvalue().strip()
+    if captured_logs:
+        logger.info(
+            "Orchestrator output for question '%s':\n%s",
+            normalized_question,
+            captured_logs,
+        )
 
     response_payload = {
         "question": normalized_question,
