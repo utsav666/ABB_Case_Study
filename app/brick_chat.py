@@ -12,13 +12,30 @@ load_env()
 
 st.set_page_config(page_title="Chat with SQL Orchestrator", page_icon="🧠")
 
-st.sidebar.subheader("Navigation")
-selected_page = st.sidebar.radio(
-    "Go to",
-    ["Chat", "DB Column Config"],
+st.markdown(
+    """
+    <style>
+        section[data-testid="stSidebar"] .stButton > button > div {
+            text-align: left !important;
+            justify-content: left !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-if selected_page == "DB Column Config":
+st.sidebar.subheader("Navigation")
+
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "Chat"
+
+if st.sidebar.button("💬 Chat", use_container_width=True):
+    st.session_state.selected_page = "Chat"
+
+if st.sidebar.button("⚙️ DB Column Config", use_container_width=True):
+    st.session_state.selected_page = "DB Column Config"
+
+if st.session_state.selected_page == "DB Column Config":
     render_db_column_configuration_page()
     st.stop()
 
@@ -114,5 +131,4 @@ if user_input:
             with st.expander("📝 Logs"):
                 st.code(logs)
 
-    st.session_state.messages.append(assistant_message)
     st.session_state.messages.append(assistant_message)
