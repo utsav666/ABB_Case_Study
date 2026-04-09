@@ -7,15 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR ${LAMBDA_TASK_ROOT}
 
-COPY requirements.txt ./
+COPY requirements-lambda.txt ./
 
-RUN if command -v dnf >/dev/null 2>&1; then \
-        dnf install -y gcc gcc-c++ make && dnf clean all; \
-    else \
-        yum install -y gcc gcc-c++ make && yum clean all; \
-    fi \
-    && python -m pip install --upgrade pip \
-    && pip install --no-cache-dir --prefer-binary -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
+RUN python -m pip install --upgrade pip \
+    && pip install --no-cache-dir --only-binary=:all: \
+        -r requirements-lambda.txt \
+        --target "${LAMBDA_TASK_ROOT}"
 
 COPY app ./app
 COPY config ./config
