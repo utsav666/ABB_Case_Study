@@ -1,18 +1,10 @@
-FROM public.ecr.aws/lambda/python:3.11
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    MPLBACKEND=Agg \
-    MPLCONFIGDIR=/tmp/matplotlib
-
-WORKDIR ${LAMBDA_TASK_ROOT}
+FROM public.ecr.aws/lambda/python:3.12
 
 COPY requirements-lambda.txt ./
 
 RUN python -m pip install --upgrade pip \
     && pip install --no-cache-dir --only-binary=:all: \
-        -r requirements-lambda.txt \
-        --target "${LAMBDA_TASK_ROOT}"
+        -r requirements-lambda.txt
 
 COPY app ./app
 COPY config ./config
