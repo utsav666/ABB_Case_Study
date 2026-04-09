@@ -26,6 +26,7 @@ class RoutingDecision(BaseModel):
         "sql_query",
         "sql_and_chart",
         "schema_info",
+        "configuration",
         "general_answer",
         "explanation",
         "follow_up",

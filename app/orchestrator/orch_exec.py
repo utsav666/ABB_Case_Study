@@ -121,6 +121,11 @@ class Orchestrator:
             else:
                 print("\nFailed to generate charts")
 
+        elif decision_maker.route == "configuration":
+            return (
+                "Open the `DB Column Config` page in the Streamlit sidebar to "
+                "manage column labels, descriptions, and assistant visibility."
+            )
         elif decision_maker.route == "schema_info":
             schema_info_agent = SchemaInfoAgent(
                 self.user_question, decision_maker.reasoning

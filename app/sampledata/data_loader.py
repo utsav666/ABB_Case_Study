@@ -1,24 +1,15 @@
-import json
 import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.schema_config import SchemaConfigManager
 
 
 class DataLoader:
     @staticmethod
     def load_data():
-        # Get the path to the schema file relative to this file's location
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up from app/sampledata to app, then to SQL-Agent, then to sample_data
-        schema_path = os.path.join(
-            current_dir, "..", "..", "sample_data", "schema_preserve.json"
-        )
-        schema_path = os.path.abspath(schema_path)
-
-        with open(schema_path, "r") as table_structure:
-            json_tab_strcuture = json.load(table_structure)
-        return json_tab_strcuture
+        """Return schema data enriched with any UI-saved column configuration."""
+        return SchemaConfigManager.get_schema_with_column_configuration()
 
 
 class DBLoader:

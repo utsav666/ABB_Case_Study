@@ -48,6 +48,8 @@ sample_router_prompt = """You are a routing assistant that decides whether a use
         - If the question is about structure, metadata, relationships, or descriptions 
           (e.g., "what tables exist", "what does the Person table contain", "explain the schema"), 
           it can be answered from schema_info.
+        - If the question is about editing column labels/descriptions or opening settings in the UI,
+          return configuration.
         - Return JSON with keys "route" and "reasoning".
 
         Example 1:
@@ -58,11 +60,15 @@ sample_router_prompt = """You are a routing assistant that decides whether a use
         Question: "What columns are there in the person table?"
         Output: {{"route": "schema_info", "reasoning": "This only needs schema details."}}
 
+        Example 3:
+        Question: "Open the column configuration page"
+        Output: {{"route": "configuration", "reasoning": "User wants the UI settings route."}}
+
         Now analyze this:
         Question: 
         {user_question}
         """
-schema_info_gen_prompt ="""You are a Data expert . You will be provided a schema summary you need to answer
+schema_info_gen_prompt = """You are a Data expert . You will be provided a schema summary you need to answer
 User question based on the schema summary . Understand the user question then generate the answer
 You will be provided a context as well for your understanding 
 Below is a summary of the database schema. Each line describes a table and its key relationships.
@@ -84,6 +90,7 @@ Available routes:
 - sql_query: when user wants to retrieve data or run a DB query
 - schema_info: when user asks about tables, columns,structure, metadata, conceptual explanation or relationships relevant to schema,
 - sql_and_chart:  When the user wants to visualize, plot, chart, graph,compare trends, or display data visually from the database.
+- configuration: when user wants to configure the UI, edit DB column names/descriptions, or open a settings/configuration page
 - general_answer: when user asks general knowledge not related to DB
 - follow_up: when user asks something dependent on earlier context
 
@@ -142,5 +149,3 @@ User Question:
 Dataset Summary:
 {context}
 """
-
-

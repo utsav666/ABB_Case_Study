@@ -19,8 +19,11 @@ load_env()
 
 
 class RoutingDecision(BaseModel):
-    route: Literal["sql_query", "schema_info"] = Field(
-        description="Decide whether to run an SQL query or answer directly from schema info."
+    route: Literal["sql_query", "schema_info", "configuration"] = Field(
+        description=(
+            "Decide whether to run an SQL query, answer from schema info, "
+            "or direct the user to the UI configuration page."
+        )
     )
     reasoning: str = Field(description="Short reasoning why this route was chosen.")
 

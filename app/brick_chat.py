@@ -6,10 +6,22 @@ import streamlit as st
 from envsetup.env_loader import load_env
 from orchestrator.orch_exec import Orchestrator
 from pandas import DataFrame
+from utils.db_column_config_view import render_db_column_configuration_page
 
 load_env()
 
 st.set_page_config(page_title="Chat with SQL Orchestrator", page_icon="🧠")
+
+st.sidebar.subheader("Navigation")
+selected_page = st.sidebar.radio(
+    "Go to",
+    ["Chat", "DB Column Config"],
+)
+
+if selected_page == "DB Column Config":
+    render_db_column_configuration_page()
+    st.stop()
+
 st.title("🧠 Natural Language → SQL Orchestrator")
 
 if st.button("Clear chat history"):
@@ -50,24 +62,20 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Ask a question about your database...")
 
 if user_input:
-    # Save and display user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
 
-    # ✅ Run Orchestrator
     orch = Orchestrator(user_input)
 
-    # Capture logs (stdout) + returned result
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
-        result: Any = orch.executor()  # <-- whatever executor RETURNS
-    logs = buffer.getvalue()  # <-- everything executor PRINTED
+        result: Any = orch.executor()
+    logs = buffer.getvalue()
 
     assistant_message: dict[str, Any] = {"role": "assistant"}
     is_chart_result = isinstance(result, dict) and result.get("type") == "chart"
 
-    # ✅ Display assistant message (cleaner UI)
     with st.chat_message("assistant"):
         if is_chart_result:
             chart_figure = result.get("figure")
@@ -106,5 +114,5 @@ if user_input:
             with st.expander("📝 Logs"):
                 st.code(logs)
 
-    # ✅ Save assistant response in message history
+    st.session_state.messages.append(assistant_message)
     st.session_state.messages.append(assistant_message)
