@@ -4,7 +4,7 @@ import sys
 import openai
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
+from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from prompt.prompts import sql_gen_prompts
 from utils.table_struc_creation import TabStrucCreation
 
@@ -23,7 +23,7 @@ class SQLGenerationAgent:
             table_structure=self.tab_struc_gen, user_question=self.user_question
         )
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a world-class SQL generator."},
                 {"role": "user", "content": prompt},

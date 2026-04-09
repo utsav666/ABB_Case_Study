@@ -4,7 +4,7 @@ import sys
 import openai
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
+from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from prompt.prompts import schema_info_gen_prompt
 from utils.schema_summarizer import Summarizer
 
@@ -27,7 +27,7 @@ class SchemaInfoAgent:
         )
         print(prompt)
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a Schema expert."},
                 {"role": "user", "content": prompt},

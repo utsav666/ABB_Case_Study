@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from typing import Literal
 
-from envsetup.env_loader import load_env
+from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -33,7 +33,7 @@ class Router:
         self.schema_summary = (
             Summarizer.summarize_schema() or "No schema summary provided."
         )
-        self.llm = ChatOpenAI(model="gpt-4", temperature=0)
+        self.llm = ChatOpenAI(model=get_openai_model(), temperature=0)
 
     def route_question(self, user_question: str):
         """

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from envsetup.env_loader import get_openai_api_key, load_env
+from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -20,7 +20,7 @@ class ChartDecision(BaseModel):
 class ChartAgent:
     def __init__(self):
         self.llm = ChatOpenAI(
-            model="gpt-4o",
+            model=get_openai_model(),
             temperature=0,
             api_key=SecretStr(get_openai_api_key()),
         )

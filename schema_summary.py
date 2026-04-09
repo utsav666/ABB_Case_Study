@@ -12,6 +12,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from app.envsetup.env_loader import load_env
+from app.envsetup.env_loader import get_openai_model
 
 # Load variables from .env file
 load_env()
@@ -23,7 +24,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
 
 # Define LLM
-llm = ChatOpenAI(model="gpt-4", temperature=0)
+llm = ChatOpenAI(model=get_openai_model(), temperature=0)
 
 
 # ---------- Pydantic Schema ----------
@@ -75,7 +76,7 @@ def tab_struc_creation(tab_list):
 
 # ----Table Identification-------
 def identify_relevant_tables(
-    parser, res: str, user_question: str, model: str = "gpt-4"
+    parser, res: str, user_question: str, model: str | None = None
 ):
     """
     Given a schema summary (text) and a natural-language question,
@@ -108,7 +109,7 @@ User Question: "{user_question}"
     return parsed
 
 
-def sql_generator(table_structure: str, user_question: str, model: str = "gpt-4"):
+def sql_generator(table_structure: str, user_question: str, model: str | None = None):
     sql_prompt = f"""You are a world-class SQL engineer.
 Your task is to write the perfect SQL query based on the given **table structure (in JSON format)** and **user question**.
 Guidelines:
@@ -128,7 +129,7 @@ User Question:
 Now write the SQL query:
 """
     response = openai.chat.completions.create(
-        model=model,
+        model=model or get_openai_model(),
         messages=[
             {"role": "system", "content": "You are a world-class SQL generator."},
             {"role": "user", "content": sql_prompt},

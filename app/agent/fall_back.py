@@ -2,7 +2,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from envsetup.env_loader import get_openai_api_key, load_env
+from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from langchain_openai import ChatOpenAI
 from prompt.prompts import fall_back_prompt
 from pydantic import SecretStr
@@ -16,9 +16,9 @@ class GeneralAnswerAgent:
     It uses conversation history + user question + router reasoning to generate a clean answer.
     """
 
-    def __init__(self, model="gpt-4o", temperature=0.2):
+    def __init__(self, model: str | None = None, temperature=0.2):
         self.llm = ChatOpenAI(
-            model=model,
+            model=model or get_openai_model(),
             temperature=temperature,
             api_key=SecretStr(get_openai_api_key()),
         )
