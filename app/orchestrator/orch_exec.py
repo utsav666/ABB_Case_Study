@@ -140,9 +140,9 @@ class Orchestrator:
 
 
 #### Unite Test 3 #########
-# if __name__ == "__main__":
-#     user_query = "visuzlie me year wise movie count"
-#     print("..Orchestration Started.....")
-#     orch_run = Orchestrator(user_query)
-#     orch_run.executor()
-#     print("..Orchetsration Completed.....")
+if __name__ == "__main__":
+    user_query = "show me the total movie count in the year 1950"
+    print("..Orchestration Started.....")
+    orch_run = Orchestrator(user_query)
+    orch_run.executor()
+    print("..Orchetsration Completed.....")

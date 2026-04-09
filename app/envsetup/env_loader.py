@@ -28,6 +28,12 @@ def load_env():
     _env_loaded = True
 
 
+def get_openai_model() -> str:
+    """Return the configured OpenAI model name, defaulting to gpt-4o."""
+    load_env()
+    return os.getenv("OPENAI_MODEL", "gpt-4o").strip().strip("'\"")
+
+
 def get_openai_api_key() -> str:
     """Return the configured OpenAI API key from environment or .env."""
     load_env()
