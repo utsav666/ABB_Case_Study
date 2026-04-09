@@ -626,12 +626,14 @@ async def chat(
         )
 
     try:
-        from orchestrator.orch_exec import Orchestrator
+        from app.orchestrator.orch_exec import Orchestrator
 
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
             result = Orchestrator(normalized_question).executor()
     except FileNotFoundError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    except ModuleNotFoundError as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=500, detail=str(error)) from error

@@ -46,7 +46,7 @@ def test_chat_endpoint_accepts_message_payload(monkeypatch) -> None:
             return {"echo": self.question}
 
     fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
-    monkeypatch.setitem(sys.modules, "orchestrator.orch_exec", fake_module)
+    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
 
     response = client.post("/chat", json={"message": "show me sales"})
 
