@@ -74,6 +74,26 @@ def test_chat_endpoint_logs_failures(monkeypatch, caplog) -> None:
     assert "Chat request failed" in caplog.text
 
 
+def test_chat_endpoint_logs_unexpected_failures(monkeypatch, caplog) -> None:
+    class DummyOrchestrator:
+        def __init__(self, question: str) -> None:
+            self.question = question
+
+        def executor(self) -> dict[str, str]:
+            raise RuntimeError("unexpected failure")
+
+    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
+    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+
+    error_client = TestClient(app, raise_server_exceptions=False)
+    with caplog.at_level(logging.ERROR):
+        response = error_client.post("/chat", json={"message": "show me sales"})
+
+    assert response.status_code == 500
+    assert "Unhandled application error" in caplog.text
+    assert "unexpected failure" in caplog.text
+
+
 def test_chat_endpoint_handles_empty_payload_gracefully() -> None:
     response = client.post("/chat", json={})
 

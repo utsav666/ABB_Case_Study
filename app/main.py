@@ -14,6 +14,7 @@ import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.envsetup.env_loader import load_env
@@ -81,6 +82,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_exception(
+    request: Request,
+    error: Exception,
+) -> JSONResponse:
+    """Log uncaught application exceptions for CloudWatch visibility."""
+    logger.exception(
+        "Unhandled application error on %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(status_code=500, content={"detail": str(error)})
 
 
 class ChatRequest(BaseModel):
