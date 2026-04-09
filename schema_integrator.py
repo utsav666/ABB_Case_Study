@@ -1,6 +1,6 @@
-import sqlite3
 import json
-from typing import Dict, Any, List
+import sqlite3
+from typing import Any, Dict, List
 
 
 class SQLiteSchemaIngestor:
@@ -25,7 +25,7 @@ class SQLiteSchemaIngestor:
                 "type": col[2],
                 "notnull": bool(col[3]),
                 "default": col[4],
-                "is_pk": col[5] > 0
+                "is_pk": col[5] > 0,
             }
             if col[5] > 0:
                 pk_columns.append((col[5], col_name))  # (position, name)
@@ -40,11 +40,7 @@ class SQLiteSchemaIngestor:
         for row in cursor.fetchall():
             fid = row[0]  # foreign key id, same id = same composite FK
             if fid not in fks:
-                fks[fid] = {
-                    "from": [],
-                    "to_table": row[2],
-                    "to_columns": []
-                }
+                fks[fid] = {"from": [], "to_table": row[2], "to_columns": []}
             fks[fid]["from"].append(row[3])
             fks[fid]["to_columns"].append(row[4])
         return list(fks.values())
@@ -57,16 +53,16 @@ class SQLiteSchemaIngestor:
             unique = bool(idx[2])
             idx_info_cursor = self.conn.execute(f"PRAGMA index_info({index_name});")
             indexed_cols = [col[2] for col in idx_info_cursor.fetchall()]
-            indices.append({
-                "name": index_name,
-                "unique": unique,
-                "columns": indexed_cols
-            })
+            indices.append(
+                {"name": index_name, "unique": unique, "columns": indexed_cols}
+            )
         return indices
 
     def get_sample_rows(self, table: str):
         try:
-            cursor = self.conn.execute(f"SELECT * FROM {table} LIMIT {self.sample_rows};")
+            cursor = self.conn.execute(
+                f"SELECT * FROM {table} LIMIT {self.sample_rows};"
+            )
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.DatabaseError:
             return []  # views without data, etc.
@@ -88,7 +84,7 @@ class SQLiteSchemaIngestor:
                 "primary_key": pk_columns,
                 "foreign_keys": fks,
                 "indices": indices,
-                "sample_rows": samples
+                "sample_rows": samples,
             }
         return schema
 
@@ -99,9 +95,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SQLite Schema Ingestor")
     parser.add_argument("db_path", help="Path to the SQLite database file")
     args = parser.parse_args()
-    print(args,'---args-----')
+    print(args, "---args-----")
     ingestor = SQLiteSchemaIngestor(args.db_path)
     schema = ingestor.extract()
-    #print(json.dumps(schema, indent=2))
-    with open('sample_data/schema_preserve.json','w') as f:
+    # print(json.dumps(schema, indent=2))
+    with open("sample_data/schema_preserve.json", "w") as f:
         json.dump(schema, f, indent=2)
