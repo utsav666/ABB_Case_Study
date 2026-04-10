@@ -234,6 +234,55 @@ def test_auth_callback_endpoint_returns_user_details(monkeypatch) -> None:
     assert payload["token"]["access_token"] == "demo-access-token"
 
 
+def test_lambda_handler_accepts_sparse_api_gateway_v2_events() -> None:
+    from app.lambda_handler import handler
+
+    event = {
+        "version": "2.0",
+        "routeKey": "$default",
+        "rawPath": "/health",
+        "rawQueryString": "",
+        "headers": None,
+        "requestContext": {
+            "http": {
+                "method": "GET",
+                "path": "/health",
+            }
+        },
+        "isBase64Encoded": False,
+    }
+
+    response = handler(event, {})
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"]) == {"status": "ok"}
+
+
+def test_lambda_handler_supports_api_gateway_v1_events() -> None:
+    from app.lambda_handler import handler
+
+    event = {
+        "resource": "/health",
+        "path": "/health",
+        "httpMethod": "GET",
+        "headers": {
+            "Host": "lambda.example.com",
+            "X-Forwarded-Proto": "https",
+        },
+        "requestContext": {
+            "identity": {
+                "sourceIp": "127.0.0.1",
+            }
+        },
+        "isBase64Encoded": False,
+    }
+
+    response = handler(event, {})
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"]) == {"status": "ok"}
+
+
 def test_lambda_handler_serves_health_endpoint() -> None:
     from app.lambda_handler import handler
 
