@@ -404,6 +404,30 @@ def serialize_figure_to_base64(figure: Any) -> str | None:
     return base64.b64encode(buffer.read()).decode("utf-8")
 
 
+def log_captured_orchestrator_output(
+    question: str,
+    raw_logs: str,
+    level: int = logging.INFO,
+) -> None:
+    """Write captured orchestrator stdout and stderr into application logs.
+
+    Args:
+        question: User question tied to the orchestrator run.
+        raw_logs: Captured stdout and stderr text.
+        level: Logging level used for the message.
+    """
+    cleaned_logs = raw_logs.strip()
+    if not cleaned_logs:
+        return
+
+    logger.log(
+        level,
+        "Orchestrator output for question '%s':\n%s",
+        question,
+        cleaned_logs,
+    )
+
+
 def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
     """Normalize orchestrator output for API responses."""
     payload: dict[str, Any] = {
@@ -664,19 +688,29 @@ async def chat(
         from app.orchestrator.orch_exec import Orchestrator
 
         buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
             result = Orchestrator(normalized_question).executor()
     except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
+        log_captured_orchestrator_output(
+            normalized_question,
+            buffer.getvalue(),
+            logging.ERROR,
+        )
         logger.exception("Chat request failed for question: %s", normalized_question)
         raise HTTPException(status_code=500, detail=str(error)) from error
-
-    captured_logs = buffer.getvalue().strip()
-    if captured_logs:
-        logger.info(
-            "Orchestrator output for question '%s':\n%s",
+    except Exception:
+        log_captured_orchestrator_output(
             normalized_question,
-            captured_logs,
+            buffer.getvalue(),
+            logging.ERROR,
         )
+        raise
+
+    log_captured_orchestrator_output(
+        normalized_question,
+        buffer.getvalue(),
+        logging.INFO,
+    )
 
     response_payload = {
         "question": normalized_question,

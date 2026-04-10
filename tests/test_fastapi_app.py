@@ -74,6 +74,25 @@ def test_chat_endpoint_logs_failures(monkeypatch, caplog) -> None:
     assert "Chat request failed" in caplog.text
 
 
+def test_chat_endpoint_logs_captured_output_on_failures(monkeypatch, caplog) -> None:
+    class DummyOrchestrator:
+        def __init__(self, question: str) -> None:
+            self.question = question
+
+        def executor(self) -> dict[str, str]:
+            print("step one completed")
+            raise ValueError("demo failure")
+
+    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
+    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+
+    with caplog.at_level(logging.INFO):
+        response = client.post("/chat", json={"message": "show me sales"})
+
+    assert response.status_code == 500
+    assert "step one completed" in caplog.text
+
+
 def test_chat_endpoint_logs_unexpected_failures(monkeypatch, caplog) -> None:
     class DummyOrchestrator:
         def __init__(self, question: str) -> None:
