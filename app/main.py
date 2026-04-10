@@ -72,7 +72,7 @@ app = FastAPI(
         "FastAPI version of the natural-language-to-SQL orchestrator. "
         "Use `/chat` for questions and `/schema/config` to manage column metadata."
     ),
-    root_path=os.getenv("FASTAPI_ROOT_PATH", "").strip(),
+    docs_url="/docs",
 )
 
 app.add_middleware(

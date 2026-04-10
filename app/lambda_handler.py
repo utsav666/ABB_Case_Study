@@ -4,6 +4,6 @@ from mangum import Mangum
 
 from app.main import app
 
-handler = Mangum(app, lifespan="off", api_gateway_base_path="")
+handler = Mangum(app, lifespan="off")
 
 __all__ = ["handler"]
