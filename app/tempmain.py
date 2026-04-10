@@ -3,7 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize the app
 # Use root_path="" if using a custom domain or HTTP API $default stage
-app = FastAPI(title="Lambda FastAPI", root_path="")
+app = FastAPI(
+    title="Lambda FastAPI",
+    root_path="",  # Forces the app to treat the domain root as the base
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+)
 
 # Add CORS so your frontend doesn't complain
 app.add_middleware(
@@ -20,7 +25,7 @@ def read_root():
 
 
 @app.get("/items/{item_id}")
-def read_item(item_id: int, q: str = None):
+def read_item(item_id: int, q: str = ""):
     return {"item_id": item_id, "query": q}
 
 
