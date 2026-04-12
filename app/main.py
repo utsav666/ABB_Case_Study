@@ -11,7 +11,7 @@ from urllib.parse import parse_qsl, urlencode
 
 import pandas as pd
 import requests
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,7 +23,14 @@ from app.utils.db_column_config_view import (
     get_table_configuration_payload,
     save_table_configuration,
 )
+from app.utils.db_connections import (
+    DBConnectionCreate,
+    get_table_columns_for_connection,
+    get_tables_for_connection,
+    insert_db_connection,
+)
 from app.utils.schema_config import SchemaConfigManager
+from app.utils.schema_generator import generate_schema_config
 from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
@@ -612,15 +619,59 @@ def get_schema_summary() -> dict[str, str]:
     return {"summary": Summarizer.summarize_schema()}
 
 
+@app.get("/schema/tables")
+def get_schema_tables(
+    connection_id: str,
+    schema_name: str = "public",
+) -> dict[str, Any]:
+    """Return the list of tables and their count from the target database."""
+    return get_tables_for_connection(connection_id, schema_name)
+
+
 @app.get("/schema/config")
-def get_schema_configuration() -> dict[str, Any]:
-    """Return the full schema plus editable column metadata."""
+def get_schema_configuration(
+    connection_id: str | None = None,
+    schema_name: str = "public",
+    table_name: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    """Return the full schema plus editable column metadata.
+
+    When connection_id is provided, fetches schema config
+    (columns, primary keys, foreign keys) from the target database.
+    Otherwise returns locally loaded schema configuration.
+
+    Query params:
+        connection_id: Target database connection to query.
+        schema_name: Schema inside the target database (default: public).
+        table_name: One or more table names to include (repeat for multiple).
+            When omitted, all tables in the schema are returned.
+    """
+    if connection_id:
+        if table_name:
+            selected_tables = table_name
+        else:
+            tables_result = get_tables_for_connection(connection_id, schema_name)
+            selected_tables = tables_result["table_names"]
+
+        return generate_schema_config(connection_id, selected_tables, schema_name)
+
     return jsonable_encoder(build_db_column_configuration_payload())
 
 
 @app.get("/schema/config/{table_name}")
-def get_table_configuration(table_name: str) -> dict[str, Any]:
-    """Return editable configuration rows for one table."""
+def get_table_configuration(
+    table_name: str,
+    connection_id: str | None = None,
+    schema_name: str = "public",
+) -> dict[str, Any]:
+    """Return column details for one table.
+
+    When connection_id is provided, fetches columns from the target database.
+    Otherwise returns locally loaded column metadata.
+    """
+    if connection_id:
+        return get_table_columns_for_connection(connection_id, table_name, schema_name)
+
     table_payload = get_table_configuration_payload(table_name)
     if table_payload is None:
         raise HTTPException(status_code=404, detail=f"Unknown table: {table_name}")
@@ -652,6 +703,12 @@ def reset_table_metadata(table_name: str) -> dict[str, str]:
 
     SchemaConfigManager.reset_table_configuration(table_name)
     return {"status": "reset", "table_name": table_name}
+
+
+@app.post("/db-connections", status_code=201)
+def create_db_connection(payload: DBConnectionCreate) -> dict[str, Any]:
+    """Create a new database connection record."""
+    return insert_db_connection(payload)
 
 
 @app.post("/chat")
