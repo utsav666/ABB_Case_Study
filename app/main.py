@@ -603,6 +603,7 @@ async def get_auth_callback(
         "error": None,
         "error_description": None,
         "message": message,
+        "access_token": access_token,
     }
 
 
