@@ -1,3 +1,5 @@
+import logging
+
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -5,6 +7,8 @@ from app.envsetup.env_loader import get_openai_api_key, load_env
 from app.prompt.prompts import fall_back_prompt
 
 load_env()
+
+logger = logging.getLogger(__name__)
 
 
 class GeneralAnswerAgent:
@@ -26,7 +30,9 @@ class GeneralAnswerAgent:
         user_question: str
         router_reasoning: str
         """
-        print(conversation_history, ".....conv history.....")
+        logger.debug(
+            "Fallback agent conversation length: %s", len(conversation_history)
+        )
         messages = [{"role": "system", "content": fall_back_prompt}]
 
         # Add conversation history

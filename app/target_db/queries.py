@@ -2,38 +2,18 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-# ---------------------------------------------------------------------------
-# Settings DB queries
-# ---------------------------------------------------------------------------
-
-INSERT_DB_CONNECTION = text("""
-    INSERT INTO settings.db_connections
-        (workspace_id, name, engine, db_host, db_port, db_name, db_user, db_password)
-    VALUES
-        (:workspace_id, :name, :engine, :db_host, :db_port, :db_name, :db_user, :db_password)
-    RETURNING id, workspace_id, name, engine, db_host, db_port, db_name, db_user,
-              is_healthy, last_synced_at, created_at
-""")
-
-FETCH_CONNECTION_BY_ID = text("""
-    SELECT id, engine, db_host, db_port, db_name, db_user, db_password
-    FROM settings.db_connections
-    WHERE id = :connection_id
-""")
-
-# ---------------------------------------------------------------------------
-# Target DB queries
-# ---------------------------------------------------------------------------
-
-FETCH_TABLES = text("""
+FETCH_TABLES = text(
+    """
     SELECT table_name
     FROM information_schema.tables
     WHERE table_schema = :schema_name
       AND table_type = 'BASE TABLE'
     ORDER BY table_name
-""")
+    """
+)
 
-FETCH_TABLE_COLUMNS = text("""
+FETCH_TABLE_COLUMNS = text(
+    """
     SELECT
         c.column_name,
         c.data_type,
@@ -53,9 +33,11 @@ FETCH_TABLE_COLUMNS = text("""
     WHERE c.table_schema = :schema_name
       AND c.table_name = :table_name
     ORDER BY c.ordinal_position
-""")
+    """
+)
 
-FETCH_COLUMNS_WITH_PK = text("""
+FETCH_COLUMNS_WITH_PK = text(
+    """
     SELECT
         c.column_name,
         c.data_type,
@@ -74,9 +56,11 @@ FETCH_COLUMNS_WITH_PK = text("""
     WHERE c.table_schema = :schema_name
       AND c.table_name = :table_name
     ORDER BY c.ordinal_position
-""")
+    """
+)
 
-FETCH_FOREIGN_KEYS = text("""
+FETCH_FOREIGN_KEYS = text(
+    """
     SELECT
         kcu.column_name AS from_column,
         ccu.table_name AS to_table,
@@ -93,4 +77,5 @@ FETCH_FOREIGN_KEYS = text("""
       AND tc.table_schema = :schema_name
       AND tc.table_name = :table_name
     ORDER BY tc.constraint_name, kcu.ordinal_position
-""")
+    """
+)

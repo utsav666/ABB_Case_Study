@@ -1,3 +1,5 @@
+import logging
+
 import matplotlib
 from pandas import DataFrame
 
@@ -14,52 +16,52 @@ from app.utils.char_context import ChartContext
 from app.utils.sql_executor import SqlExec
 from app.utils.sql_validator import validator
 
+logger = logging.getLogger(__name__)
+
 
 ######Simple Hardcoded Orchetrator########
 class Orchestrator:
-    def __init__(self, user_question):
+    def __init__(self, user_question: str):
         self.user_question = user_question
         self.TA = TableIdentiferAgent(self.user_question)
         self.router = Router()
 
     def executor(self):
-        print("user question .... " + self.user_question)
-        print("\n.....Intent identifcation......")
+        logger.info("Running orchestration for question: %s", self.user_question)
         decision_maker = self.router.route_question(self.user_question)
-        # print(memory,"........mory........")
-        print(decision_maker, "decision_maker")
+        logger.info("Router decision: %s", decision_maker)
         if decision_maker.route == "sql_query":
             ta_agent_result = self.TA.run()
-            print("\n....Table identifier result... " + str(ta_agent_result))
-            print("\nRunning SQL Generation Agent")
+            logger.debug("Table identifier result: %s", ta_agent_result)
             sql_gen_agent = SQLGenerationAgent(
                 self.user_question, ta_agent_result["relevant_tables"]
             )
             sql_gen_res = sql_gen_agent.run()
-            print("\n....SQL generation Result... " + sql_gen_res)
+            logger.debug("Generated SQL: %s", sql_gen_res)
             sql_val = validator(sql_gen_res)
             if sql_val is True:
-                print("\n.........executing query......")
+                logger.debug("Executing generated SQL")
                 sql_exec = SqlExec().sql_executor(sql_gen_res)
-                # print(sql_exec.shape)
                 return sql_exec
             else:
-                print("\nFailed to generate sql")
+                logger.warning("SQL validation failed")
         elif decision_maker.route == "sql_and_chart":
             ta_agent_result = self.TA.run()
-            print("\n....Table identifier result... " + str(ta_agent_result))
-            print("\nRunning SQL Generation Agent")
+            logger.debug("Table identifier result: %s", ta_agent_result)
             sql_gen_agent = SQLGenerationAgent(
                 self.user_question, ta_agent_result["relevant_tables"]
             )
             sql_gen_res = sql_gen_agent.run()
-            print("\n....SQL generation Result... " + sql_gen_res)
+            logger.debug("Generated SQL: %s", sql_gen_res)
             sql_val = validator(sql_gen_res)
             if sql_val is True:
-                print("\n.........executing query......")
+                logger.debug("Executing generated SQL for chart flow")
                 sql_exec: DataFrame | str = SqlExec().sql_executor(sql_gen_res)
                 if not isinstance(sql_exec, DataFrame):
-                    print("SQL execution did not return a DataFrame:", repr(sql_exec))
+                    logger.warning(
+                        "SQL execution did not return a DataFrame: %s",
+                        repr(sql_exec),
+                    )
                     return {
                         "type": "error",
                         "message": "Query execution failed or returned invalid result.",
@@ -67,14 +69,14 @@ class Orchestrator:
 
                 chart_context = ChartContext.build_chart_context(sql_exec)
                 chart_gen_decision = ChartAgent().run(self.user_question, chart_context)
-                print(chart_gen_decision, "....chart gen decision....")
+                logger.debug("Chart generation decision: %s", chart_gen_decision)
 
                 if (
                     chart_gen_decision.x_axis not in sql_exec.columns
                     or chart_gen_decision.y_axis not in sql_exec.columns
                 ):
-                    print(
-                        "Chart axis not found in SQL result columns:",
+                    logger.warning(
+                        "Chart axis missing in SQL result columns: %s",
                         sql_exec.columns.tolist(),
                     )
                     return {
@@ -117,7 +119,7 @@ class Orchestrator:
                 ax.set_ylabel(chart_gen_decision.y_axis)
                 return {"type": "chart", "figure": fig, "data": sql_exec}
             else:
-                print("\nFailed to generate charts")
+                logger.warning("SQL validation failed for chart flow")
 
         elif decision_maker.route == "configuration":
             return (
@@ -129,7 +131,7 @@ class Orchestrator:
                 self.user_question, decision_maker.reasoning
             )
             res = schema_info_agent.run()
-            print(res)
+            logger.debug("Schema info response generated")
             return res
         else:
             gen_ans_agent = GeneralAnswerAgent()

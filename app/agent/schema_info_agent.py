@@ -1,3 +1,5 @@
+import logging
+
 import openai
 
 from app.envsetup.env_loader import get_openai_api_key, load_env
@@ -5,6 +7,8 @@ from app.prompt.prompts import schema_info_gen_prompt
 from app.utils.schema_summarizer import Summarizer
 
 load_env()
+
+logger = logging.getLogger(__name__)
 
 
 class SchemaInfoAgent:
@@ -21,7 +25,7 @@ class SchemaInfoAgent:
             user_question=self.user_question,
             context=self.context,
         )
-        print(prompt)
+        logger.debug("Running schema info prompt with context: %s", self.context)
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[

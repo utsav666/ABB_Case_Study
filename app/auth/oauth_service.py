@@ -3,39 +3,31 @@ from __future__ import annotations
 import base64
 import contextlib
 import json
-import os
+import logging
 import time
 from typing import Any
 from urllib.parse import parse_qsl, urlencode
 
 import requests
-from fastapi import Request
+from fastapi import HTTPException, Request
 
-DEFAULT_OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-DEFAULT_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
-DEFAULT_OAUTH_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
-DEFAULT_OAUTH_SCOPE = "openid profile email"
-DEFAULT_OAUTH_CALLBACK_PATH = "/auth/callback"
+from app.auth.oauth_config import (
+    DEFAULT_OAUTH_CALLBACK_PATH,
+    DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS,
+    DEFAULT_OAUTH_WELL_KNOWN_TIMEOUT_SECONDS,
+    get_oauth_config,
+)
+from app.settings_db.exceptions import SettingsDatabaseConfigurationError
+from app.utils.settings_users import upsert_oauth_user
+
 DEFAULT_OAUTH_SESSION_PATH = "/auth/session"
-DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS = 300
-DEFAULT_OAUTH_WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration"
-DEFAULT_OAUTH_WELL_KNOWN_TIMEOUT_SECONDS = 10
+
+logger = logging.getLogger(__name__)
 
 
 def get_oauth_well_known_url() -> str:
-    """Return configured OpenID discovery URL when available."""
-    configured_well_known_url = os.getenv("OAUTH_WELL_KNOWN_URL", "").strip()
-    if configured_well_known_url:
-        return configured_well_known_url
-
-    configured_issuer = (
-        os.getenv("OAUTH_ISSUER", "").strip()
-        or os.getenv("OAUTH_ISSUER_URL", "").strip()
-    )
-    if not configured_issuer:
-        return ""
-
-    return f"{configured_issuer.rstrip('/')}{DEFAULT_OAUTH_WELL_KNOWN_SUFFIX}"
+    """Return configured OpenID discovery URL from environment settings."""
+    return get_oauth_config().well_known_url
 
 
 def get_oauth_well_known_payload() -> dict[str, Any]:
@@ -72,7 +64,7 @@ def get_well_known_endpoint(endpoint_name: str) -> str:
 
 def get_oauth_redirect_uri(request: Request) -> str:
     """Return the configured callback URL for OAuth login."""
-    configured_redirect_uri = os.getenv("OAUTH_REDIRECT_URI", "").strip()
+    configured_redirect_uri = get_oauth_config().redirect_uri
     if configured_redirect_uri:
         return configured_redirect_uri
 
@@ -82,31 +74,36 @@ def get_oauth_redirect_uri(request: Request) -> str:
 
 def build_oauth_login_payload(request: Request) -> dict[str, Any]:
     """Build a frontend-ready OAuth login URL payload."""
-    provider_name = os.getenv("OAUTH_PROVIDER", "oauth").strip() or "oauth"
+    oauth_config = get_oauth_config()
+    provider_name = oauth_config.provider_name
     authorize_url = get_oauth_authorize_url()
-    scope = os.getenv("OAUTH_SCOPE", DEFAULT_OAUTH_SCOPE).strip() or DEFAULT_OAUTH_SCOPE
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
+    scope = oauth_config.scope
+    client_id = oauth_config.client_id
 
     query_params: dict[str, str] = {
         "client_id": client_id,
         "redirect_uri": get_oauth_redirect_uri(request),
         "response_type": "code",
         "scope": scope,
-        "state": os.getenv("OAUTH_STATE", "login").strip() or "login",
+        "state": oauth_config.state,
     }
 
-    access_type = os.getenv("OAUTH_ACCESS_TYPE", "").strip()
+    access_type = oauth_config.access_type
     if access_type:
         query_params["access_type"] = access_type
 
-    include_granted_scopes = os.getenv("OAUTH_INCLUDE_GRANTED_SCOPES", "").strip()
+    include_granted_scopes = oauth_config.include_granted_scopes
     if include_granted_scopes:
         query_params["include_granted_scopes"] = include_granted_scopes
 
+    login_url = ""
+    if authorize_url:
+        login_url = f"{authorize_url}?{urlencode(query_params)}"
+
     return {
         "provider": provider_name,
-        "configured": bool(client_id),
-        "login_url": f"{authorize_url}?{urlencode(query_params)}",
+        "configured": bool(client_id and authorize_url),
+        "login_url": login_url,
         "redirect_uri": query_params["redirect_uri"],
         "scopes": scope.split(),
     }
@@ -114,66 +111,48 @@ def build_oauth_login_payload(request: Request) -> dict[str, Any]:
 
 def get_oauth_provider_name() -> str:
     """Return provider name used by auth responses."""
-    return os.getenv("OAUTH_PROVIDER", "oauth").strip() or "oauth"
+    return get_oauth_config().provider_name
 
 
 def get_oauth_token_url() -> str:
-    """Return the configured OAuth token endpoint."""
-    configured_token_url = os.getenv("OAUTH_TOKEN_URL", "").strip()
-    if configured_token_url:
-        return configured_token_url
-
-    discovered_token_url = get_well_known_endpoint("token_endpoint")
-    if discovered_token_url:
-        return discovered_token_url
-
-    return DEFAULT_OAUTH_TOKEN_URL
+    """Return the OAuth token endpoint from OpenID discovery."""
+    return get_well_known_endpoint("token_endpoint")
 
 
 def get_oauth_userinfo_url() -> str:
-    """Return the configured OAuth userinfo endpoint."""
-    configured_userinfo_url = os.getenv("OAUTH_USERINFO_URL", "").strip()
-    if configured_userinfo_url:
-        return configured_userinfo_url
-
-    discovered_userinfo_url = get_well_known_endpoint("userinfo_endpoint")
-    if discovered_userinfo_url:
-        return discovered_userinfo_url
-
-    return DEFAULT_OAUTH_USERINFO_URL
+    """Return the OAuth userinfo endpoint from OpenID discovery."""
+    return get_well_known_endpoint("userinfo_endpoint")
 
 
 def get_oauth_authorize_url() -> str:
-    """Return the configured OAuth authorization endpoint."""
-    configured_authorize_url = os.getenv("OAUTH_AUTHORIZE_URL", "").strip()
-    if configured_authorize_url:
-        return configured_authorize_url
-
-    discovered_authorize_url = get_well_known_endpoint("authorization_endpoint")
-    if discovered_authorize_url:
-        return discovered_authorize_url
-
-    return DEFAULT_OAUTH_AUTHORIZE_URL
+    """Return the OAuth authorization endpoint from OpenID discovery."""
+    return get_well_known_endpoint("authorization_endpoint")
 
 
 def can_exchange_oauth_code() -> bool:
     """Return whether the backend can exchange the authorization code."""
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("OAUTH_CLIENT_SECRET", "").strip()
+    oauth_config = get_oauth_config()
+    client_id = oauth_config.client_id
+    client_secret = oauth_config.client_secret
     return bool(client_id and client_secret)
 
 
 def exchange_oauth_code_for_token(code: str, request: Request) -> dict[str, Any]:
     """Exchange an OAuth authorization code for tokens."""
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("OAUTH_CLIENT_SECRET", "").strip()
+    oauth_config = get_oauth_config()
+    client_id = oauth_config.client_id
+    client_secret = oauth_config.client_secret
     if not client_id or not client_secret:
         raise ValueError(
             "Set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to enable backend authentication."
         )
 
+    token_url = get_oauth_token_url()
+    if not token_url:
+        raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable OAuth token exchange.")
+
     token_response = requests.post(
-        get_oauth_token_url(),
+        token_url,
         data={
             "client_id": client_id,
             "client_secret": client_secret,
@@ -193,15 +172,20 @@ def exchange_oauth_code_for_token(code: str, request: Request) -> dict[str, Any]
 
 def refresh_oauth_token(refresh_token: str, request: Request) -> dict[str, Any]:
     """Exchange a refresh token for a new access token payload."""
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("OAUTH_CLIENT_SECRET", "").strip()
+    oauth_config = get_oauth_config()
+    client_id = oauth_config.client_id
+    client_secret = oauth_config.client_secret
     if not client_id or not client_secret:
         raise ValueError(
             "Set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to enable token refresh."
         )
 
+    token_url = get_oauth_token_url()
+    if not token_url:
+        raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable token refresh.")
+
     token_response = requests.post(
-        get_oauth_token_url(),
+        token_url,
         data={
             "client_id": client_id,
             "client_secret": client_secret,
@@ -224,8 +208,12 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
     if not access_token.strip():
         return {}
 
+    userinfo_url = get_oauth_userinfo_url()
+    if not userinfo_url:
+        raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable user profile fetch.")
+
     user_response = requests.get(
-        get_oauth_userinfo_url(),
+        userinfo_url,
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=30,
     )
@@ -235,6 +223,24 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
         raise ValueError("OAuth user info response must be a JSON object.")
 
     return user_payload
+
+
+def persist_oauth_user_details(user_payload: dict[str, Any]) -> dict[str, Any]:
+    """Persist an OAuth user into settings.users and return the enriched payload.
+
+    Args:
+        user_payload: OAuth user profile payload.
+
+    Returns:
+        dict[str, Any]: Persisted user payload.
+    """
+    try:
+        return upsert_oauth_user(user_payload)
+    except (HTTPException, ModuleNotFoundError, SettingsDatabaseConfigurationError):
+        logger.warning(
+            "Skipping OAuth user persistence because the settings database is unavailable."
+        )
+        return user_payload
 
 
 def build_oauth_token_payload(
@@ -364,11 +370,8 @@ def get_seconds_until_expiry(
 
 def get_refresh_window_seconds() -> int:
     """Return the threshold window used to refresh near-expiry tokens."""
-    configured_window = os.getenv(
-        "OAUTH_SESSION_REFRESH_WINDOW_SECONDS",
-        str(DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS),
-    )
-    parsed_window = parse_duration_seconds(configured_window)
+    refresh_window_seconds = get_oauth_config().refresh_window_seconds
+    parsed_window = parse_duration_seconds(str(refresh_window_seconds))
     if parsed_window is None:
         return DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS
 

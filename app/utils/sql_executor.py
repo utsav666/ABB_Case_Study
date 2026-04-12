@@ -1,9 +1,13 @@
+import logging
 from typing import Union
 
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.sampledata.data_loader import DBLoader
+
+logger = logging.getLogger(__name__)
 
 
 class SqlExec:
@@ -13,7 +17,7 @@ class SqlExec:
         # self.connection = sqlite3.connect(self.data_path)
         # self.sql_query = sql_query
 
-    def sql_executor(self, sql_query) -> Union[pd.DataFrame, str]:
+    def sql_executor(self, sql_query: str) -> Union[pd.DataFrame, str]:
         try:
             db_details = self.data_path["data_base_detail"]
             url = f"postgresql://{db_details['user']}:{db_details['password']}@{db_details['host']}:{db_details['port']}/{db_details['database']}"
@@ -21,8 +25,9 @@ class SqlExec:
             df = pd.read_sql_query(sql_query, engine)
             engine.dispose()
             return df
-        except Exception as e:
-            return str(e)
+        except (KeyError, SQLAlchemyError, ValueError) as error:
+            logger.exception("SQL execution failed")
+            return str(error)
 
 
 # if __name__ == "__main__":

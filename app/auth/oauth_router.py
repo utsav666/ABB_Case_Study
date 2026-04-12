@@ -4,11 +4,13 @@ import logging
 from typing import Any
 
 import requests
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
-from app.auth.oauth_service import (
+from app.auth.oauth_config import (
     DEFAULT_OAUTH_CALLBACK_PATH,
     DEFAULT_OAUTH_SESSION_PATH,
+)
+from app.auth.oauth_service import (
     build_oauth_authentication_response,
     build_oauth_login_payload,
     can_exchange_oauth_code,
@@ -19,6 +21,7 @@ from app.auth.oauth_service import (
     get_oauth_provider_name,
     get_refresh_window_seconds,
     get_seconds_until_expiry,
+    persist_oauth_user_details,
     read_auth_session_parameters,
     read_oauth_callback_parameters,
     refresh_oauth_token,
@@ -86,8 +89,9 @@ async def get_auth_callback(
             token_payload = exchange_oauth_code_for_token(authorization_code, request)
             access_token = str(token_payload.get("access_token", "")).strip()
             user_payload = fetch_oauth_user_details(access_token)
+            user_payload = persist_oauth_user_details(user_payload)
             message = "OAuth callback received and user details were loaded."
-        except (ValueError, requests.RequestException) as request_error:
+        except (HTTPException, ValueError, requests.RequestException) as request_error:
             logger.warning(
                 "OAuth backend authentication could not be completed: %s",
                 request_error,
@@ -107,7 +111,7 @@ async def get_auth_callback(
                 token_payload=None,
                 error="authentication_failed",
                 error_description=(
-                    "OAuth callback was received, but user details could not be loaded."
+                    "OAuth callback was received, but user details could not be loaded or saved."
                 ),
             )
     else:
