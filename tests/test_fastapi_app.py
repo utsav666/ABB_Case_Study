@@ -218,8 +218,8 @@ def test_auth_callback_endpoint_returns_user_details(monkeypatch) -> None:
         "OAUTH_USERINFO_URL",
         "https://oauth.example.com/userinfo",
     )
-    monkeypatch.setattr("app.main.requests.post", fake_post)
-    monkeypatch.setattr("app.main.requests.get", fake_get)
+    monkeypatch.setattr("app.auth.oauth_service.requests.post", fake_post)
+    monkeypatch.setattr("app.auth.oauth_service.requests.get", fake_get)
 
     response = client.get(
         "/auth/callback",
@@ -231,6 +231,213 @@ def test_auth_callback_endpoint_returns_user_details(monkeypatch) -> None:
     assert payload["status"] == "success"
     assert payload["user"]["email"] == "user@example.com"
     assert payload["user"]["name"] == "Demo User"
+    assert payload["token"]["access_token"] == "demo-access-token"
+
+
+def test_auth_session_endpoint_validates_existing_token(monkeypatch) -> None:
+    class DummyResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_get(
+        url: str,
+        headers: dict[str, str],
+        timeout: int,
+    ) -> DummyResponse:
+        assert "userinfo" in url
+        assert headers["Authorization"] == "Bearer demo-access-token"
+        return DummyResponse({"email": "user@example.com", "name": "Demo User"})
+
+    monkeypatch.setenv("OAUTH_USERINFO_URL", "https://oauth.example.com/userinfo")
+    monkeypatch.setattr("app.auth.oauth_service.requests.get", fake_get)
+
+    response = client.post(
+        "/auth/session",
+        json={
+            "access_token": "demo-access-token",
+            "expires_in": 3600,
+            "state": "login",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["authenticated"] is True
+    assert payload["user"]["email"] == "user@example.com"
+    assert payload["token"]["access_token"] == "demo-access-token"
+    assert payload["state"] == "login"
+
+
+def test_auth_session_endpoint_refreshes_near_expiry_token(monkeypatch) -> None:
+    class DummyResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_post(
+        url: str,
+        data: dict[str, str],
+        timeout: int,
+    ) -> DummyResponse:
+        assert "token" in url
+        assert data["grant_type"] == "refresh_token"
+        assert data["refresh_token"] == "demo-refresh-token"
+        return DummyResponse(
+            {
+                "access_token": "new-access-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+        )
+
+    def fake_get(
+        url: str,
+        headers: dict[str, str],
+        timeout: int,
+    ) -> DummyResponse:
+        assert "userinfo" in url
+        assert headers["Authorization"] == "Bearer new-access-token"
+        return DummyResponse({"email": "user@example.com", "name": "Demo User"})
+
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "demo-client-id")
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "demo-client-secret")
+    monkeypatch.setenv("OAUTH_TOKEN_URL", "https://oauth.example.com/token")
+    monkeypatch.setenv("OAUTH_USERINFO_URL", "https://oauth.example.com/userinfo")
+    monkeypatch.setattr("app.auth.oauth_service.requests.post", fake_post)
+    monkeypatch.setattr("app.auth.oauth_service.requests.get", fake_get)
+
+    response = client.post(
+        "/auth/session",
+        json={
+            "access_token": "old-access-token",
+            "refresh_token": "demo-refresh-token",
+            "expires_in": 10,
+            "state": "login",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["authenticated"] is True
+    assert payload["token"]["access_token"] == "new-access-token"
+    assert payload["token"]["refresh_token"] == "demo-refresh-token"
+    assert payload["message"] == "Session token was renewed successfully."
+
+
+def test_login_endpoint_uses_well_known_authorize_url(monkeypatch) -> None:
+    class DummyResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "authorization_endpoint": "https://issuer.example.com/oauth2/authorize",
+                "token_endpoint": "https://issuer.example.com/oauth2/token",
+                "userinfo_endpoint": "https://issuer.example.com/oauth2/userinfo",
+            }
+
+    def fake_get(
+        url: str,
+        timeout: int,
+    ) -> DummyResponse:
+        assert "openid-configuration" in url
+        return DummyResponse()
+
+    monkeypatch.delenv("OAUTH_AUTHORIZE_URL", raising=False)
+    monkeypatch.setenv(
+        "OAUTH_WELL_KNOWN_URL",
+        "https://issuer.example.com/.well-known/openid-configuration",
+    )
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "demo-client-id")
+    monkeypatch.setattr("app.auth.oauth_service.requests.get", fake_get)
+
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["login_url"].startswith(
+        "https://issuer.example.com/oauth2/authorize?"
+    )
+
+
+def test_auth_callback_endpoint_uses_well_known_token_and_userinfo(monkeypatch) -> None:
+    class DummyResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_get(
+        url: str,
+        headers: dict[str, str] | None = None,
+        timeout: int = 0,
+    ) -> DummyResponse:
+        if "openid-configuration" in url:
+            return DummyResponse(
+                {
+                    "authorization_endpoint": "https://issuer.example.com/oauth2/authorize",
+                    "token_endpoint": "https://issuer.example.com/oauth2/token",
+                    "userinfo_endpoint": "https://issuer.example.com/oauth2/userinfo",
+                }
+            )
+
+        assert url == "https://issuer.example.com/oauth2/userinfo"
+        assert headers is not None
+        assert headers["Authorization"] == "Bearer demo-access-token"
+        return DummyResponse({"email": "user@example.com", "name": "Demo User"})
+
+    def fake_post(
+        url: str,
+        data: dict[str, str],
+        timeout: int,
+    ) -> DummyResponse:
+        assert url == "https://issuer.example.com/oauth2/token"
+        assert data["code"] == "sample-code"
+        return DummyResponse(
+            {
+                "access_token": "demo-access-token",
+                "id_token": "demo-id-token",
+                "token_type": "Bearer",
+            }
+        )
+
+    monkeypatch.delenv("OAUTH_TOKEN_URL", raising=False)
+    monkeypatch.delenv("OAUTH_USERINFO_URL", raising=False)
+    monkeypatch.setenv(
+        "OAUTH_WELL_KNOWN_URL",
+        "https://issuer.example.com/.well-known/openid-configuration",
+    )
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "demo-client-id")
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "demo-client-secret")
+    monkeypatch.setattr("app.auth.oauth_service.requests.post", fake_post)
+    monkeypatch.setattr("app.auth.oauth_service.requests.get", fake_get)
+
+    response = client.get(
+        "/auth/callback",
+        params={"code": "sample-code", "state": "login"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["user"]["email"] == "user@example.com"
     assert payload["token"]["access_token"] == "demo-access-token"
 
 
