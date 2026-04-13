@@ -5,7 +5,9 @@ from typing import Any
 
 from mangum import Mangum
 
-from app.main import app
+from app.utils.runtime_env import ensure_matplotlib_runtime_config
+
+ensure_matplotlib_runtime_config()
 
 DEFAULT_SOURCE_IP = "0.0.0.0"
 
@@ -16,11 +18,23 @@ def get_api_gateway_base_path() -> str:
     return configured_root_path or "/"
 
 
-mangum_handler = Mangum(
-    app,
-    lifespan="off",
-    api_gateway_base_path=get_api_gateway_base_path(),
-)
+_mangum_handler: Mangum | None = None
+
+
+def get_mangum_handler() -> Mangum:
+    """Create and cache the Mangum handler lazily."""
+    global _mangum_handler
+    if _mangum_handler is not None:
+        return _mangum_handler
+
+    from app.main import app
+
+    _mangum_handler = Mangum(
+        app,
+        lifespan="off",
+        api_gateway_base_path=get_api_gateway_base_path(),
+    )
+    return _mangum_handler
 
 
 def should_normalize_api_gateway_event(event: Any) -> bool:
@@ -78,6 +92,7 @@ def normalize_api_gateway_event(event: Any) -> dict[str, Any]:
 def handler(event: Any, context: Any) -> dict[str, Any]:
     """Serve the FastAPI app from AWS Lambda for API Gateway v1 and v2."""
     normalized_event = normalize_api_gateway_event(event)
+    mangum_handler = get_mangum_handler()
     return mangum_handler(normalized_event, context)
 
 
