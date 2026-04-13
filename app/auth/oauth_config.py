@@ -8,6 +8,9 @@ DEFAULT_OAUTH_CALLBACK_PATH = "/auth/callback"
 DEFAULT_OAUTH_SESSION_PATH = "/auth/session"
 DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS = 300
 DEFAULT_OAUTH_WELL_KNOWN_TIMEOUT_SECONDS = 10
+DEFAULT_OAUTH_HTTP_CONNECT_TIMEOUT_SECONDS = 3.0
+DEFAULT_OAUTH_HTTP_READ_TIMEOUT_SECONDS = 10.0
+DEFAULT_OAUTH_WELL_KNOWN_CACHE_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,9 @@ class OAuthConfig:
     redirect_uri: str
     well_known_url: str
     refresh_window_seconds: int
+    http_connect_timeout_seconds: float
+    http_read_timeout_seconds: float
+    well_known_cache_ttl_seconds: int
 
 
 def _parse_positive_int(raw_value: str, default_value: int) -> int:
@@ -34,6 +40,19 @@ def _parse_positive_int(raw_value: str, default_value: int) -> int:
         return default_value
 
     if parsed_value < 0:
+        return default_value
+
+    return parsed_value
+
+
+def _parse_positive_float(raw_value: str, default_value: float) -> float:
+    """Parse a positive float with fallback."""
+    try:
+        parsed_value = float(raw_value.strip())
+    except (AttributeError, ValueError):
+        return default_value
+
+    if parsed_value <= 0:
         return default_value
 
     return parsed_value
@@ -61,5 +80,26 @@ def get_oauth_config() -> OAuthConfig:
                 str(DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS),
             ),
             DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS,
+        ),
+        http_connect_timeout_seconds=_parse_positive_float(
+            os.getenv(
+                "OAUTH_HTTP_CONNECT_TIMEOUT_SECONDS",
+                str(DEFAULT_OAUTH_HTTP_CONNECT_TIMEOUT_SECONDS),
+            ),
+            DEFAULT_OAUTH_HTTP_CONNECT_TIMEOUT_SECONDS,
+        ),
+        http_read_timeout_seconds=_parse_positive_float(
+            os.getenv(
+                "OAUTH_HTTP_READ_TIMEOUT_SECONDS",
+                str(DEFAULT_OAUTH_HTTP_READ_TIMEOUT_SECONDS),
+            ),
+            DEFAULT_OAUTH_HTTP_READ_TIMEOUT_SECONDS,
+        ),
+        well_known_cache_ttl_seconds=_parse_positive_int(
+            os.getenv(
+                "OAUTH_WELL_KNOWN_CACHE_TTL_SECONDS",
+                str(DEFAULT_OAUTH_WELL_KNOWN_CACHE_TTL_SECONDS),
+            ),
+            DEFAULT_OAUTH_WELL_KNOWN_CACHE_TTL_SECONDS,
         ),
     )

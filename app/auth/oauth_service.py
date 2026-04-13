@@ -14,7 +14,6 @@ from fastapi import HTTPException, Request
 from app.auth.oauth_config import (
     DEFAULT_OAUTH_CALLBACK_PATH,
     DEFAULT_OAUTH_SESSION_REFRESH_WINDOW_SECONDS,
-    DEFAULT_OAUTH_WELL_KNOWN_TIMEOUT_SECONDS,
     get_oauth_config,
 )
 from app.settings_db.exceptions import SettingsDatabaseConfigurationError
@@ -23,6 +22,23 @@ from app.utils.settings_users import upsert_oauth_user
 DEFAULT_OAUTH_SESSION_PATH = "/auth/session"
 
 logger = logging.getLogger(__name__)
+
+_WELL_KNOWN_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def get_oauth_http_timeout_seconds() -> tuple[float, float]:
+    """Return connect and read timeouts for OAuth HTTP requests."""
+    oauth_config = get_oauth_config()
+    return (
+        oauth_config.http_connect_timeout_seconds,
+        oauth_config.http_read_timeout_seconds,
+    )
+
+
+def _log_timed_request(method: str, url: str, started_at: float) -> None:
+    """Log request duration for OAuth network calls."""
+    duration_ms = (time.monotonic() - started_at) * 1000
+    logger.info("OAuth %s %s completed in %.2f ms", method, url, duration_ms)
 
 
 def get_oauth_well_known_url() -> str:
@@ -36,18 +52,36 @@ def get_oauth_well_known_payload() -> dict[str, Any]:
     if not well_known_url:
         return {}
 
+    cached_payload = _WELL_KNOWN_CACHE.get(well_known_url)
+    current_time = time.monotonic()
+    cache_ttl_seconds = get_oauth_config().well_known_cache_ttl_seconds
+    if cached_payload is not None:
+        cached_until, payload = cached_payload
+        if current_time < cached_until:
+            return payload
+
+    timeout_seconds = get_oauth_http_timeout_seconds()
+    started_at = time.monotonic()
+
     try:
         metadata_response = requests.get(
             well_known_url,
-            timeout=DEFAULT_OAUTH_WELL_KNOWN_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
         )
+        _log_timed_request("GET", well_known_url, started_at)
         metadata_response.raise_for_status()
         metadata_payload = metadata_response.json()
     except (requests.RequestException, ValueError):
+        _log_timed_request("GET", well_known_url, started_at)
         return {}
 
     if not isinstance(metadata_payload, dict):
         return {}
+
+    _WELL_KNOWN_CACHE[well_known_url] = (
+        current_time + cache_ttl_seconds,
+        metadata_payload,
+    )
 
     return metadata_payload
 
@@ -151,17 +185,23 @@ def exchange_oauth_code_for_token(code: str, request: Request) -> dict[str, Any]
     if not token_url:
         raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable OAuth token exchange.")
 
-    token_response = requests.post(
-        token_url,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": get_oauth_redirect_uri(request),
-        },
-        timeout=30,
-    )
+    timeout_seconds = get_oauth_http_timeout_seconds()
+    started_at = time.monotonic()
+
+    try:
+        token_response = requests.post(
+            token_url,
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": get_oauth_redirect_uri(request),
+            },
+            timeout=timeout_seconds,
+        )
+    finally:
+        _log_timed_request("POST", token_url, started_at)
     token_response.raise_for_status()
     token_payload = token_response.json()
     if not isinstance(token_payload, dict):
@@ -184,17 +224,23 @@ def refresh_oauth_token(refresh_token: str, request: Request) -> dict[str, Any]:
     if not token_url:
         raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable token refresh.")
 
-    token_response = requests.post(
-        token_url,
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "redirect_uri": get_oauth_redirect_uri(request),
-        },
-        timeout=30,
-    )
+    timeout_seconds = get_oauth_http_timeout_seconds()
+    started_at = time.monotonic()
+
+    try:
+        token_response = requests.post(
+            token_url,
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "redirect_uri": get_oauth_redirect_uri(request),
+            },
+            timeout=timeout_seconds,
+        )
+    finally:
+        _log_timed_request("POST", token_url, started_at)
     token_response.raise_for_status()
     token_payload = token_response.json()
     if not isinstance(token_payload, dict):
@@ -212,11 +258,17 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
     if not userinfo_url:
         raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable user profile fetch.")
 
-    user_response = requests.get(
-        userinfo_url,
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=30,
-    )
+    timeout_seconds = get_oauth_http_timeout_seconds()
+    started_at = time.monotonic()
+
+    try:
+        user_response = requests.get(
+            userinfo_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=timeout_seconds,
+        )
+    finally:
+        _log_timed_request("GET", userinfo_url, started_at)
     user_response.raise_for_status()
     user_payload = user_response.json()
     if not isinstance(user_payload, dict):
