@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "FastAPI",
             "type": "python",
@@ -19,6 +20,18 @@
                 "--reload"
             ],
             "jinja": true,
+            "justMyCode": true
+        },
+        {
+            "name": "Streamlit: brick_chat",
+            "type": "python",
+            "request": "launch",
+            "module": "streamlit",
+            "python": "/usr/local/python/current/bin/python",
+            "args": [
+                "run",
+                "app/brick_chat.py"
+            ],
             "justMyCode": true
         }
     ]

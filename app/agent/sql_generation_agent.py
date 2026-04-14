@@ -8,20 +8,26 @@ load_env()
 
 
 class SQLGenerationAgent:
-    def __init__(self, user_question, table_list):
+    def __init__(self, user_question, table_list, dialect="PostgreSQL"):
         openai.api_key = get_openai_api_key()
 
         self.user_question = user_question
+        self.dialect = dialect
         self.tab_struc_gen = TabStrucCreation(table_list).struc_creation()
 
     def run(self):
         prompt = sql_gen_prompts.format(
-            table_structure=self.tab_struc_gen, user_question=self.user_question
+            table_structure=self.tab_struc_gen,
+            user_question=self.user_question,
+            dialect=self.dialect,
         )
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a world-class SQL generator."},
+                {
+                    "role": "system",
+                    "content": f"You are a world-class {self.dialect} SQL generator.",
+                },
                 {"role": "user", "content": prompt},
             ],
             temperature=0,
