@@ -17,7 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
+from app.auth.oauth_router import auth_router
 from app.envsetup.env_loader import load_env
+from app.settings_db.router import settings_db_router
 from app.utils.db_column_config_view import (
     build_db_column_configuration_payload,
     get_table_configuration_payload,
@@ -90,6 +92,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
+app.include_router(settings_db_router)
+
 
 @app.exception_handler(Exception)
 async def handle_unexpected_exception(
@@ -147,168 +152,6 @@ QUESTION_FIELD_NAMES: tuple[str, ...] = (
     "user_question",
     "userQuery",
 )
-DEFAULT_OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-DEFAULT_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
-DEFAULT_OAUTH_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
-DEFAULT_OAUTH_SCOPE = "openid profile email"
-DEFAULT_OAUTH_CALLBACK_PATH = "/auth/callback"
-
-
-def get_oauth_redirect_uri(request: Request) -> str:
-    """Return the configured callback URL for OAuth login."""
-    configured_redirect_uri = os.getenv("OAUTH_REDIRECT_URI", "").strip()
-    if configured_redirect_uri:
-        return configured_redirect_uri
-
-    base_url = str(request.base_url).rstrip("/")
-    return f"{base_url}{DEFAULT_OAUTH_CALLBACK_PATH}"
-
-
-def build_oauth_login_payload(request: Request) -> dict[str, Any]:
-    """Build a frontend-ready OAuth login URL payload."""
-    provider_name = os.getenv("OAUTH_PROVIDER", "oauth").strip() or "oauth"
-    authorize_url = (
-        os.getenv("OAUTH_AUTHORIZE_URL", DEFAULT_OAUTH_AUTHORIZE_URL).strip()
-        or DEFAULT_OAUTH_AUTHORIZE_URL
-    )
-    scope = os.getenv("OAUTH_SCOPE", DEFAULT_OAUTH_SCOPE).strip() or DEFAULT_OAUTH_SCOPE
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-
-    query_params = {
-        "client_id": client_id,
-        "redirect_uri": get_oauth_redirect_uri(request),
-        "response_type": "code",
-        "scope": scope,
-        "state": os.getenv("OAUTH_STATE", "login").strip() or "login",
-    }
-
-    access_type = os.getenv("OAUTH_ACCESS_TYPE", "").strip()
-    if access_type:
-        query_params["access_type"] = access_type
-
-    include_granted_scopes = os.getenv("OAUTH_INCLUDE_GRANTED_SCOPES", "").strip()
-    if include_granted_scopes:
-        query_params["include_granted_scopes"] = include_granted_scopes
-
-    return {
-        "provider": provider_name,
-        "configured": bool(client_id),
-        "login_url": f"{authorize_url}?{urlencode(query_params)}",
-        "redirect_uri": query_params["redirect_uri"],
-        "scopes": scope.split(),
-    }
-
-
-def get_oauth_token_url() -> str:
-    """Return the configured OAuth token endpoint."""
-    configured_token_url = os.getenv("OAUTH_TOKEN_URL", "").strip()
-    return configured_token_url or DEFAULT_OAUTH_TOKEN_URL
-
-
-def get_oauth_userinfo_url() -> str:
-    """Return the configured OAuth userinfo endpoint."""
-    configured_userinfo_url = os.getenv("OAUTH_USERINFO_URL", "").strip()
-    return configured_userinfo_url or DEFAULT_OAUTH_USERINFO_URL
-
-
-def can_exchange_oauth_code() -> bool:
-    """Return whether the backend can exchange the authorization code."""
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("OAUTH_CLIENT_SECRET", "").strip()
-    return bool(client_id and client_secret)
-
-
-def exchange_oauth_code_for_token(code: str, request: Request) -> dict[str, Any]:
-    """Exchange an OAuth authorization code for tokens."""
-    client_id = os.getenv("OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("OAUTH_CLIENT_SECRET", "").strip()
-    if not client_id or not client_secret:
-        raise ValueError(
-            "Set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to enable backend authentication."
-        )
-
-    token_response = requests.post(
-        get_oauth_token_url(),
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": get_oauth_redirect_uri(request),
-        },
-        timeout=30,
-    )
-    token_response.raise_for_status()
-    token_payload = token_response.json()
-    if not isinstance(token_payload, dict):
-        raise ValueError("OAuth token response must be a JSON object.")
-
-    return token_payload
-
-
-def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
-    """Fetch the authenticated user's profile from the OAuth provider."""
-    if not access_token.strip():
-        return {}
-
-    user_response = requests.get(
-        get_oauth_userinfo_url(),
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=30,
-    )
-    user_response.raise_for_status()
-    user_payload = user_response.json()
-    if not isinstance(user_payload, dict):
-        raise ValueError("OAuth user info response must be a JSON object.")
-
-    return user_payload
-
-
-def build_oauth_token_payload(
-    token_payload: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Return the safe token fields to send back to the frontend."""
-    if not token_payload:
-        return None
-
-    return {
-        "access_token": token_payload.get("access_token"),
-        "token_type": token_payload.get("token_type"),
-        "expires_in": token_payload.get("expires_in"),
-        "scope": token_payload.get("scope"),
-        "id_token": token_payload.get("id_token"),
-        "refresh_token": token_payload.get("refresh_token"),
-    }
-
-
-async def read_oauth_callback_parameters(request: Request) -> dict[str, str]:
-    """Read OAuth callback values from the query string or POST body.
-
-    Args:
-        request: Incoming FastAPI request.
-
-    Returns:
-        A normalized mapping of callback fields.
-    """
-    callback_values: dict[str, str] = {
-        key: value.strip()
-        for key, value in request.query_params.items()
-        if isinstance(value, str) and value.strip()
-    }
-
-    payload = await read_request_payload(request)
-    if not isinstance(payload, dict):
-        return callback_values
-
-    for key, value in payload.items():
-        if value is None:
-            continue
-
-        normalized_value = str(value).strip()
-        if normalized_value:
-            callback_values[key] = normalized_value
-
-    return callback_values
 
 
 def extract_question_from_payload(payload: Any) -> str:
@@ -484,6 +327,10 @@ def get_root() -> dict[str, Any]:
             "/login",
             "/auth/login",
             "/auth/callback",
+            "/auth/session",
+            "/settings/db-connections/engines",
+            "/settings/db-connections/validate",
+            "/settings/db-connections",
             "/chat",
             "/schema/summary",
             "/schema/config",
@@ -495,122 +342,6 @@ def get_root() -> dict[str, Any]:
 def get_health() -> dict[str, str]:
     """Return a simple health response for monitoring."""
     return {"status": "ok"}
-
-
-@app.get("/login")
-@app.get("/auth/login")
-def get_login_url(request: Request) -> dict[str, Any]:
-    """Return an OAuth authorization URL for the frontend login flow."""
-    return build_oauth_login_payload(request)
-
-
-@app.get(DEFAULT_OAUTH_CALLBACK_PATH)
-@app.post(DEFAULT_OAUTH_CALLBACK_PATH)
-@app.get("/login/callback")
-@app.post("/login/callback")
-async def get_auth_callback(
-    request: Request,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-    error_description: str | None = None,
-) -> dict[str, Any]:
-    """Authenticate the OAuth callback and return the frontend payload."""
-    callback_values = await read_oauth_callback_parameters(request)
-    provider_name = os.getenv("OAUTH_PROVIDER", "oauth").strip() or "oauth"
-    authorization_code = (code or callback_values.get("code", "")).strip() or None
-    callback_state = (state or callback_values.get("state", "")).strip() or None
-    callback_error = (error or callback_values.get("error", "")).strip() or None
-    callback_error_description = (
-        error_description or callback_values.get("error_description", "")
-    ).strip() or None
-
-    if callback_error:
-        return {
-            "status": "error",
-            "provider": provider_name,
-            "code": None,
-            "authorization_code": None,
-            "state": callback_state,
-            "authenticated": False,
-            "user": None,
-            "token": None,
-            "error": callback_error,
-            "error_description": (
-                callback_error_description or "OAuth login was not completed."
-            ),
-            "message": "OAuth callback received with an error.",
-        }
-
-    if not authorization_code:
-        return {
-            "status": "pending",
-            "provider": provider_name,
-            "code": None,
-            "authorization_code": None,
-            "state": callback_state,
-            "authenticated": False,
-            "user": None,
-            "token": None,
-            "error": None,
-            "error_description": None,
-            "message": (
-                "OAuth callback endpoint is ready to receive the authorization code."
-            ),
-        }
-
-    token_payload: dict[str, Any] | None = None
-    user_payload: dict[str, Any] | None = None
-    message = "OAuth callback received successfully."
-
-    if can_exchange_oauth_code():
-        try:
-            token_payload = exchange_oauth_code_for_token(authorization_code, request)
-            access_token = str(token_payload.get("access_token", "")).strip()
-            user_payload = fetch_oauth_user_details(access_token)
-            message = "OAuth callback received and user details were loaded."
-        except (ValueError, requests.RequestException) as request_error:
-            logger.warning(
-                "OAuth backend authentication could not be completed: %s",
-                request_error,
-            )
-            message = (
-                "OAuth callback received successfully, but backend authentication "
-                "could not be completed."
-            )
-            return {
-                "status": "success",
-                "provider": provider_name,
-                "code": authorization_code,
-                "authorization_code": authorization_code,
-                "state": callback_state,
-                "authenticated": False,
-                "user": None,
-                "token": None,
-                "error": "authentication_failed",
-                "error_description": (
-                    "OAuth callback was received, but user details could not be loaded."
-                ),
-                "message": message,
-            }
-    else:
-        message = (
-            "OAuth callback received, but backend token exchange is not configured yet."
-        )
-
-    return {
-        "status": "success",
-        "provider": provider_name,
-        "code": authorization_code,
-        "authorization_code": authorization_code,
-        "state": callback_state,
-        "authenticated": bool(user_payload),
-        "user": user_payload,
-        "token": build_oauth_token_payload(token_payload),
-        "error": None,
-        "error_description": None,
-        "message": message,
-    }
 
 
 @app.get("/schema/summary")

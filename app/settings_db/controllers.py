@@ -8,14 +8,17 @@ from app.settings_db.exceptions import (
     SettingsDatabaseConfigurationError,
     SettingsDatabaseQueryError,
 )
-from app.settings_db.models import DBConnectionCreate
+from app.settings_db.models import DBConnectionCreate, DBConnectionValidationRequest
 from app.settings_db.repositories import DBConnectionRepository, SettingsUserRepository
 from app.settings_db.views import (
     build_db_connection_response,
+    build_db_connection_validation_response,
     build_settings_user_response,
 )
+from app.target_db.connection_profiles import get_supported_database_engines
+from app.target_db.connection_validation import validate_target_connection_settings
 
-ALLOWED_ENGINES = {"postgres", "snowflake", "bigquery"}
+ALLOWED_ENGINES = set(get_supported_database_engines())
 
 
 class SettingsUserController:
@@ -76,6 +79,7 @@ class DBConnectionController:
         Returns:
             dict[str, Any]: Serialized created connection payload.
         """
+        self.validate_connection(payload)
         self._validate_engine(payload.engine)
         try:
             persisted_row = self._repository.insert_connection(payload)
@@ -88,6 +92,15 @@ class DBConnectionController:
             raise HTTPException(status_code=500, detail="Insert did not return a row.")
 
         return build_db_connection_response(persisted_row)
+
+    def validate_connection(
+        self,
+        payload: DBConnectionValidationRequest | DBConnectionCreate,
+    ) -> dict[str, Any]:
+        """Validate a connection payload without persisting it."""
+        self._validate_engine(payload.engine)
+        validation_result = validate_target_connection_settings(payload.model_dump())
+        return build_db_connection_validation_response(validation_result)
 
     def get_connection_credentials(self, connection_id: str) -> dict[str, Any]:
         """Fetch stored credentials for a connection from the settings database.
@@ -151,6 +164,18 @@ def create_db_connection(payload: DBConnectionCreate) -> dict[str, Any]:
         dict[str, Any]: Serialized created connection payload.
     """
     return DBConnectionController().create_connection(payload)
+
+
+def validate_db_connection(
+    payload: DBConnectionValidationRequest | DBConnectionCreate,
+) -> dict[str, Any]:
+    """Validate a database connection payload."""
+    return DBConnectionController().validate_connection(payload)
+
+
+def get_supported_connection_engines() -> list[str]:
+    """Return supported target database engines for the settings UI."""
+    return get_supported_database_engines()
 
 
 def get_settings_connection_credentials(connection_id: str) -> dict[str, Any]:

@@ -64,6 +64,9 @@ CREATE TABLE settings.db_connections (
     db_name TEXT NOT NULL,
     db_user TEXT NOT NULL,
     db_password TEXT NOT NULL,
+    db_schema TEXT,
+    use_ssl BOOLEAN NOT NULL DEFAULT FALSE,
+    extra_options TEXT,
 
     is_healthy BOOLEAN DEFAULT TRUE,
     last_synced_at TIMESTAMPTZ,

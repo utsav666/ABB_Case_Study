@@ -77,10 +77,26 @@ def build_db_connection_response(persisted_row: Mapping[str, Any]) -> dict[str, 
             "db_port": persisted_row["db_port"],
             "db_name": persisted_row["db_name"],
             "db_user": persisted_row["db_user"],
+            "db_schema": persisted_row.get("db_schema"),
+            "use_ssl": persisted_row.get("use_ssl"),
+            "extra_options": persisted_row.get("extra_options"),
             "is_healthy": persisted_row["is_healthy"],
             "last_synced_at": format_datetime_value(
                 persisted_row.get("last_synced_at")
             ),
             "created_at": format_datetime_value(persisted_row.get("created_at")),
         },
+    }
+
+
+def build_db_connection_validation_response(validation_result: Mapping[str, Any]) -> dict[str, Any]:
+    """Build a response payload for a validated database connection."""
+    return {
+        "status": validation_result.get("status", "validated"),
+        "can_save": bool(validation_result.get("can_save", True)),
+        "engine": validation_result.get("engine"),
+        "message": validation_result.get(
+            "message",
+            "Connection validated successfully.",
+        ),
     }

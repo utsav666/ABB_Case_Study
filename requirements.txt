@@ -90,6 +90,7 @@ Mangum==0.19.0
 MarkupSafe==3.0.3
 marshmallow==3.26.2
 matplotlib==3.10.8
+mysql-connector-python==9.4.0
 matplotlib-inline==0.2.1
 mccabe==0.7.0
 mistune==3.2.0
@@ -104,6 +105,7 @@ notebook==7.5.5
 notebook_shim==0.2.4
 numpy==2.4.4
 openai==2.30.0
+oracledb==3.4.0
 orjson==3.11.8
 ormsgpack==1.12.2
 overrides==7.7.0
@@ -129,6 +131,7 @@ pycodestyle==2.14.0
 pycparser==3.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
+pytds==1.16.1
 pydantic_core==2.41.5
 pydeck==0.9.1
 pyflakes==3.4.0

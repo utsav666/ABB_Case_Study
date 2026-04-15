@@ -5,15 +5,14 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.target_db.connection_profiles import build_target_db_url as build_database_url
+
 logger = logging.getLogger(__name__)
 
 
 def build_target_db_url(credentials: dict[str, Any]) -> str:
     """Build a target database URL from stored credentials."""
-    return (
-        f"postgresql://{credentials['db_user']}:{credentials['db_password']}"
-        f"@{credentials['db_host']}:{credentials['db_port']}/{credentials['db_name']}"
-    )
+    return build_database_url(credentials)
 
 
 def build_tables_response(

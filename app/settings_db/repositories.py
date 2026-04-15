@@ -99,6 +99,9 @@ class DBConnectionRepository:
             db_name=payload.db_name,
             db_user=payload.db_user,
             db_password=payload.db_password,
+            db_schema=payload.db_schema,
+            use_ssl=payload.use_ssl,
+            extra_options=payload.extra_options or None,
         )
         statement = statement.returning(
             SettingsDBConnectionEntity.id,
@@ -109,6 +112,9 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_port,
             SettingsDBConnectionEntity.db_name,
             SettingsDBConnectionEntity.db_user,
+            SettingsDBConnectionEntity.db_schema,
+            SettingsDBConnectionEntity.use_ssl,
+            SettingsDBConnectionEntity.extra_options,
             SettingsDBConnectionEntity.is_healthy,
             SettingsDBConnectionEntity.last_synced_at,
             SettingsDBConnectionEntity.created_at,
@@ -144,6 +150,9 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_name,
             SettingsDBConnectionEntity.db_user,
             SettingsDBConnectionEntity.db_password,
+            SettingsDBConnectionEntity.db_schema,
+            SettingsDBConnectionEntity.use_ssl,
+            SettingsDBConnectionEntity.extra_options,
         ).where(SettingsDBConnectionEntity.id == parsed_connection_id)
 
         with self._gateway.get_session() as session:

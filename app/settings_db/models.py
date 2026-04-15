@@ -2,10 +2,63 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.target_db.connection_profiles import get_default_port, normalize_database_engine
 
 
-class DBConnectionCreate(BaseModel):
+class DBConnectionInput(BaseModel):
+    """Shared database connection fields from the settings UI."""
+
+    name: str = Field(min_length=1, description="Display name for this connection.")
+    engine: str = Field(description="Supported database engine identifier.")
+    db_host: str = Field(default="", description="Database host address.")
+    db_port: int | None = Field(default=None, ge=0, le=65535, description="Database port.")
+    db_name: str = Field(min_length=1, description="Database name or SQLite file path.")
+    db_user: str = Field(default="", description="Database user.")
+    db_password: str = Field(default="", description="Database password.")
+    db_schema: str = Field(default="public", description="Default schema name.")
+    use_ssl: bool = Field(default=False, description="Whether to require SSL/TLS.")
+    extra_options: str = Field(
+        default="",
+        description="Optional driver-specific key=value pairs, one per line.",
+    )
+
+    @model_validator(mode="after")
+    def normalize_fields(self) -> "DBConnectionInput":
+        """Normalize engine-specific defaults and validate required fields."""
+        normalized_engine = normalize_database_engine(self.engine)
+        self.engine = normalized_engine
+        self.db_schema = self.db_schema.strip() or "public"
+        self.extra_options = self.extra_options.strip()
+
+        if self.db_port is None:
+            self.db_port = get_default_port(normalized_engine)
+
+        if normalized_engine == "sqlite":
+            self.db_host = ""
+            self.db_user = ""
+            self.db_password = ""
+            return self
+
+        self.db_host = self.db_host.strip()
+        self.db_user = self.db_user.strip()
+        self.db_password = self.db_password.strip()
+        if not self.db_host:
+            raise ValueError("Database host is required for this engine.")
+        if not self.db_user:
+            raise ValueError("Database username is required for this engine.")
+        if not self.db_password:
+            raise ValueError("Database password is required for this engine.")
+
+        return self
+
+
+class DBConnectionValidationRequest(DBConnectionInput):
+    """Request body for validating a database connection."""
+
+
+class DBConnectionCreate(DBConnectionInput):
     """Request body for creating a new database connection."""
 
     model_config = ConfigDict(
@@ -19,17 +72,11 @@ class DBConnectionCreate(BaseModel):
                 "db_name": "analytics",
                 "db_user": "app_user",
                 "db_password": "secret",
+                "db_schema": "public",
+                "use_ssl": True,
+                "extra_options": "sslmode=require",
             }
         }
     )
 
     workspace_id: UUID = Field(description="UUID of the parent workspace.")
-    name: str = Field(min_length=1, description="Display name for this connection.")
-    engine: str = Field(
-        description="Database engine: postgres, snowflake, or bigquery."
-    )
-    db_host: str = Field(min_length=1, description="Database host address.")
-    db_port: int = Field(default=5432, ge=1, le=65535, description="Database port.")
-    db_name: str = Field(min_length=1, description="Database name.")
-    db_user: str = Field(min_length=1, description="Database user.")
-    db_password: str = Field(min_length=1, description="Database password.")

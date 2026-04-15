@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -56,6 +56,9 @@ class SettingsDBConnectionEntity(SettingsBase):
     db_name: Mapped[str] = mapped_column(String(255), nullable=False)
     db_user: Mapped[str] = mapped_column(String(255), nullable=False)
     db_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    db_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    use_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    extra_options: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_healthy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
