@@ -32,30 +32,30 @@ class Orchestrator:
         logger.info("Router decision: %s", decision_maker)
         if decision_maker.route == "sql_query":
             ta_agent_result = self.TA.run()
-            logger.debug("Table identifier result: %s", ta_agent_result)
+            logger.info("Table identifier result: %s", ta_agent_result)
             sql_gen_agent = SQLGenerationAgent(
                 self.user_question, ta_agent_result["relevant_tables"]
             )
             sql_gen_res = sql_gen_agent.run()
-            logger.debug("Generated SQL: %s", sql_gen_res)
+            logger.info("Generated SQL: %s", sql_gen_res)
             sql_val = validator(sql_gen_res)
             if sql_val is True:
-                logger.debug("Executing generated SQL")
+                logger.info("Executing generated SQL")
                 sql_exec = SqlExec().sql_executor(sql_gen_res)
                 return sql_exec
             else:
                 logger.warning("SQL validation failed")
         elif decision_maker.route == "sql_and_chart":
             ta_agent_result = self.TA.run()
-            logger.debug("Table identifier result: %s", ta_agent_result)
+            logger.info("Table identifier result: %s", ta_agent_result)
             sql_gen_agent = SQLGenerationAgent(
                 self.user_question, ta_agent_result["relevant_tables"]
             )
             sql_gen_res = sql_gen_agent.run()
-            logger.debug("Generated SQL: %s", sql_gen_res)
+            logger.info("Generated SQL: %s", sql_gen_res)
             sql_val = validator(sql_gen_res)
             if sql_val is True:
-                logger.debug("Executing generated SQL for chart flow")
+                logger.info("Executing generated SQL for chart flow")
                 sql_exec: DataFrame | str = SqlExec().sql_executor(sql_gen_res)
                 if not isinstance(sql_exec, DataFrame):
                     logger.warning(
@@ -69,7 +69,7 @@ class Orchestrator:
 
                 chart_context = ChartContext.build_chart_context(sql_exec)
                 chart_gen_decision = ChartAgent().run(self.user_question, chart_context)
-                logger.debug("Chart generation decision: %s", chart_gen_decision)
+                logger.info("Chart generation decision: %s", chart_gen_decision)
 
                 if (
                     chart_gen_decision.x_axis not in sql_exec.columns
@@ -103,11 +103,19 @@ class Orchestrator:
                 elif chart_gen_decision.chart_type == "histogram":
                     ax.hist(sql_exec[chart_gen_decision.x_axis], bins=10)
                 elif chart_gen_decision.chart_type == "pie":
-                    ax.pie(
-                        sql_exec[chart_gen_decision.y_axis],
-                        labels=sql_exec[chart_gen_decision.x_axis].astype(str).tolist(),
-                        autopct="%1.1f%%",
-                    )
+                    pie_values = sql_exec[chart_gen_decision.y_axis]
+                    if (pie_values < 0).any():
+                        logger.warning("Pie chart not possible with negative values, falling back to bar chart")
+                        ax.bar(
+                            sql_exec[chart_gen_decision.x_axis],
+                            pie_values,
+                        )
+                    else:
+                        ax.pie(
+                            pie_values,
+                            labels=sql_exec[chart_gen_decision.x_axis].astype(str).tolist(),
+                            autopct="%1.1f%%",
+                        )
                 elif chart_gen_decision.chart_type == "box":
                     ax.boxplot(sql_exec[chart_gen_decision.y_axis])
                 elif chart_gen_decision.chart_type == "area":
@@ -131,7 +139,7 @@ class Orchestrator:
                 self.user_question, decision_maker.reasoning
             )
             res = schema_info_agent.run()
-            logger.debug("Schema info response generated")
+            logger.info("Schema info response generated")
             return res
         else:
             gen_ans_agent = GeneralAnswerAgent()

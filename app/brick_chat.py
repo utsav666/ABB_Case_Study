@@ -3,8 +3,8 @@ from __future__ import annotations
 from app.main import app
 
 __all__ = ["app"]
-import contextlib
 import io
+import logging
 from typing import Any
 
 import streamlit as st
@@ -92,8 +92,22 @@ if user_input:
     orch = Orchestrator(user_input)
 
     buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
+    log_handler = logging.StreamHandler(buffer)
+    log_handler.setLevel(logging.DEBUG)
+    log_handler.setFormatter(
+        logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+    )
+    log_handler.addFilter(lambda record: not record.name.startswith("httpx"))
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(log_handler)
+
+    try:
         result: Any = orch.executor()
+    finally:
+        root_logger.removeHandler(log_handler)
+
     logs = buffer.getvalue()
 
     assistant_message: dict[str, Any] = {"role": "assistant"}

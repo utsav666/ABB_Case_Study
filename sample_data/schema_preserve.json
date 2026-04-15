@@ -1,6 +1,7 @@
 {
   "tables": {
-    "sales.sample": {
+    "sample": {
+      "schema": "sales",
       "type": "table",
       "columns": {
         "date": {

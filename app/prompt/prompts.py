@@ -29,6 +29,8 @@ Guidelines:
 4. Keep all column names exactly as they appear in the table structure.
 5. Write the most optimized and syntactically correct SQL query possible.
 6. Return ONLY the SQL query.
+7. If a table has "schema" and "qualified_name" fields, use the qualified_name (schema.table) in the FROM/JOIN clauses. Do NOT wrap the qualified name in double quotes as a single identifier.
+8. When the user asks for data relative to a time period (e.g. "last 3 years"), do NOT use CURRENT_DATE. Instead, use a subquery to find the MAX date from the table and calculate the range relative to that. For example: WHERE date >= ((SELECT MAX(date) FROM schema.table) - INTERVAL '3 years').
 
 ------------------    
 Table Structure (JSON):

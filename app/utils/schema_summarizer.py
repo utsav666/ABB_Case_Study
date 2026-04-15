@@ -34,7 +34,9 @@ class Summarizer:
                 for foreign_key in table_info.get("foreign_keys", [])
             ]
 
-            summary = f"{table_name}({', '.join(column_summaries)})"
+            schema_name = table_info.get("schema", "")
+            display_name = f"{schema_name}.{table_name}" if schema_name else table_name
+            summary = f"{display_name}({', '.join(column_summaries)})"
             if primary_keys:
                 summary += f" PK: {', '.join(primary_keys)}"
             if foreign_keys:
