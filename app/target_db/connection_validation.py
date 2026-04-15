@@ -60,7 +60,9 @@ def validate_target_connection_settings(payload: Mapping[str, Any]) -> dict[str,
             ),
         ) from error
     except (SQLAlchemyError, ValueError) as error:
-        logger.exception("Database connection validation failed for engine '%s'", engine_name)
+        logger.exception(
+            "Database connection validation failed for engine '%s'", engine_name
+        )
         raise HTTPException(
             status_code=422,
             detail=f"Connection validation failed: {error}",

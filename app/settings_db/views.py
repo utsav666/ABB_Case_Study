@@ -89,7 +89,9 @@ def build_db_connection_response(persisted_row: Mapping[str, Any]) -> dict[str, 
     }
 
 
-def build_db_connection_validation_response(validation_result: Mapping[str, Any]) -> dict[str, Any]:
+def build_db_connection_validation_response(
+    validation_result: Mapping[str, Any],
+) -> dict[str, Any]:
     """Build a response payload for a validated database connection."""
     return {
         "status": validation_result.get("status", "validated"),

@@ -4,7 +4,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.target_db.connection_profiles import get_default_port, normalize_database_engine
+from app.target_db.connection_profiles import (
+    get_default_port,
+    normalize_database_engine,
+)
 
 
 class DBConnectionInput(BaseModel):
@@ -13,7 +16,9 @@ class DBConnectionInput(BaseModel):
     name: str = Field(min_length=1, description="Display name for this connection.")
     engine: str = Field(description="Supported database engine identifier.")
     db_host: str = Field(default="", description="Database host address.")
-    db_port: int | None = Field(default=None, ge=0, le=65535, description="Database port.")
+    db_port: int | None = Field(
+        default=None, ge=0, le=65535, description="Database port."
+    )
     db_name: str = Field(min_length=1, description="Database name or SQLite file path.")
     db_user: str = Field(default="", description="Database user.")
     db_password: str = Field(default="", description="Database password.")
