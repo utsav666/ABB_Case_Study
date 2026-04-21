@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,6 +18,13 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.auth.oauth_router import auth_router
 from app.envsetup.env_loader import load_env
+from app.settings_db.controllers import (
+    create_db_connection as create_settings_db_connection,
+)
+from app.settings_db.controllers import (
+    validate_db_connection as validate_settings_db_connection,
+)
+from app.settings_db.models import DBConnectionCreate
 from app.settings_db.router import settings_db_router
 from app.utils.db_column_config_view import (
     build_db_column_configuration_payload,
@@ -25,10 +32,8 @@ from app.utils.db_column_config_view import (
     save_table_configuration,
 )
 from app.utils.db_connections import (
-    DBConnectionCreate,
     get_table_columns_for_connection,
     get_tables_for_connection,
-    insert_db_connection,
 )
 from app.utils.schema_config import SchemaConfigManager
 from app.utils.schema_generator import generate_schema_config
@@ -138,6 +143,18 @@ class ColumnConfigRow(BaseModel):
     display_name: str = ""
     description: str = ""
     include_in_assistant: bool = True
+
+
+class DBConnectionRequest(DBConnectionCreate):
+    """Legacy db-connections request with two-step save confirmation."""
+
+    confirm_save: bool = Field(
+        default=False,
+        description=(
+            "When false, only validate the connection settings. "
+            "When true, validate again and persist the connection."
+        ),
+    )
 
 
 QUESTION_FIELD_NAMES: tuple[str, ...] = (
@@ -435,10 +452,18 @@ def reset_table_metadata(table_name: str) -> dict[str, str]:
     return {"status": "reset", "table_name": table_name}
 
 
-@app.post("/db-connections", status_code=201)
-def create_db_connection(payload: DBConnectionCreate) -> dict[str, Any]:
-    """Create a new database connection record."""
-    return insert_db_connection(payload)
+@app.post("/settings/db-connections", status_code=201)
+def create_db_connection(
+    payload: DBConnectionRequest,
+    response: Response,
+) -> dict[str, Any]:
+    """Validate first and persist only when the request is confirmed."""
+    validation_response = validate_settings_db_connection(payload)
+    if not payload.confirm_save:
+        response.status_code = 200
+        return validation_response
+
+    return create_settings_db_connection(payload)
 
 
 @app.post("/chat")
