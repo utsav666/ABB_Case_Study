@@ -3,12 +3,17 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.settings_db.gateway import SettingsDatabaseGateway
 from app.settings_db.models import DBConnectionCreate
-from app.settings_db.orm_models import SettingsDBConnectionEntity, SettingsUserEntity
+from app.settings_db.orm_models import (
+    ColumnDefinitionEntity,
+    SelectedTableEntity,
+    SettingsDBConnectionEntity,
+    SettingsUserEntity,
+)
 
 
 class SettingsUserRepository:
@@ -162,3 +167,111 @@ class DBConnectionRepository:
             return None
 
         return dict(row_mapping)
+
+
+class SelectedTableRepository:
+    """Data access for settings.selected_tables records."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def upsert_table(
+        self,
+        connection_id: str,
+        schema_name: str,
+        table_name: str,
+        human_description: str | None,
+    ) -> dict[str, Any] | None:
+        """Insert or update a selected-table record.
+
+        Args:
+            connection_id: The db_connections UUID this table belongs to.
+            schema_name: Schema the table lives in.
+            table_name: Name of the table.
+            human_description: Optional plain-english description.
+
+        Returns:
+            dict[str, Any] | None: Persisted row when available.
+        """
+        parsed_connection_id = UUID(connection_id)
+
+        statement = insert(SelectedTableEntity).values(
+            db_connection_id=parsed_connection_id,
+            schema_name=schema_name,
+            table_name=table_name,
+            human_description=human_description,
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="selected_tables_db_connection_id_schema_name_table_name_key",
+            set_={"human_description": statement.excluded.human_description},
+        )
+        statement = statement.returning(
+            SelectedTableEntity.id,
+            SelectedTableEntity.db_connection_id,
+            SelectedTableEntity.schema_name,
+            SelectedTableEntity.table_name,
+            SelectedTableEntity.human_description,
+        )
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+            session.commit()
+
+        if row_mapping is None:
+            return None
+
+        return dict(row_mapping)
+
+
+class ColumnDefinitionRepository:
+    """Data access for settings.column_definitions records."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def replace_columns_for_table(
+        self,
+        table_id: UUID,
+        column_rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Delete existing columns for a table and insert the new set.
+
+        Args:
+            table_id: UUID of the parent selected_tables row.
+            column_rows: List of column field dicts to insert.
+
+        Returns:
+            list[dict[str, Any]]: All newly inserted column rows.
+        """
+        delete_statement = delete(ColumnDefinitionEntity).where(
+            ColumnDefinitionEntity.table_id == table_id
+        )
+
+        if not column_rows:
+            with self._gateway.get_session() as session:
+                session.execute(delete_statement)
+                session.commit()
+            return []
+
+        insert_statement = (
+            insert(ColumnDefinitionEntity)
+            .values(column_rows)
+            .returning(
+                ColumnDefinitionEntity.id,
+                ColumnDefinitionEntity.table_id,
+                ColumnDefinitionEntity.raw_name,
+                ColumnDefinitionEntity.logical_name,
+                ColumnDefinitionEntity.description,
+                ColumnDefinitionEntity.data_type,
+                ColumnDefinitionEntity.is_pii,
+                ColumnDefinitionEntity.is_filterable,
+                ColumnDefinitionEntity.example_values,
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            session.execute(delete_statement)
+            row_mappings = session.execute(insert_statement).mappings().all()
+            session.commit()
+
+        return [dict(row) for row in row_mappings]

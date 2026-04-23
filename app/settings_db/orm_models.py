@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -67,5 +67,59 @@ class SettingsDBConnectionEntity(SettingsBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        server_default=func.now(),
+    )
+
+
+class SelectedTableEntity(SettingsBase):
+    """ORM entity for settings.selected_tables."""
+
+    __tablename__ = "selected_tables"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    db_connection_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    schema_name: Mapped[str] = mapped_column(Text, nullable=False, default="public")
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    human_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ColumnDefinitionEntity(SettingsBase):
+    """ORM entity for settings.column_definitions."""
+
+    __tablename__ = "column_definitions"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    table_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    raw_name: Mapped[str] = mapped_column(Text, nullable=False)
+    logical_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_pii: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_filterable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    example_values: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
         server_default=func.now(),
     )

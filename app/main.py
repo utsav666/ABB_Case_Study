@@ -25,6 +25,10 @@ from app.settings_db.controllers import (
     validate_db_connection as validate_settings_db_connection,
 )
 from app.settings_db.models import DBConnectionCreate
+from app.settings_db.repositories import (
+    ColumnDefinitionRepository,
+    SelectedTableRepository,
+)
 from app.settings_db.router import settings_db_router
 from app.utils.db_column_config_view import (
     build_db_column_configuration_payload,
@@ -136,13 +140,39 @@ class ChatRequest(BaseModel):
 class ColumnConfigRow(BaseModel):
     """Editable metadata for one database column."""
 
+    # Core fields shared by local config and settings DB
     column_name: str
     data_type: str = ""
-    required: bool = False
-    primary_key: bool = False
     display_name: str = ""
     description: str = ""
+
+    # Local-config-only fields (used for demo/local schema file)
+    required: bool = False
+    primary_key: bool = False
     include_in_assistant: bool = True
+
+    # Settings-DB-only fields (stored in column_definitions table)
+    is_pii: bool = False
+    is_filterable: bool = True
+    example_values: list[str] = Field(default_factory=list)
+
+
+class TableConfigRequest(BaseModel):
+    """Request body for saving table column configuration."""
+
+    rows: list[ColumnConfigRow]
+
+    # When provided, also saves to settings.selected_tables + column_definitions
+    connection_id: str | None = None
+    schema_name: str = "public"
+    human_description: str | None = None
+
+
+class BulkTableConfigRequest(BaseModel):
+    """Request body for saving config for all tables in one shot."""
+
+    connection_id: str
+    schema_name: str = "public"
 
 
 class DBConnectionRequest(DBConnectionCreate):
@@ -426,17 +456,142 @@ def get_table_configuration(
     return jsonable_encoder(table_payload)
 
 
+@app.post("/schema/config/bulk")
+def save_all_tables_config(payload: BulkTableConfigRequest) -> dict[str, Any]:
+    """Fetch every table + column from the target DB and save config for all.
+
+    Iterates every table in the schema, fetches its columns, then upserts
+    settings.selected_tables and replaces settings.column_definitions for each.
+    Returns a summary of how many tables and columns were saved.
+    """
+    tables_result = get_tables_for_connection(
+        payload.connection_id, payload.schema_name
+    )
+    all_table_names: list[str] = tables_result["table_names"]
+
+    if not all_table_names:
+        return {"saved_tables": 0, "saved_columns": 0, "tables": []}
+
+    selected_table_repo = SelectedTableRepository()
+    column_def_repo = ColumnDefinitionRepository()
+    summary: list[dict[str, Any]] = []
+
+    for current_table_name in all_table_names:
+        columns_result = get_table_columns_for_connection(
+            payload.connection_id,
+            current_table_name,
+            payload.schema_name,
+        )
+        raw_columns: list[dict[str, Any]] = columns_result.get("columns", [])
+
+        selected_table_row = selected_table_repo.upsert_table(
+            connection_id=payload.connection_id,
+            schema_name=payload.schema_name,
+            table_name=current_table_name,
+            human_description=None,
+        )
+        if selected_table_row is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upsert selected_table for '{current_table_name}'.",
+            )
+
+        column_rows = [
+            {
+                "table_id": selected_table_row["id"],
+                "raw_name": col["column_name"],
+                "logical_name": None,
+                "description": None,
+                "data_type": col.get("data_type"),
+                "is_pii": False,
+                "is_filterable": True,
+                "example_values": None,
+            }
+            for col in raw_columns
+        ]
+        saved_columns = column_def_repo.replace_columns_for_table(
+            table_id=selected_table_row["id"],
+            column_rows=column_rows,
+        )
+        summary.append(
+            {
+                "table_name": current_table_name,
+                "column_count": len(saved_columns),
+            }
+        )
+
+    return jsonable_encoder(
+        {
+            "saved_tables": len(summary),
+            "saved_columns": sum(t["column_count"] for t in summary),
+            "tables": summary,
+        }
+    )
+
+
 @app.post("/schema/config/{table_name}")
 def save_table_metadata(
     table_name: str,
-    rows: list[ColumnConfigRow],
+    payload: TableConfigRequest,
 ) -> dict[str, Any]:
-    """Persist column metadata for one table."""
+    """Persist column metadata for one table.
+
+    Always saves to the local schema config file (demo path).
+    When connection_id is supplied, also upserts into settings.selected_tables
+    and replaces settings.column_definitions for that table.
+    """
     schema_data = SchemaConfigManager.get_schema_with_column_configuration()
-    if table_name not in schema_data.get("tables", {}):
+    has_local_table = table_name in schema_data.get("tables", {})
+
+    # ── Local file save (demo path, runs whenever the table exists locally) ──
+    if has_local_table:
+        save_table_configuration(table_name, [row.model_dump() for row in payload.rows])
+
+    # ── Settings-DB save (runs when caller provides a connection_id) ─────────
+    if payload.connection_id:
+        selected_table_row = SelectedTableRepository().upsert_table(
+            connection_id=payload.connection_id,
+            schema_name=payload.schema_name,
+            table_name=table_name,
+            human_description=payload.human_description,
+        )
+        if selected_table_row is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to upsert selected_table record.",
+            )
+
+        column_rows = [
+            {
+                "table_id": selected_table_row["id"],
+                "raw_name": row.column_name,
+                "logical_name": row.display_name or None,
+                "description": row.description or None,
+                "data_type": row.data_type or None,
+                "is_pii": row.is_pii,
+                "is_filterable": row.is_filterable,
+                "example_values": row.example_values or None,
+            }
+            for row in payload.rows
+        ]
+        saved_columns = ColumnDefinitionRepository().replace_columns_for_table(
+            table_id=selected_table_row["id"],
+            column_rows=column_rows,
+        )
+
+        # If there is no local table, return the settings-DB result directly
+        if not has_local_table:
+            return jsonable_encoder(
+                {
+                    "table_name": table_name,
+                    "selected_table": selected_table_row,
+                    "columns": saved_columns,
+                }
+            )
+
+    if not has_local_table and not payload.connection_id:
         raise HTTPException(status_code=404, detail=f"Unknown table: {table_name}")
 
-    save_table_configuration(table_name, [row.model_dump() for row in rows])
     updated_payload = get_table_configuration_payload(table_name)
     return jsonable_encoder(updated_payload)
 
