@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSON as PostgreSQLJSON
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -122,4 +123,36 @@ class ColumnDefinitionEntity(SettingsBase):
         DateTime(timezone=True),
         nullable=True,
         server_default=func.now(),
+    )
+
+
+class AgentEntity(SettingsBase):
+    """ORM entity for settings.agents."""
+
+    __tablename__ = "agents"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    workspace_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    name: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        server_default="Data Assistant",
+    )
+    model_version: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        server_default="gpt-4o",
+    )
+    system_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict | None] = mapped_column(PostgreSQLJSON, nullable=True)
+    is_public_to_team: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, server_default="true"
     )

@@ -15,6 +15,7 @@ def generate_schema_config(
     connection_id: str,
     table_names: list[str],
     schema_name: str = "public",
+    column_filter: dict[str, list[str]] | None = None,
 ) -> dict:
     """Build a schema_preserve-style JSON config for the given tables.
 
@@ -25,6 +26,9 @@ def generate_schema_config(
         connection_id: ID of the stored database connection.
         table_names: Tables to include in the config.
         schema_name: Database schema to query.
+        column_filter: Optional mapping of table_name -> list of column names.
+            When a table appears in this dict, only those columns are included.
+            When absent or None for a table, all columns are included.
     """
     target_url = _connect_target(connection_id)
 
@@ -47,6 +51,15 @@ def generate_schema_config(
                         schema_name,
                     )
                     continue
+
+                # Apply column filter when the user selected specific columns
+                if column_filter and table_name in column_filter:
+                    allowed = {c.lower() for c in column_filter[table_name]}
+                    if allowed:
+                        col_rows = [
+                            c for c in col_rows
+                            if c["column_name"].lower() in allowed
+                        ]
 
                 columns = {}
                 primary_key = []

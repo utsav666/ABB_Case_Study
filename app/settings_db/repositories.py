@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.settings_db.gateway import SettingsDatabaseGateway
 from app.settings_db.models import DBConnectionCreate
 from app.settings_db.orm_models import (
+    AgentEntity,
     ColumnDefinitionEntity,
     SelectedTableEntity,
     SettingsDBConnectionEntity,
@@ -275,3 +276,105 @@ class ColumnDefinitionRepository:
             session.commit()
 
         return [dict(row) for row in row_mappings]
+
+
+class AgentRepository:
+    """Data access for settings.agents records."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def create_agent(self, values: dict[str, Any]) -> dict[str, Any] | None:
+        """Insert a new agent row and return the persisted record."""
+        statement = (
+            insert(AgentEntity)
+            .values(**values)
+            .returning(
+                AgentEntity.id,
+                AgentEntity.workspace_id,
+                AgentEntity.name,
+                AgentEntity.model_version,
+                AgentEntity.system_instructions,
+                AgentEntity.config,
+                AgentEntity.is_public_to_team,
+            )
+        )
+        with self._gateway.get_session() as session:
+            row = session.execute(statement).mappings().first()
+            session.commit()
+        return dict(row) if row else None
+
+    def get_agent_by_id(self, agent_id: str) -> dict[str, Any] | None:
+        """Fetch an agent by its UUID."""
+        try:
+            parsed_id = UUID(agent_id)
+        except ValueError:
+            return None
+
+        statement = select(
+            AgentEntity.id,
+            AgentEntity.workspace_id,
+            AgentEntity.name,
+            AgentEntity.model_version,
+            AgentEntity.system_instructions,
+            AgentEntity.config,
+            AgentEntity.is_public_to_team,
+        ).where(AgentEntity.id == parsed_id)
+
+        with self._gateway.get_session() as session:
+            row = session.execute(statement).mappings().first()
+        return dict(row) if row else None
+
+    def list_agents_by_workspace(self, workspace_id: str) -> list[dict[str, Any]]:
+        """Return all agents belonging to a workspace."""
+        parsed_id = UUID(workspace_id)
+        statement = select(
+            AgentEntity.id,
+            AgentEntity.workspace_id,
+            AgentEntity.name,
+            AgentEntity.model_version,
+            AgentEntity.config,
+            AgentEntity.is_public_to_team,
+        ).where(AgentEntity.workspace_id == parsed_id)
+
+        with self._gateway.get_session() as session:
+            rows = session.execute(statement).mappings().all()
+        return [dict(r) for r in rows]
+
+    def update_agent(self, agent_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        """Update an existing agent's fields."""
+        parsed_id = UUID(agent_id)
+        # Remove None values so we only update provided fields
+        clean = {k: v for k, v in updates.items() if v is not None}
+        if not clean:
+            return self.get_agent_by_id(agent_id)
+
+        from sqlalchemy import update as sa_update
+
+        statement = (
+            sa_update(AgentEntity)
+            .where(AgentEntity.id == parsed_id)
+            .values(**clean)
+            .returning(
+                AgentEntity.id,
+                AgentEntity.workspace_id,
+                AgentEntity.name,
+                AgentEntity.model_version,
+                AgentEntity.system_instructions,
+                AgentEntity.config,
+                AgentEntity.is_public_to_team,
+            )
+        )
+        with self._gateway.get_session() as session:
+            row = session.execute(statement).mappings().first()
+            session.commit()
+        return dict(row) if row else None
+
+    def delete_agent(self, agent_id: str) -> bool:
+        """Delete an agent by ID. Returns True if a row was removed."""
+        parsed_id = UUID(agent_id)
+        statement = delete(AgentEntity).where(AgentEntity.id == parsed_id)
+        with self._gateway.get_session() as session:
+            result = session.execute(statement)
+            session.commit()
+        return result.rowcount > 0

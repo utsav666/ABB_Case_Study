@@ -25,7 +25,9 @@ from app.settings_db.controllers import (
     validate_db_connection as validate_settings_db_connection,
 )
 from app.settings_db.models import DBConnectionCreate
+from app.settings_db.models import AgentCreate, AgentUpdate
 from app.settings_db.repositories import (
+    AgentRepository,
     ColumnDefinitionRepository,
     SelectedTableRepository,
 )
@@ -168,11 +170,45 @@ class TableConfigRequest(BaseModel):
     human_description: str | None = None
 
 
+class TableSelection(BaseModel):
+    """One table with an optional column filter."""
+
+    table_name: str
+    column_names: list[str] | None = Field(
+        default=None,
+        description=(
+            "Columns the user selected for this table. "
+            "When omitted or empty, all columns are included."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def normalize_empty_columns(self) -> "TableSelection":
+        """Treat an empty column list the same as None (all columns)."""
+        if self.column_names is not None and len(self.column_names) == 0:
+            self.column_names = None
+        return self
+
+
 class BulkTableConfigRequest(BaseModel):
-    """Request body for saving config for all tables in one shot."""
+    """Request body for saving schema configuration.
+
+    Supports four selection modes:
+      1. All tables, all columns        → omit `tables`
+      2. Specific tables, all columns   → tables: [{table_name: "orders"}, ...]
+      3. Specific tables, specific cols  → tables: [{table_name: "orders", column_names: ["id","total"]}, ...]
+      4. All tables, specific cols each  → fetch all tables first, then filter cols per entry
+    """
 
     connection_id: str
     schema_name: str = "public"
+    tables: list[TableSelection] | None = Field(
+        default=None,
+        description=(
+            "Tables (and optionally columns) the user selected. "
+            "When omitted, every table with all columns is saved."
+        ),
+    )
 
 
 class DBConnectionRequest(DBConnectionCreate):
@@ -405,34 +441,93 @@ def get_schema_tables(
     return get_tables_for_connection(connection_id, schema_name)
 
 
-@app.get("/schema/config")
-def get_schema_configuration(
-    connection_id: str | None = None,
-    schema_name: str = "public",
-    table_name: list[str] | None = Query(default=None),
-) -> dict[str, Any]:
-    """Return the full schema plus editable column metadata.
+class SchemaConfigRequest(BaseModel):
+    """Request body for POST /schema/config with full table+column selection.
 
-    When connection_id is provided, fetches schema config
-    (columns, primary keys, foreign keys) from the target database.
-    Otherwise returns locally loaded schema configuration.
-
-    Query params:
-        connection_id: Target database connection to query.
-        schema_name: Schema inside the target database (default: public).
-        table_name: One or more table names to include (repeat for multiple).
-            When omitted, all tables in the schema are returned.
+    Supports the same four scenarios as bulk save:
+      1. All tables, all columns        → omit `tables`
+      2. Specific tables, all columns   → tables: [{table_name: "x"}, ...]
+      3. Specific tables, specific cols  → tables: [{table_name: "x", column_names: ["a","b"]}, ...]
+      4. Mixed                           → some entries with column_names, some without
     """
-    if connection_id:
-        if table_name:
-            selected_tables = table_name
+
+    connection_id: str
+    schema_name: str = "public"
+    workspace_id: str | None = Field(
+        default=None,
+        description=(
+            "When provided, the generated schema config is saved "
+            "into the agent's config JSONB column. If no agent exists "
+            "for this workspace, one is created automatically."
+        ),
+    )
+    tables: list[TableSelection] | None = Field(
+        default=None,
+        description=(
+            "Tables (and optionally columns) to include. "
+            "When omitted, every table with all columns is returned."
+        ),
+    )
+
+
+@app.post("/schema/config")
+def post_schema_configuration(payload: SchemaConfigRequest) -> dict[str, Any]:
+    """Return schema config with full table + column selection.
+
+    Supports all four selection modes via the request body.
+    """
+    if payload.tables:
+        selected_tables = [t.table_name for t in payload.tables]
+        # Build column filter: only for entries that specify column_names
+        column_filter: dict[str, list[str]] = {
+            t.table_name: t.column_names
+            for t in payload.tables
+            if t.column_names is not None
+        }
+    else:
+        tables_result = get_tables_for_connection(
+            payload.connection_id, payload.schema_name
+        )
+        selected_tables = tables_result["table_names"]
+        column_filter = {}
+
+    schema_config = generate_schema_config(
+        payload.connection_id,
+        selected_tables,
+        payload.schema_name,
+        column_filter=column_filter or None,
+    )
+
+    # Save the generated config into the agent's config JSONB when workspace_id is provided
+    if payload.workspace_id:
+        agent_repo = AgentRepository()
+        agents = agent_repo.list_agents_by_workspace(payload.workspace_id)
+
+        if agents:
+            # Update the first (default) agent for this workspace
+            agent = agents[0]
+            agent_repo.update_agent(
+                str(agent["id"]),
+                {"config": schema_config},
+            )
+            schema_config["agent_id"] = str(agent["id"])
         else:
-            tables_result = get_tables_for_connection(connection_id, schema_name)
-            selected_tables = tables_result["table_names"]
+            # Auto-create an agent for this workspace
+            from uuid import UUID as _UUID
 
-        return generate_schema_config(connection_id, selected_tables, schema_name)
+            new_agent = agent_repo.create_agent({
+                "workspace_id": _UUID(payload.workspace_id),
+                "name": "Data Assistant",
+                "model_version": "gpt-4o",
+                "config": schema_config,
+                "is_public_to_team": True,
+            })
+            if new_agent:
+                schema_config["agent_id"] = str(new_agent["id"])
 
-    return jsonable_encoder(build_db_column_configuration_payload())
+        schema_config["agent_config_saved"] = True
+
+    return schema_config
 
 
 @app.get("/schema/config/{table_name}")
@@ -458,31 +553,49 @@ def get_table_configuration(
 
 @app.post("/schema/config/bulk")
 def save_all_tables_config(payload: BulkTableConfigRequest) -> dict[str, Any]:
-    """Fetch every table + column from the target DB and save config for all.
+    """Save schema configuration for user-selected tables and columns.
 
-    Iterates every table in the schema, fetches its columns, then upserts
-    settings.selected_tables and replaces settings.column_definitions for each.
-    Returns a summary of how many tables and columns were saved.
+    Selection modes:
+      1. All tables, all columns        → omit `tables`
+      2. Specific tables, all columns   → tables: [{table_name: "x"}, ...]
+      3. Specific tables, specific cols  → tables: [{table_name: "x", column_names: ["a","b"]}, ...]
+      4. Mixed                           → some entries with column_names, some without
     """
-    tables_result = get_tables_for_connection(
-        payload.connection_id, payload.schema_name
-    )
-    all_table_names: list[str] = tables_result["table_names"]
+    # ── Build a mapping: table_name → allowed column names (None = all) ──
+    if payload.tables:
+        table_column_filter: dict[str, list[str] | None] = {
+            t.table_name: t.column_names for t in payload.tables
+        }
+    else:
+        # No selection provided → fetch every table, keep all columns
+        tables_result = get_tables_for_connection(
+            payload.connection_id, payload.schema_name
+        )
+        table_column_filter = {name: None for name in tables_result["table_names"]}
 
-    if not all_table_names:
+    if not table_column_filter:
         return {"saved_tables": 0, "saved_columns": 0, "tables": []}
 
     selected_table_repo = SelectedTableRepository()
     column_def_repo = ColumnDefinitionRepository()
     summary: list[dict[str, Any]] = []
 
-    for current_table_name in all_table_names:
+    for current_table_name, allowed_columns in table_column_filter.items():
+        # Fetch all columns from the target DB for this table
         columns_result = get_table_columns_for_connection(
             payload.connection_id,
             current_table_name,
             payload.schema_name,
         )
         raw_columns: list[dict[str, Any]] = columns_result.get("columns", [])
+
+        # Filter to only the columns the user selected (if specified)
+        if allowed_columns is not None:
+            allowed_set = {c.lower() for c in allowed_columns}
+            raw_columns = [
+                col for col in raw_columns
+                if col["column_name"].lower() in allowed_set
+            ]
 
         selected_table_row = selected_table_repo.upsert_table(
             connection_id=payload.connection_id,
@@ -619,6 +732,87 @@ def create_db_connection(
         return validation_response
 
     return create_settings_db_connection(payload)
+
+
+# ── Agent CRUD ───────────────────────────────────────────────────────────────
+
+
+@app.post("/settings/agents", status_code=201)
+def create_agent(payload: AgentCreate) -> dict[str, Any]:
+    """Create a new agent.
+
+    The config JSONB stores db_connection_id, schema_name, and model params.
+    """
+    values = {
+        "workspace_id": payload.workspace_id,
+        "name": payload.name,
+        "model_version": payload.model_version,
+        "system_instructions": payload.system_instructions,
+        "config": payload.config.model_dump(),
+        "is_public_to_team": payload.is_public_to_team,
+    }
+    result = AgentRepository().create_agent(values)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Failed to create agent.")
+    return jsonable_encoder(result)
+
+
+@app.get("/settings/agents/{agent_id}")
+def get_agent(agent_id: str) -> dict[str, Any]:
+    """Fetch a single agent by ID."""
+    result = AgentRepository().get_agent_by_id(agent_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    return jsonable_encoder(result)
+
+
+@app.get("/settings/agents")
+def list_agents(workspace_id: str) -> dict[str, Any]:
+    """List all agents in a workspace."""
+    agents = AgentRepository().list_agents_by_workspace(workspace_id)
+    return jsonable_encoder({"agents": agents, "count": len(agents)})
+
+
+@app.patch("/settings/agents")
+def update_agent(workspace_id: str, payload: AgentUpdate) -> dict[str, Any]:
+    """Update the agent for a workspace. Only provided fields are changed."""
+    agent_repo = AgentRepository()
+    agents = agent_repo.list_agents_by_workspace(workspace_id)
+    if not agents:
+        raise HTTPException(status_code=404, detail="No agent found for this workspace.")
+
+    agent_id = str(agents[0]["id"])
+    updates: dict[str, Any] = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.model_version is not None:
+        updates["model_version"] = payload.model_version
+    if payload.system_instructions is not None:
+        updates["system_instructions"] = payload.system_instructions
+    if payload.config is not None:
+        updates["config"] = payload.config.model_dump()
+    if payload.is_public_to_team is not None:
+        updates["is_public_to_team"] = payload.is_public_to_team
+
+    result = agent_repo.update_agent(agent_id, updates)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    return jsonable_encoder(result)
+
+
+@app.delete("/settings/agents")
+def delete_agent(workspace_id: str) -> dict[str, str]:
+    """Delete the agent for a workspace."""
+    agent_repo = AgentRepository()
+    agents = agent_repo.list_agents_by_workspace(workspace_id)
+    if not agents:
+        raise HTTPException(status_code=404, detail="No agent found for this workspace.")
+
+    agent_id = str(agents[0]["id"])
+    deleted = agent_repo.delete_agent(agent_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Agent not found.")
+    return {"status": "deleted", "agent_id": agent_id}
 
 
 @app.post("/chat")

@@ -85,3 +85,39 @@ class DBConnectionCreate(DBConnectionInput):
     )
 
     workspace_id: UUID = Field(description="UUID of the parent workspace.")
+
+
+class AgentConfig(BaseModel):
+    """JSONB config stored in settings.agents.config."""
+
+    db_connection_id: str | None = Field(
+        default=None,
+        description="UUID of the db_connection this agent queries.",
+    )
+    schema_name: str = Field(
+        default="public",
+        description="Database schema the agent operates on.",
+    )
+    max_tokens: int = Field(default=1000)
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+
+
+class AgentCreate(BaseModel):
+    """Request body for creating an agent."""
+
+    workspace_id: UUID
+    name: str = "Data Assistant"
+    model_version: str = "gpt-4o"
+    system_instructions: str | None = None
+    config: AgentConfig = Field(default_factory=AgentConfig)
+    is_public_to_team: bool = True
+
+
+class AgentUpdate(BaseModel):
+    """Request body for updating an agent (all fields optional)."""
+
+    name: str | None = None
+    model_version: str | None = None
+    system_instructions: str | None = None
+    config: AgentConfig | None = None
+    is_public_to_team: bool | None = None
