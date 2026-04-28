@@ -468,6 +468,27 @@ class SchemaConfigRequest(BaseModel):
             "When omitted, every table with all columns is returned."
         ),
     )
+    profile: bool = Field(
+        default=False,
+        description=(
+            "When true, run Phase 1 statistical data profiling on every "
+            "column (cardinality, distinct values, min/max, date ranges)."
+        ),
+    )
+    annotate: bool = Field(
+        default=False,
+        description=(
+            "When true (requires profile=true), run Phase 2 LLM semantic "
+            "annotation to generate value descriptions, aliases, and query hints."
+        ),
+    )
+    save_local: bool = Field(
+        default=False,
+        description=(
+            "When true, also persist the (enriched) config to the local "
+            "schema_preserve.json file for the existing pipeline."
+        ),
+    )
 
 
 @app.post("/schema/config")
@@ -497,6 +518,27 @@ def post_schema_configuration(payload: SchemaConfigRequest) -> dict[str, Any]:
         payload.schema_name,
         column_filter=column_filter or None,
     )
+
+    # ── Semantic enrichment (Phase 1 profiling + Phase 2 annotation) ─────
+    if payload.profile:
+        from app.semantic_catalog.catalog_manager import (
+            enrich_schema_config_for_connection,
+            save_enriched_config_to_local_file,
+        )
+
+        schema_config = enrich_schema_config_for_connection(
+            connection_id=payload.connection_id,
+            schema_config=schema_config,
+            annotate=payload.annotate,
+        )
+        logger.info(
+            "Schema enrichment complete: profiled=%s, annotated=%s",
+            schema_config.get("profiled"),
+            schema_config.get("annotated"),
+        )
+
+        if payload.save_local:
+            save_enriched_config_to_local_file(schema_config)
 
     # Save the generated config into the agent's config JSONB when workspace_id is provided
     if payload.workspace_id:

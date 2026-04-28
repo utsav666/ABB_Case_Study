@@ -1,10 +1,88 @@
 from app.sampledata.data_loader import DataLoader
 
 
+def _render_semantic_profile(column_name: str, profile: dict) -> str:
+    """Render a single column's semantic profile into a compact string.
+
+    This is the function that converts the enriched JSON data into
+    prompt-friendly text consumed by the Router, TableIdentifier, and
+    SQLGenerator.
+
+    Parameters
+    ----------
+    column_name:
+        Raw column name.
+    profile:
+        The ``semantic_profile`` dict attached to the column.
+
+    Returns
+    -------
+    str
+        A compact human-readable summary of the column's data.
+    """
+    parts: list[str] = []
+
+    # Description from LLM annotation
+    desc = profile.get("description", "").strip()
+    if desc:
+        parts.append(desc)
+
+    # TEXT columns — show values / aliases
+    distinct = profile.get("distinct_values")
+    if distinct:
+        # Show value descriptions if available, else raw values
+        value_descs = profile.get("value_descriptions", {})
+        if value_descs:
+            mapped = [f"{v}={value_descs[v]}" if v in value_descs else v for v in distinct[:20]]
+        else:
+            mapped = distinct[:20]
+        suffix = f" +{len(distinct) - 20} more" if len(distinct) > 20 else ""
+        parts.append(f"values=[{', '.join(mapped)}{suffix}]")
+    elif profile.get("top_values"):
+        top = [tv["value"] for tv in profile["top_values"][:15]]
+        parts.append(f"top values=[{', '.join(top)} …]")
+
+    # Aliases
+    aliases = profile.get("natural_language_aliases", {})
+    if aliases:
+        alias_pairs = [f'"{k}"→{v}' for k, v in list(aliases.items())[:10]]
+        parts.append(f"aliases: {', '.join(alias_pairs)}")
+
+    # NUMERIC columns
+    if profile.get("min_value") is not None:
+        parts.append(
+            f"range {profile.get('min_value')}–{profile.get('max_value')}"
+            f", mean={profile.get('mean_value')}"
+        )
+
+    # TEMPORAL columns
+    if profile.get("min_date"):
+        parts.append(
+            f"range {profile['min_date']} → {profile.get('max_date')}"
+            f", {profile.get('granularity', 'unknown')} granularity"
+        )
+
+    # Query hints
+    hints = profile.get("query_hints", "").strip()
+    if hints:
+        parts.append(f"⚠️ {hints}")
+
+    return "; ".join(parts)
+
+
 class Summarizer:
     @staticmethod
-    def summarize_schema() -> str:
-        """Return a schema summary enriched with any configured column labels."""
+    def summarize_schema(include_semantic_profile: bool = True) -> str:
+        """Return a schema summary enriched with any configured column labels.
+
+        Parameters
+        ----------
+        include_semantic_profile:
+            When ``True`` (default), appends semantic profile data (value
+            descriptions, aliases, ranges, query hints) to each column's
+            summary line.  Set to ``False`` for a compact structure-only
+            summary.
+        """
         data = DataLoader.load_data()
         table_summaries: list[str] = []
 
@@ -22,6 +100,14 @@ class Summarizer:
                     column_summary = f"{column_name} ({display_name})"
                 if description:
                     column_summary = f"{column_summary}: {description}"
+
+                # Append semantic profile when available and enabled
+                if include_semantic_profile:
+                    sem_profile = column_info.get("semantic_profile")
+                    if sem_profile:
+                        rendered = _render_semantic_profile(column_name, sem_profile)
+                        if rendered:
+                            column_summary = f"{column_summary} [{rendered}]"
 
                 column_summaries.append(column_summary)
 
