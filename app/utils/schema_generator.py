@@ -96,8 +96,9 @@ def generate_schema_config(
                         fk_row["to_column"]
                     )
 
-                qualified_table_name = f"{schema_name}.{table_name}"
+                qualified_table_name = table_name
                 schema_config["tables"][qualified_table_name] = {
+                    "schema": schema_name,
                     "type": "table",
                     "columns": columns,
                     "primary_key": primary_key,

@@ -1,0 +1,144 @@
+{
+  "tables": {
+    "sample": {
+      "schema": "sales",
+      "type": "table",
+      "columns": {
+        "date": {
+          "type": "TIMESTAMP",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "customer_id": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "pincode": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "city": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "state": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "region": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "zonal_manager": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "regional_manager": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "business_head": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "brand_name": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "category": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "vertical": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "gender": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "redemption_type": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "campaign_type": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "channel": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "device_type": {
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "list_price": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "selling_price": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "quantity": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "actual_sales": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        },
+        "target_sales": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false
+        }
+      },
+      "primary_key": [],
+      "foreign_keys": []
+    }
+  }
+}

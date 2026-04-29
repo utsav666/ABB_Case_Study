@@ -142,19 +142,19 @@ class DataProfiler:
         """
         result: dict[str, dict[str, dict[str, Any]]] = {}
 
-        for qualified_name, table_info in tables.items():
-            # Qualified name might be "public.orders" — extract bare name
-            bare_name = qualified_name.rsplit(".", 1)[-1]
-            table_schema = (
-                qualified_name.rsplit(".", 1)[0]
-                if "." in qualified_name
+        for table_name, table_info in tables.items():
+            # Schema can be a field inside the table dict or part of a qualified name
+            table_schema = table_info.get("schema") or (
+                table_name.rsplit(".", 1)[0]
+                if "." in table_name
                 else schema_name
             )
+            bare_name = table_name.rsplit(".", 1)[-1] if "." in table_name else table_name
 
             columns = table_info.get("columns", {})
-            logger.info("Profiling table %s (%d columns)…", qualified_name, len(columns))
+            logger.info("Profiling table %s.%s (%d columns)…", table_schema, bare_name, len(columns))
 
-            result[qualified_name] = self.profile_table(
+            result[table_name] = self.profile_table(
                 table_schema, bare_name, columns,
             )
 

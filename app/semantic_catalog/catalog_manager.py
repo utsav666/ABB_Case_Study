@@ -224,15 +224,37 @@ def save_enriched_config_to_local_file(
     and writes it to the local schema file so that the existing pipeline
     (Summarizer, TableIdentifier, SQLGenerator) picks up the semantic
     profiles automatically.
+
+    The API uses qualified table keys (``"sales.sample"``) while the local
+    file uses bare table names with a ``"schema"`` field inside.  This
+    function converts between the two formats automatically.
     """
     import json
     from pathlib import Path
 
     schema_file = Path(__file__).resolve().parents[2] / "sample_data" / "schema_preserve.json"
     inner_config = enriched_config.get("config", enriched_config)
+    schema_name = enriched_config.get("schema", "public")
+
+    # Convert qualified table keys ("sales.sample") to local format
+    # where key is bare name ("sample") and "schema" is a field inside.
+    tables = inner_config.get("tables", {})
+    converted_tables: dict[str, Any] = {}
+    for qualified_name, table_info in tables.items():
+        if "." in qualified_name:
+            table_schema, bare_name = qualified_name.split(".", 1)
+        else:
+            table_schema = schema_name
+            bare_name = qualified_name
+
+        converted_table = dict(table_info)
+        converted_table["schema"] = table_schema
+        converted_tables[bare_name] = converted_table
+
+    output = {"tables": converted_tables}
 
     schema_file.parent.mkdir(parents=True, exist_ok=True)
     with schema_file.open("w", encoding="utf-8") as f:
-        json.dump(inner_config, f, indent=2, default=str)
+        json.dump(output, f, indent=2, default=str)
 
     logger.info("Saved enriched schema config to %s", schema_file)
