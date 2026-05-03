@@ -8,8 +8,11 @@ import logging
 from typing import Any
 
 import streamlit as st
-from envsetup.env_loader import load_env
-from orchestrator.orch_exec import Orchestrator
+from app.envsetup.env_loader import load_env
+# --- Old orchestrator (pipeline) ---
+# from app.orchestrator.orch_exec import Orchestrator
+# --- New orchestrator (agent) ---
+from app.orchestrator.orch_improve import AgentOrchestrator
 from pandas import DataFrame
 
 # from app.utils.db_column_config_view import render_db_column_configuration_page
@@ -89,7 +92,8 @@ if user_input:
     with st.chat_message("user"):
         st.write(user_input)
 
-    orch = Orchestrator(user_input)
+    # orch = Orchestrator(user_input)  # old pipeline
+    orch = AgentOrchestrator(user_input)  # new agent
 
     buffer = io.StringIO()
     log_handler = logging.StreamHandler(buffer)
@@ -111,16 +115,22 @@ if user_input:
     logs = buffer.getvalue()
 
     assistant_message: dict[str, Any] = {"role": "assistant"}
-    is_chart_result = isinstance(result, dict) and result.get("type") == "chart"
 
     with st.chat_message("assistant"):
-        if is_chart_result:
+        # --- New agent always returns dict with "type" key ---
+        result_type = result.get("type", "") if isinstance(result, dict) else ""
+
+        if result_type == "chart":
             chart_figure = result.get("figure")
             chart_data = result.get("data")
 
-            assistant_message["content"] = "Here is your chart."
+            assistant_message["content"] = result.get("message", "Here is your chart.")
             assistant_message["figure"] = chart_figure
             assistant_message["data"] = chart_data
+
+            if result.get("sql"):
+                with st.expander("🔍 Generated SQL"):
+                    st.code(result["sql"], language="sql")
 
             if chart_figure is not None:
                 st.write("### 📊 Chart")
@@ -130,6 +140,28 @@ if user_input:
                 st.write("### 📄 Data")
                 st.dataframe(chart_data)
 
+        elif result_type == "data":
+            assistant_message["content"] = result.get("message", "Here are the query results.")
+            assistant_message["data"] = result.get("data")
+
+            if result.get("sql"):
+                with st.expander("🔍 Generated SQL"):
+                    st.code(result["sql"], language="sql")
+
+            st.write("### ✅ Result:")
+            st.dataframe(result.get("data"))
+
+        elif result_type == "text":
+            assistant_message["content"] = result.get("message", "")
+            st.write("### ✅ Result:")
+            st.write(result.get("message", ""))
+
+        elif result_type == "error":
+            assistant_message["content"] = result.get("message", "An error occurred.")
+            st.write("### ❌ Error:")
+            st.error(result.get("message", "Unknown error"))
+
+        # --- Old orchestrator fallback (backward compat) ---
         elif isinstance(result, DataFrame):
             assistant_message["content"] = "Here are the query results."
             assistant_message["data"] = result

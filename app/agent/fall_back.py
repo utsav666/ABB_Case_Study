@@ -1,4 +1,9 @@
+"""Tool: Answer general (non-DB) questions."""
+
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -6,57 +11,81 @@ from pydantic import SecretStr
 from app.envsetup.env_loader import get_openai_api_key, load_env
 from app.prompt.prompts import fall_back_prompt
 
-load_env()
-
 logger = logging.getLogger(__name__)
 
+load_env()
 
-class GeneralAnswerAgent:
-    """
-    A simple agent that answers general questions (not schema / SQL specific).
-    It uses conversation history + user question + router reasoning to generate a clean answer.
-    """
 
-    def __init__(self, model="gpt-4o", temperature=0.2):
-        self.llm = ChatOpenAI(
-            model=model,
-            temperature=temperature,
+def general_answer(
+    user_question: str,
+    conversation_history: list[dict[str, str]] | None = None,
+    router_reasoning: str = "",
+) -> dict[str, Any]:
+    """Answer a general-purpose question not related to the database.
+
+    Returns
+    -------
+    {"success": True, "answer": "..."} or {"success": False, "error": "..."}
+    """
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.2,
             api_key=SecretStr(get_openai_api_key()),
         )
 
-    def run(self, conversation_history, user_question, router_reasoning):
-        """
-        conversation_history: list of {"role": "...", "content": "..."}
-        user_question: str
-        router_reasoning: str
-        """
-        logger.debug(
-            "Fallback agent conversation length: %s", len(conversation_history)
-        )
         messages = [{"role": "system", "content": fall_back_prompt}]
 
-        # Add conversation history
         if conversation_history:
             messages.extend(conversation_history)
 
-        # Add router reasoning context
-        messages.append(
-            {"role": "system", "content": f"Router reasoning: {router_reasoning}"}
-        )
+        if router_reasoning:
+            messages.append(
+                {"role": "system", "content": f"Router reasoning: {router_reasoning}"}
+            )
 
-        # Add user question
         messages.append({"role": "user", "content": user_question})
 
-        # Pass everything to the LLM
-        response = self.llm.invoke(messages)
+        response = llm.invoke(messages)
+        logger.debug("General answer generated")
+        return {"success": True, "answer": response.content}
+    except Exception as e:
+        logger.exception("General answer failed")
+        return {"success": False, "error": str(e)}
 
-        return response.content
+
+# --- Backward compatibility ---
+class GeneralAnswerAgent:
+    """Deprecated: use general_answer() directly."""
+
+    def __init__(self, model="gpt-4o", temperature=0.2):
+        pass
+
+    def run(self, conversation_history, user_question, router_reasoning) -> str:
+        history = conversation_history if isinstance(conversation_history, list) else []
+        result = general_answer(user_question, history, router_reasoning)
+        if result["success"]:
+            return result["answer"]
+        raise RuntimeError(result["error"])
 
 
-# if __name__ == "__main__":
-#     gen_answer_agent = GeneralAnswerAgent()
-#     sample_Res = gen_answer_agent.run('what is love?',
-#                                       'could you explain ?',
-#                                       'The user is asking for an explanation, which typically involves providing a conceptual understanding or clarification of a topic. The question is open-ended and does not specify a request for data retrieval, schema information, or general knowledge, nor does it reference any prior context that would make it a follow-up'
-# )
-#     print(sample_Res)
+# ====== Unit Tests ======
+if __name__ == "__main__":
+    test_question = "what is love?"
+    test_history = [{"role": "user", "content": "hello"}]
+    test_reasoning = "User is asking a general knowledge question."
+
+    # Test new function API
+    print("--- Testing general_answer() ---")
+    result = general_answer(test_question, test_history, test_reasoning)
+    print(f"Success: {result['success']}")
+    if result["success"]:
+        print(f"Answer: {result['answer'][:200]}...")
+    else:
+        print(f"Error: {result['error']}")
+
+    # Test old class API
+    print("\n--- Testing GeneralAnswerAgent (old API) ---")
+    agent = GeneralAnswerAgent()
+    old_result = agent.run(test_history, test_question, test_reasoning)
+    print(f"Result: {old_result[:200]}...")

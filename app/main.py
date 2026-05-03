@@ -888,11 +888,15 @@ async def chat(
         )
 
     try:
-        from app.orchestrator.orch_exec import Orchestrator
+        # --- Old orchestrator (pipeline) ---
+        # from app.orchestrator.orch_exec import Orchestrator
+        # --- New orchestrator (agent) ---
+        from app.orchestrator.orch_improve import AgentOrchestrator
 
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-            result = Orchestrator(normalized_question).executor()
+            # result = Orchestrator(normalized_question).executor()
+            result = AgentOrchestrator(normalized_question).executor()
     except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
         log_captured_orchestrator_output(
             normalized_question,
