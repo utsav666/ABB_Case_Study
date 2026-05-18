@@ -9,10 +9,11 @@ from typing import Any
 
 import streamlit as st
 from app.envsetup.env_loader import load_env
-# --- Old orchestrator (pipeline) ---
+
+# --- Orchestrators: uncomment ONE at a time ---
 # from app.orchestrator.orch_exec import Orchestrator
-# --- New orchestrator (agent) ---
-from app.orchestrator.orch_improve import AgentOrchestrator
+# from app.orchestrator.orch_improve import AgentOrchestrator
+from app.orchestrator.orch_graph import GraphOrchestrator
 from pandas import DataFrame
 
 # from app.utils.db_column_config_view import render_db_column_configuration_page
@@ -92,8 +93,10 @@ if user_input:
     with st.chat_message("user"):
         st.write(user_input)
 
-    # orch = Orchestrator(user_input)  # old pipeline
-    orch = AgentOrchestrator(user_input)  # new agent
+    # --- Orchestrator: uncomment ONE at a time ---
+    # orch = Orchestrator(user_input)
+    # orch = AgentOrchestrator(user_input)
+    orch = GraphOrchestrator(user_input)
 
     buffer = io.StringIO()
     log_handler = logging.StreamHandler(buffer)
