@@ -373,6 +373,19 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
     if isinstance(result, dict):
         payload["sql"] = result.get("sql")
 
+    # ### HITL — Return pending_hitl response as-is (graph is paused)
+    if isinstance(result, dict) and result.get("type") == "pending_hitl":
+        payload["answer_type"] = "pending_hitl"
+        payload["message"] = result.get("message", "Human input needed.")
+        payload["hitl_type"] = result.get("hitl_type")
+        payload["thread_id"] = result.get("thread_id")
+        payload["suggestions"] = result.get("suggestions")
+        payload["data"] = {
+            k: v for k, v in result.items()
+            if k not in ("type", "message", "hitl_type", "thread_id", "suggestions", "sql")
+        }
+        return payload
+
     # --- Typed results from GraphOrchestrator ---
     if isinstance(result, dict) and "type" in result:
         result_type = result["type"]
@@ -918,13 +931,17 @@ async def chat(
         )
 
     import asyncio
+    import uuid
     from app.orchestrator.orch_graph import GraphOrchestrator
+
+    ### HITL — Generate a thread_id for this conversation
+    thread_id = str(uuid.uuid4())
 
     buffer = io.StringIO()
     try:
         def _run_orchestrator() -> Any:
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-                return GraphOrchestrator(normalized_question).executor()
+                return GraphOrchestrator(normalized_question, thread_id=thread_id).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
     except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
@@ -954,6 +971,49 @@ async def chat(
 
     response_payload = {
         "question": normalized_question,
+        **build_chat_response(result, buffer.getvalue()),
+    }
+    return jsonable_encoder(response_payload)
+
+
+# ============================================================
+# ### HITL — Resume endpoint for human-in-the-loop responses
+# ============================================================
+
+
+class HitlResumeRequest(BaseModel):
+    """### HITL — Request model for resuming a paused graph."""
+
+    thread_id: str
+    decision: Any  # Human's choice: string, dict, etc.
+
+
+@app.post("/chat/resume")
+async def chat_resume(payload: HitlResumeRequest) -> dict[str, Any]:
+    """### HITL — Resume a paused orchestrator after human input.
+
+    Called when the /chat endpoint returns a 'pending_hitl' response.
+    The frontend sends back the thread_id and the human's decision.
+    """
+    import asyncio
+    from app.orchestrator.orch_graph import GraphOrchestrator
+
+    buffer = io.StringIO()
+    try:
+        def _resume() -> Any:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                return GraphOrchestrator.resume(payload.thread_id, payload.decision)
+
+        result = await asyncio.to_thread(_resume)
+    except Exception as error:
+        logger.exception("### HITL — Resume failed for thread: %s", payload.thread_id)
+        raise HTTPException(
+            status_code=500,
+            detail="An internal error occurred while resuming.",
+        ) from error
+
+    response_payload = {
+        "thread_id": payload.thread_id,
         **build_chat_response(result, buffer.getvalue()),
     }
     return jsonable_encoder(response_payload)

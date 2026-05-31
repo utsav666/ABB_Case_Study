@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from app.main import app
-
-__all__ = ["app"]
 import io
 import logging
+import uuid
 from typing import Any
 
 import streamlit as st
@@ -85,6 +83,95 @@ for msg in st.session_state.messages:
             with st.expander("📝 Logs"):
                 st.code(history_logs)
 
+# ### HITL — Handle resumed result after st.rerun()
+if "hitl_resume_result" in st.session_state and st.session_state.hitl_resume_result is not None:
+    result = st.session_state.hitl_resume_result
+    st.session_state.hitl_resume_result = None
+    result_type = result.get("type", "") if isinstance(result, dict) else ""
+    with st.chat_message("assistant"):
+        msg: dict[str, Any] = {"role": "assistant"}
+        if result_type == "chart":
+            fig = result.get("figure")
+            msg["content"] = "Here is your chart."
+            msg["figure"] = fig
+            if result.get("sql"):
+                with st.expander("🔍 Generated SQL"):
+                    st.code(result["sql"], language="sql")
+            if fig:
+                st.pyplot(fig)
+            if result.get("data") is not None:
+                st.dataframe(result["data"])
+        elif result_type == "data":
+            msg["content"] = "Here are the query results."
+            msg["data"] = result.get("data")
+            if result.get("sql"):
+                with st.expander("🔍 Generated SQL"):
+                    st.code(result["sql"], language="sql")
+            st.dataframe(result.get("data"))
+        elif result_type == "error":
+            msg["content"] = result.get("message", "Error")
+            st.error(result.get("message"))
+        else:
+            msg["content"] = result.get("message", str(result))
+            st.write(result.get("message", str(result)))
+        st.session_state.messages.append(msg)
+
+# ### HITL — Show pending HITL UI (persists across reruns via session_state)
+if "hitl_pending" in st.session_state and st.session_state.hitl_pending is not None:
+    pending = st.session_state.hitl_pending
+    hitl_type = pending.get("hitl_type", "")
+    thread_id = pending.get("thread_id", "")
+
+    with st.chat_message("assistant"):
+        st.write("### 🧑 Human Input Needed")
+        st.info(pending.get("message", "Please make a selection."))
+
+        if hitl_type == "cardinality_filter":
+            suggestions = pending.get("suggestions", [])
+            if suggestions:
+                choice = st.radio(
+                    f"Which value for **{pending.get('column', 'column')}**?",
+                    options=suggestions,
+                    key="hitl_cardinality_choice",
+                )
+            else:
+                choice = st.text_input(
+                    "Type the exact value:",
+                    key="hitl_cardinality_input",
+                )
+            if st.button("✅ Confirm Selection", key="hitl_confirm_card"):
+                from app.orchestrator.orch_graph import GraphOrchestrator
+                resume_result = GraphOrchestrator.resume(thread_id, choice)
+                st.session_state.hitl_pending = None
+                st.session_state.hitl_thread_id = str(uuid.uuid4())
+                # Check if another HITL is triggered (e.g., chart after cardinality)
+                if isinstance(resume_result, dict) and resume_result.get("type") == "pending_hitl":
+                    st.session_state.hitl_pending = resume_result
+                else:
+                    st.session_state.hitl_resume_result = resume_result
+                st.rerun()
+
+        elif hitl_type == "chart_approval":
+            suggested = pending.get("suggested_chart_type", "bar")
+            available_charts = pending.get("available_chart_types", ["bar", "line", "scatter", "pie"])
+            available_cols = pending.get("available_columns", [])
+
+            st.write(f"Suggested: **{suggested}** (x={pending.get('suggested_x_axis')}, y={pending.get('suggested_y_axis')})")
+            chart_choice = st.selectbox("Chart type", available_charts, index=available_charts.index(suggested) if suggested in available_charts else 0, key="hitl_chart_type")
+            x_choice = st.selectbox("X axis", available_cols, index=available_cols.index(pending.get("suggested_x_axis")) if pending.get("suggested_x_axis") in available_cols else 0, key="hitl_x")
+            y_choice = st.selectbox("Y axis", available_cols, index=available_cols.index(pending.get("suggested_y_axis")) if pending.get("suggested_y_axis") in available_cols else 0, key="hitl_y")
+
+            if st.button("✅ Approve Chart", key="hitl_confirm_chart"):
+                from app.orchestrator.orch_graph import GraphOrchestrator
+                human_decision = {"chart_type": chart_choice, "x_axis": x_choice, "y_axis": y_choice}
+                resume_result = GraphOrchestrator.resume(thread_id, human_decision)
+                st.session_state.hitl_pending = None
+                st.session_state.hitl_thread_id = str(uuid.uuid4())
+                st.session_state.hitl_resume_result = resume_result
+                st.rerun()
+
+    st.stop()  # Don't show chat input while waiting for HITL
+
 # User input
 user_input = st.chat_input("Ask a question about your database...")
 
@@ -93,10 +180,12 @@ if user_input:
     with st.chat_message("user"):
         st.write(user_input)
 
-    # --- Orchestrator: uncomment ONE at a time ---
-    # orch = Orchestrator(user_input)
-    # orch = AgentOrchestrator(user_input)
-    orch = GraphOrchestrator(user_input)
+    # --- Orchestrator ---
+    ### HITL — thread_id persists across interrupt/resume cycles
+    if "hitl_thread_id" not in st.session_state:
+        st.session_state.hitl_thread_id = str(uuid.uuid4())
+    thread_id = st.session_state.hitl_thread_id
+    orch = GraphOrchestrator(user_input, thread_id=thread_id)
 
     buffer = io.StringIO()
     log_handler = logging.StreamHandler(buffer)
@@ -122,6 +211,13 @@ if user_input:
     with st.chat_message("assistant"):
         # --- New agent always returns dict with "type" key ---
         result_type = result.get("type", "") if isinstance(result, dict) else ""
+
+        # ### HITL — If pending, store in session and stop (UI handled above on rerun)
+        if result_type == "pending_hitl":
+            st.session_state.hitl_pending = result
+            assistant_message["content"] = result.get("message", "I need your input.")
+            st.session_state.messages.append(assistant_message)
+            st.rerun()
 
         if result_type == "chart":
             chart_figure = result.get("figure")
