@@ -365,22 +365,52 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "logs": logs.strip() or None,
         "data": None,
+        "sql": None,
         "chart_image_base64": None,
     }
 
-    is_chart_result = isinstance(result, dict) and result.get("type") == "chart"
-    if is_chart_result:
-        chart_figure = result.get("figure")
-        chart_data = result.get("data")
-        payload["answer_type"] = "chart"
-        payload["message"] = "Here is your chart."
-        payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
-        if isinstance(chart_data, pd.DataFrame):
-            payload["data"] = serialize_dataframe(chart_data)
-        else:
-            payload["data"] = chart_data
-        return payload
+    # Extract SQL if present
+    if isinstance(result, dict):
+        payload["sql"] = result.get("sql")
 
+    # --- Typed results from GraphOrchestrator ---
+    if isinstance(result, dict) and "type" in result:
+        result_type = result["type"]
+
+        if result_type == "chart":
+            chart_figure = result.get("figure")
+            chart_data = result.get("data")
+            payload["answer_type"] = "chart"
+            payload["message"] = "Here is your chart."
+            payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
+            if isinstance(chart_data, pd.DataFrame):
+                payload["data"] = serialize_dataframe(chart_data)
+            else:
+                payload["data"] = chart_data
+            return payload
+
+        if result_type == "data":
+            data = result.get("data")
+            payload["answer_type"] = "table"
+            payload["message"] = result.get("message", "Here are the query results.")
+            if isinstance(data, pd.DataFrame):
+                payload["data"] = serialize_dataframe(data)
+            else:
+                payload["data"] = data
+            return payload
+
+        if result_type == "schema_info":
+            payload["answer_type"] = "schema_info"
+            payload["message"] = result.get("message", "Schema information retrieved.")
+            payload["data"] = result.get("data")
+            return payload
+
+        if result_type == "error":
+            payload["answer_type"] = "error"
+            payload["message"] = result.get("message", "An error occurred.")
+            return payload
+
+    # --- Legacy fallbacks ---
     if isinstance(result, pd.DataFrame):
         payload["answer_type"] = "table"
         payload["message"] = "Here are the query results."
@@ -887,16 +917,16 @@ async def chat(
             }
         )
 
-    try:
-        # --- Old orchestrator (pipeline) ---
-        # from app.orchestrator.orch_exec import Orchestrator
-        # --- New orchestrator (agent) ---
-        from app.orchestrator.orch_improve import AgentOrchestrator
+    import asyncio
+    from app.orchestrator.orch_graph import GraphOrchestrator
 
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-            # result = Orchestrator(normalized_question).executor()
-            result = AgentOrchestrator(normalized_question).executor()
+    buffer = io.StringIO()
+    try:
+        def _run_orchestrator() -> Any:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                return GraphOrchestrator(normalized_question).executor()
+
+        result = await asyncio.to_thread(_run_orchestrator)
     except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
         log_captured_orchestrator_output(
             normalized_question,
@@ -904,7 +934,10 @@ async def chat(
             logging.ERROR,
         )
         logger.exception("Chat request failed for question: %s", normalized_question)
-        raise HTTPException(status_code=500, detail=str(error)) from error
+        raise HTTPException(
+            status_code=500,
+            detail="An internal error occurred. Please try again.",
+        ) from error
     except Exception:
         log_captured_orchestrator_output(
             normalized_question,
