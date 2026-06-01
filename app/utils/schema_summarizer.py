@@ -33,7 +33,10 @@ def _render_semantic_profile(column_name: str, profile: dict) -> str:
         # Show value descriptions if available, else raw values
         value_descs = profile.get("value_descriptions", {})
         if value_descs:
-            mapped = [f"{v}={value_descs[v]}" if v in value_descs else v for v in distinct[:20]]
+            mapped = [
+                f"{v}={value_descs[v]}" if v in value_descs else v
+                for v in distinct[:20]
+            ]
         else:
             mapped = distinct[:20]
         suffix = f" +{len(distinct) - 20} more" if len(distinct) > 20 else ""

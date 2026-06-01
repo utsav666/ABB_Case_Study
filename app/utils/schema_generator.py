@@ -57,8 +57,7 @@ def generate_schema_config(
                     allowed = {c.lower() for c in column_filter[table_name]}
                     if allowed:
                         col_rows = [
-                            c for c in col_rows
-                            if c["column_name"].lower() in allowed
+                            c for c in col_rows if c["column_name"].lower() in allowed
                         ]
 
                 columns = {}

@@ -85,7 +85,9 @@ def extract_where_filters(sql: str, dialect: str = "postgres") -> list[FilterCol
 
     logger.info("### HITL — Extracted %d filter(s) from SQL", len(filters))
     for f in filters:
-        logger.debug("  Filter: %s.%s %s %r", f.table, f.column, f.operator, f.filter_value)
+        logger.debug(
+            "  Filter: %s.%s %s %r", f.table, f.column, f.operator, f.filter_value
+        )
 
     return filters
 
