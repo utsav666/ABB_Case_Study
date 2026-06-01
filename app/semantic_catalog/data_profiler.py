@@ -106,22 +106,33 @@ class DataProfiler:
             try:
                 if col_family == "text":
                     profiles[col_name] = self._profile_text_column(
-                        schema_name, table_name, col_name,
+                        schema_name,
+                        table_name,
+                        col_name,
                     )
                 elif col_family == "numeric":
                     profiles[col_name] = self._profile_numeric_column(
-                        schema_name, table_name, col_name,
+                        schema_name,
+                        table_name,
+                        col_name,
                     )
                 elif col_family == "temporal":
                     profiles[col_name] = self._profile_temporal_column(
-                        schema_name, table_name, col_name,
+                        schema_name,
+                        table_name,
+                        col_name,
                     )
                 else:
-                    profiles[col_name] = {"profile_type": "skipped", "reason": col_family}
+                    profiles[col_name] = {
+                        "profile_type": "skipped",
+                        "reason": col_family,
+                    }
             except Exception:
                 logger.exception(
                     "Failed to profile column %s.%s.%s",
-                    schema_name, table_name, col_name,
+                    schema_name,
+                    table_name,
+                    col_name,
                 )
                 profiles[col_name] = {"profile_type": "error"}
 
@@ -145,17 +156,24 @@ class DataProfiler:
         for table_name, table_info in tables.items():
             # Schema can be a field inside the table dict or part of a qualified name
             table_schema = table_info.get("schema") or (
-                table_name.rsplit(".", 1)[0]
-                if "." in table_name
-                else schema_name
+                table_name.rsplit(".", 1)[0] if "." in table_name else schema_name
             )
-            bare_name = table_name.rsplit(".", 1)[-1] if "." in table_name else table_name
+            bare_name = (
+                table_name.rsplit(".", 1)[-1] if "." in table_name else table_name
+            )
 
             columns = table_info.get("columns", {})
-            logger.info("Profiling table %s.%s (%d columns)…", table_schema, bare_name, len(columns))
+            logger.info(
+                "Profiling table %s.%s (%d columns)…",
+                table_schema,
+                bare_name,
+                len(columns),
+            )
 
             result[table_name] = self.profile_table(
-                table_schema, bare_name, columns,
+                table_schema,
+                bare_name,
+                columns,
             )
 
         return result
@@ -170,7 +188,9 @@ class DataProfiler:
     # ------------------------------------------------------------------
 
     def _discover_columns(
-        self, schema_name: str, table_name: str,
+        self,
+        schema_name: str,
+        table_name: str,
     ) -> dict[str, dict[str, Any]]:
         """Query information_schema to get column names and data types."""
         query = text("""
@@ -182,11 +202,11 @@ class DataProfiler:
         """)
         with self._engine.connect() as conn:
             rows = conn.execute(
-                query, {"schema_name": schema_name, "table_name": table_name},
+                query,
+                {"schema_name": schema_name, "table_name": table_name},
             ).mappings()
             return {
-                row["column_name"]: {"type": row["data_type"].upper()}
-                for row in rows
+                row["column_name"]: {"type": row["data_type"].upper()} for row in rows
             }
 
     # ------------------------------------------------------------------
@@ -194,7 +214,10 @@ class DataProfiler:
     # ------------------------------------------------------------------
 
     def _profile_text_column(
-        self, schema: str, table: str, col: str,
+        self,
+        schema: str,
+        table: str,
+        col: str,
     ) -> dict[str, Any]:
         """Profile a TEXT/VARCHAR column."""
         profile: dict[str, Any] = {"profile_type": "text"}
@@ -271,7 +294,10 @@ class DataProfiler:
     # ------------------------------------------------------------------
 
     def _profile_numeric_column(
-        self, schema: str, table: str, col: str,
+        self,
+        schema: str,
+        table: str,
+        col: str,
     ) -> dict[str, Any]:
         """Profile a NUMERIC/INT/FLOAT column."""
         sql = text(
@@ -303,7 +329,10 @@ class DataProfiler:
     # ------------------------------------------------------------------
 
     def _profile_temporal_column(
-        self, schema: str, table: str, col: str,
+        self,
+        schema: str,
+        table: str,
+        col: str,
     ) -> dict[str, Any]:
         """Profile a DATE/TIMESTAMP column."""
         sql = text(
@@ -331,13 +360,16 @@ class DataProfiler:
             "distinct_days": distinct_days,
             "distinct_months": distinct_months,
             "distinct_years": distinct_years,
-            "granularity": infer_granularity(distinct_days, distinct_months, distinct_years),
+            "granularity": infer_granularity(
+                distinct_days, distinct_months, distinct_years
+            ),
         }
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _safe_number(value: Any) -> float | int | None:
     """Coerce a DB value to a Python number, or ``None``."""

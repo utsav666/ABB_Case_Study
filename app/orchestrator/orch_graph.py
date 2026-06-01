@@ -240,12 +240,16 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
             continue
 
         # Determine table name (use first table from state if not qualified)
-        table_name = col_filter.table or (state.get("tables", [""])[0] if state.get("tables") else "")
+        table_name = col_filter.table or (
+            state.get("tables", [""])[0] if state.get("tables") else ""
+        )
         if not table_name:
             continue
 
         # Get actual distinct values and cardinality from DB
-        actual_values, cardinality = get_column_distinct_values(table_name, col_filter.column)
+        actual_values, cardinality = get_column_distinct_values(
+            table_name, col_filter.column
+        )
 
         if cardinality == 0 or not actual_values:
             continue
@@ -275,7 +279,9 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
                 user_value,
                 resolution["match"],
             )
-            rewritten_sql = rewrite_sql_filter(rewritten_sql, col_filter, resolution["match"])
+            rewritten_sql = rewrite_sql_filter(
+                rewritten_sql, col_filter, resolution["match"]
+            )
 
         else:
             # LLM is NOT confident → trigger HITL interrupt
@@ -284,22 +290,26 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
                 user_value,
                 col_filter.column,
             )
-            human_choice = interrupt({
-                "hitl_type": "cardinality_filter",
-                "column": col_filter.column,
-                "table": table_name,
-                "user_typed": user_value,
-                "suggestions": resolution["alternatives"][:10],
-                "reasoning": resolution["reasoning"],
-                "message": (
-                    f"I'm not sure which '{col_filter.column}' value you mean. "
-                    f"You typed '{user_value}'. Please pick from the suggestions "
-                    f"or type the exact value."
-                ),
-            })
+            human_choice = interrupt(
+                {
+                    "hitl_type": "cardinality_filter",
+                    "column": col_filter.column,
+                    "table": table_name,
+                    "user_typed": user_value,
+                    "suggestions": resolution["alternatives"][:10],
+                    "reasoning": resolution["reasoning"],
+                    "message": (
+                        f"I'm not sure which '{col_filter.column}' value you mean. "
+                        f"You typed '{user_value}'. Please pick from the suggestions "
+                        f"or type the exact value."
+                    ),
+                }
+            )
 
             # Human responded — rewrite SQL with their choice
-            rewritten_sql = rewrite_sql_filter(rewritten_sql, col_filter, str(human_choice))
+            rewritten_sql = rewrite_sql_filter(
+                rewritten_sql, col_filter, str(human_choice)
+            )
             logger.info("### HITL — Human selected: '%s'", human_choice)
 
     if rewritten_sql != sql:
@@ -330,27 +340,41 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     if not result["success"]:
         return {
-            "final_response": {"type": "data", "data": state.get("data"), "sql": state.get("sql", "")}
+            "final_response": {
+                "type": "data",
+                "data": state.get("data"),
+                "sql": state.get("sql", ""),
+            }
         }
 
     decision = result["chart"]
     available_columns = list(data.columns)
 
     # ### HITL — Interrupt for human chart approval
-    human_choice = interrupt({
-        "hitl_type": "chart_approval",
-        "suggested_chart_type": decision.chart_type,
-        "suggested_x_axis": decision.x_axis,
-        "suggested_y_axis": decision.y_axis,
-        "reasoning": decision.reasoning,
-        "available_columns": available_columns,
-        "available_chart_types": ["bar", "line", "scatter", "histogram", "pie", "box", "area"],
-        "message": (
-            f"I suggest a **{decision.chart_type}** chart "
-            f"(x={decision.x_axis}, y={decision.y_axis}). "
-            f"Approve or choose differently."
-        ),
-    })
+    human_choice = interrupt(
+        {
+            "hitl_type": "chart_approval",
+            "suggested_chart_type": decision.chart_type,
+            "suggested_x_axis": decision.x_axis,
+            "suggested_y_axis": decision.y_axis,
+            "reasoning": decision.reasoning,
+            "available_columns": available_columns,
+            "available_chart_types": [
+                "bar",
+                "line",
+                "scatter",
+                "histogram",
+                "pie",
+                "box",
+                "area",
+            ],
+            "message": (
+                f"I suggest a **{decision.chart_type}** chart "
+                f"(x={decision.x_axis}, y={decision.y_axis}). "
+                f"Approve or choose differently."
+            ),
+        }
+    )
 
     # Parse human response
     if isinstance(human_choice, dict):
@@ -371,17 +395,27 @@ def chart_approval_node(state: GraphState) -> GraphState:
     if x_axis not in data.columns or y_axis not in data.columns:
         logger.warning("### HITL — Chart axes not in columns after human choice")
         return {
-            "final_response": {"type": "data", "data": state.get("data"), "sql": state.get("sql", "")}
+            "final_response": {
+                "type": "data",
+                "data": state.get("data"),
+                "sql": state.get("sql", ""),
+            }
         }
 
     # ### HITL — Store chart config (serializable), render Figure in executor()
-    logger.info("### HITL — Chart approved: %s (x=%s, y=%s)", chart_type, x_axis, y_axis)
+    logger.info(
+        "### HITL — Chart approved: %s (x=%s, y=%s)", chart_type, x_axis, y_axis
+    )
 
     return {
         "hitl_triggered": True,
         "final_response": {
             "type": "chart",
-            "chart_config": {"chart_type": chart_type, "x_axis": x_axis, "y_axis": y_axis},
+            "chart_config": {
+                "chart_type": chart_type,
+                "x_axis": x_axis,
+                "y_axis": y_axis,
+            },
             "data": state.get("data"),  # already records (list of dicts)
             "sql": state.get("sql", ""),
         },
@@ -493,7 +527,9 @@ def build_graph() -> StateGraph:
     graph.add_node("validate_sql", validate_sql_node)
     graph.add_node("execute_sql", execute_sql_node)
     graph.add_node("verify_result", verify_result_node)
-    graph.add_node("chart_approval", chart_approval_node)  ### HITL (replaces chart_decision)
+    graph.add_node(
+        "chart_approval", chart_approval_node
+    )  ### HITL (replaces chart_decision)
     graph.add_node("schema_info", schema_info_node)
     graph.add_node("general_answer", general_answer_node)
     graph.add_node("build_data_response", build_data_response_node)
@@ -503,39 +539,57 @@ def build_graph() -> StateGraph:
     graph.set_entry_point("router")
 
     # Router → branching
-    graph.add_conditional_edges("router", route_after_router, {
-        "sql_path": "table_resolver",
-        "schema_info": "schema_info",
-        "general": "general_answer",
-    })
+    graph.add_conditional_edges(
+        "router",
+        route_after_router,
+        {
+            "sql_path": "table_resolver",
+            "schema_info": "schema_info",
+            "general": "general_answer",
+        },
+    )
 
     # SQL path: linear flow
     graph.add_edge("table_resolver", "generate_sql")
-    graph.add_edge("generate_sql", "cardinality_resolver")  ### HITL — check filter values
+    graph.add_edge(
+        "generate_sql", "cardinality_resolver"
+    )  ### HITL — check filter values
     graph.add_edge("cardinality_resolver", "validate_sql")  ### HITL — then validate
 
     # After validation: proceed or retry
-    graph.add_conditional_edges("validate_sql", route_after_validate, {
-        "execute": "execute_sql",
-        "retry": "increment_retry",
-        "give_up": "build_data_response",
-    })
+    graph.add_conditional_edges(
+        "validate_sql",
+        route_after_validate,
+        {
+            "execute": "execute_sql",
+            "retry": "increment_retry",
+            "give_up": "build_data_response",
+        },
+    )
 
     # After execution: success or retry
-    graph.add_conditional_edges("execute_sql", route_after_execute, {
-        "success": "verify_result",
-        "retry": "increment_retry",
-        "give_up": "build_data_response",
-    })
+    graph.add_conditional_edges(
+        "execute_sql",
+        route_after_execute,
+        {
+            "success": "verify_result",
+            "retry": "increment_retry",
+            "give_up": "build_data_response",
+        },
+    )
 
     # Retry → back to generate_sql
     graph.add_edge("increment_retry", "generate_sql")
 
     # After verify: chart or data response
-    graph.add_conditional_edges("verify_result", route_after_verify, {
-        "chart": "chart_approval",  ### HITL — human approves chart
-        "data_response": "build_data_response",
-    })
+    graph.add_conditional_edges(
+        "verify_result",
+        route_after_verify,
+        {
+            "chart": "chart_approval",  ### HITL — human approves chart
+            "data_response": "build_data_response",
+        },
+    )
 
     # Terminal nodes → END
     graph.add_edge("chart_approval", END)  ### HITL
@@ -704,7 +758,9 @@ def _hydrate_response(response: dict[str, Any]) -> dict[str, Any]:
 
 # ====== Unit Tests ======
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(name)s | %(levelname)s | %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(name)s | %(levelname)s | %(message)s"
+    )
 
     print("=" * 60)
     print("TEST 1: SQL data query")

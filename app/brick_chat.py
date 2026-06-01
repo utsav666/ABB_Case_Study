@@ -84,7 +84,10 @@ for msg in st.session_state.messages:
                 st.code(history_logs)
 
 # ### HITL — Handle resumed result after st.rerun()
-if "hitl_resume_result" in st.session_state and st.session_state.hitl_resume_result is not None:
+if (
+    "hitl_resume_result" in st.session_state
+    and st.session_state.hitl_resume_result is not None
+):
     result = st.session_state.hitl_resume_result
     st.session_state.hitl_resume_result = None
     result_type = result.get("type", "") if isinstance(result, dict) else ""
@@ -141,11 +144,15 @@ if "hitl_pending" in st.session_state and st.session_state.hitl_pending is not N
                 )
             if st.button("✅ Confirm Selection", key="hitl_confirm_card"):
                 from app.orchestrator.orch_graph import GraphOrchestrator
+
                 resume_result = GraphOrchestrator.resume(thread_id, choice)
                 st.session_state.hitl_pending = None
                 st.session_state.hitl_thread_id = str(uuid.uuid4())
                 # Check if another HITL is triggered (e.g., chart after cardinality)
-                if isinstance(resume_result, dict) and resume_result.get("type") == "pending_hitl":
+                if (
+                    isinstance(resume_result, dict)
+                    and resume_result.get("type") == "pending_hitl"
+                ):
                     st.session_state.hitl_pending = resume_result
                 else:
                     st.session_state.hitl_resume_result = resume_result
@@ -153,17 +160,47 @@ if "hitl_pending" in st.session_state and st.session_state.hitl_pending is not N
 
         elif hitl_type == "chart_approval":
             suggested = pending.get("suggested_chart_type", "bar")
-            available_charts = pending.get("available_chart_types", ["bar", "line", "scatter", "pie"])
+            available_charts = pending.get(
+                "available_chart_types", ["bar", "line", "scatter", "pie"]
+            )
             available_cols = pending.get("available_columns", [])
 
-            st.write(f"Suggested: **{suggested}** (x={pending.get('suggested_x_axis')}, y={pending.get('suggested_y_axis')})")
-            chart_choice = st.selectbox("Chart type", available_charts, index=available_charts.index(suggested) if suggested in available_charts else 0, key="hitl_chart_type")
-            x_choice = st.selectbox("X axis", available_cols, index=available_cols.index(pending.get("suggested_x_axis")) if pending.get("suggested_x_axis") in available_cols else 0, key="hitl_x")
-            y_choice = st.selectbox("Y axis", available_cols, index=available_cols.index(pending.get("suggested_y_axis")) if pending.get("suggested_y_axis") in available_cols else 0, key="hitl_y")
+            st.write(
+                f"Suggested: **{suggested}** (x={pending.get('suggested_x_axis')}, y={pending.get('suggested_y_axis')})"
+            )
+            chart_choice = st.selectbox(
+                "Chart type",
+                available_charts,
+                index=available_charts.index(suggested)
+                if suggested in available_charts
+                else 0,
+                key="hitl_chart_type",
+            )
+            x_choice = st.selectbox(
+                "X axis",
+                available_cols,
+                index=available_cols.index(pending.get("suggested_x_axis"))
+                if pending.get("suggested_x_axis") in available_cols
+                else 0,
+                key="hitl_x",
+            )
+            y_choice = st.selectbox(
+                "Y axis",
+                available_cols,
+                index=available_cols.index(pending.get("suggested_y_axis"))
+                if pending.get("suggested_y_axis") in available_cols
+                else 0,
+                key="hitl_y",
+            )
 
             if st.button("✅ Approve Chart", key="hitl_confirm_chart"):
                 from app.orchestrator.orch_graph import GraphOrchestrator
-                human_decision = {"chart_type": chart_choice, "x_axis": x_choice, "y_axis": y_choice}
+
+                human_decision = {
+                    "chart_type": chart_choice,
+                    "x_axis": x_choice,
+                    "y_axis": y_choice,
+                }
                 resume_result = GraphOrchestrator.resume(thread_id, human_decision)
                 st.session_state.hitl_pending = None
                 st.session_state.hitl_thread_id = str(uuid.uuid4())
@@ -240,7 +277,9 @@ if user_input:
                 st.dataframe(chart_data)
 
         elif result_type == "data":
-            assistant_message["content"] = result.get("message", "Here are the query results.")
+            assistant_message["content"] = result.get(
+                "message", "Here are the query results."
+            )
             assistant_message["data"] = result.get("data")
 
             if result.get("sql"):

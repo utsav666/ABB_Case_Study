@@ -32,19 +32,45 @@ HIGH_CARDINALITY_TOP_N = int(os.getenv("PROFILER_HIGH_CARDINALITY_TOP_N", "50"))
 # ---------------------------------------------------------------------------
 
 _TEXT_TYPE_PREFIXES = (
-    "text", "varchar", "char", "character", "string", "nvarchar", "nchar",
-    "clob", "nclob", "bpchar", "name", "citext", "uuid",
+    "text",
+    "varchar",
+    "char",
+    "character",
+    "string",
+    "nvarchar",
+    "nchar",
+    "clob",
+    "nclob",
+    "bpchar",
+    "name",
+    "citext",
+    "uuid",
 )
 
 _NUMERIC_TYPE_PREFIXES = (
-    "int", "integer", "bigint", "smallint", "tinyint",
-    "numeric", "decimal", "float", "double", "real",
-    "number", "money", "serial", "bigserial",
+    "int",
+    "integer",
+    "bigint",
+    "smallint",
+    "tinyint",
+    "numeric",
+    "decimal",
+    "float",
+    "double",
+    "real",
+    "number",
+    "money",
+    "serial",
+    "bigserial",
 )
 
 _TEMPORAL_TYPE_PREFIXES = (
-    "date", "timestamp", "datetime", "time",
-    "timestamptz", "timestamp with time zone",
+    "date",
+    "timestamp",
+    "datetime",
+    "time",
+    "timestamptz",
+    "timestamp with time zone",
     "timestamp without time zone",
 )
 
@@ -73,6 +99,7 @@ def classify_column_type(data_type: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # TEXT column profiling
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def text_cardinality_query(dialect: str = "postgresql") -> str:
     """Return SQL that fetches cardinality + null ratio for a TEXT column."""
@@ -114,10 +141,10 @@ def text_top_values_query(
     """Return SQL that fetches the top-N most frequent values for high-cardinality TEXT."""
     if dialect == "bigquery":
         return f"""
-            SELECT {'{col}'} AS value, COUNT(*) AS frequency
-            FROM `{'{schema}'}.{'{table}'}`
-            WHERE {'{col}'} IS NOT NULL
-            GROUP BY {'{col}'}
+            SELECT {"{col}"} AS value, COUNT(*) AS frequency
+            FROM `{"{schema}"}.{"{table}"}`
+            WHERE {"{col}"} IS NOT NULL
+            GROUP BY {"{col}"}
             ORDER BY frequency DESC
             LIMIT {limit}
         """
@@ -167,6 +194,7 @@ def text_sample_values_query(
 # NUMERIC column profiling
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def numeric_profile_query(dialect: str = "postgresql") -> str:
     """Return SQL that computes min, max, avg, median, null ratio for a NUMERIC column."""
     if dialect == "bigquery":
@@ -211,6 +239,7 @@ def numeric_profile_query(dialect: str = "postgresql") -> str:
 # TEMPORAL (DATE / TIMESTAMP) column profiling
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def temporal_profile_query(dialect: str = "postgresql") -> str:
     """Return SQL that computes date range, granularity hints, and null ratio."""
     if dialect == "bigquery":
@@ -251,7 +280,9 @@ def temporal_profile_query(dialect: str = "postgresql") -> str:
     """
 
 
-def infer_granularity(distinct_days: int, distinct_months: int, distinct_years: int) -> str:
+def infer_granularity(
+    distinct_days: int, distinct_months: int, distinct_years: int
+) -> str:
     """Infer the most likely time granularity from profiling counts.
 
     Returns one of: ``'daily'``, ``'monthly'``, ``'yearly'``, ``'sub-daily'``,

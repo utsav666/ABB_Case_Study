@@ -161,10 +161,12 @@ def enrich_schema_config(
             if annotation:
                 semantic_profile["description"] = annotation.get("description", "")
                 semantic_profile["value_descriptions"] = annotation.get(
-                    "value_descriptions", {},
+                    "value_descriptions",
+                    {},
                 )
                 semantic_profile["natural_language_aliases"] = annotation.get(
-                    "natural_language_aliases", {},
+                    "natural_language_aliases",
+                    {},
                 )
                 semantic_profile["query_hints"] = annotation.get("query_hints", "")
 
@@ -232,7 +234,9 @@ def save_enriched_config_to_local_file(
     import json
     from pathlib import Path
 
-    schema_file = Path(__file__).resolve().parents[2] / "sample_data" / "schema_preserve.json"
+    schema_file = (
+        Path(__file__).resolve().parents[2] / "sample_data" / "schema_preserve.json"
+    )
     inner_config = enriched_config.get("config", enriched_config)
     schema_name = enriched_config.get("schema", "public")
 

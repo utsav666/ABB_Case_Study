@@ -77,7 +77,10 @@ if __name__ == "__main__":
         "columns": ["year", "movie_count"],
         "dtypes": {"year": "int64", "movie_count": "int64"},
         "row_count": 10,
-        "sample_rows": [{"year": 2020, "movie_count": 15}, {"year": 2021, "movie_count": 22}],
+        "sample_rows": [
+            {"year": 2020, "movie_count": 15},
+            {"year": 2021, "movie_count": 22},
+        ],
     }
 
     # Test new function API

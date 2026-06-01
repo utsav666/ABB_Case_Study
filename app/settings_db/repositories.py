@@ -341,7 +341,9 @@ class AgentRepository:
             rows = session.execute(statement).mappings().all()
         return [dict(r) for r in rows]
 
-    def update_agent(self, agent_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    def update_agent(
+        self, agent_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Update an existing agent's fields."""
         parsed_id = UUID(agent_id)
         # Remove None values so we only update provided fields

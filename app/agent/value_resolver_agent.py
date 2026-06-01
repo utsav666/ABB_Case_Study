@@ -162,7 +162,9 @@ def get_column_distinct_values(
     if "tables" in schema_data and table_name in schema_data["tables"]:
         table_schema = schema_data["tables"][table_name].get("schema", "")
 
-    qualified_table = f'{table_schema}."{table_name}"' if table_schema else f'"{table_name}"'
+    qualified_table = (
+        f'{table_schema}."{table_name}"' if table_schema else f'"{table_name}"'
+    )
 
     count_sql = f'SELECT COUNT(DISTINCT "{column_name}") as cnt FROM {qualified_table}'
     count_result = executor.sql_executor(count_sql)
@@ -219,7 +221,9 @@ def get_fuzzy_matches(
         else:
             # Character overlap ratio
             common = set(user_lower) & set(val_lower)
-            score = len(common) / max(len(set(user_lower)), len(set(val_lower)), 1) * 0.4
+            score = (
+                len(common) / max(len(set(user_lower)), len(set(val_lower)), 1) * 0.4
+            )
 
         scored.append((score, val))
 

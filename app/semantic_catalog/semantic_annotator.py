@@ -105,10 +105,12 @@ class SemanticAnnotator:
             temperature=temperature,
             api_key=SecretStr(get_openai_api_key()),
         )
-        self._prompt = ChatPromptTemplate.from_messages([
-            ("system", _ANNOTATION_SYSTEM_PROMPT),
-            ("user", _ANNOTATION_USER_TEMPLATE),
-        ])
+        self._prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", _ANNOTATION_SYSTEM_PROMPT),
+                ("user", _ANNOTATION_USER_TEMPLATE),
+            ]
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -189,7 +191,9 @@ class SemanticAnnotator:
 
             try:
                 result[table_name] = self.annotate_table(
-                    table_name, columns_schema, columns_profile,
+                    table_name,
+                    columns_schema,
+                    columns_profile,
                 )
             except Exception:
                 logger.exception("Annotation failed for table %s", table_name)
@@ -201,6 +205,7 @@ class SemanticAnnotator:
 # ---------------------------------------------------------------------------
 # Formatting helpers — keep prompt tokens small
 # ---------------------------------------------------------------------------
+
 
 def _format_columns_schema(columns: dict[str, dict[str, Any]]) -> str:
     """Render column schemas as a compact multi-line string."""
@@ -268,7 +273,7 @@ def _parse_annotation_response(
     # Strip markdown code fences if present
     if cleaned.startswith("```"):
         first_newline = cleaned.index("\n")
-        cleaned = cleaned[first_newline + 1:]
+        cleaned = cleaned[first_newline + 1 :]
     if cleaned.endswith("```"):
         cleaned = cleaned[: cleaned.rfind("```")]
     cleaned = cleaned.strip()

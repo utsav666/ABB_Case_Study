@@ -55,7 +55,10 @@ TOOLS = [
                 "properties": {
                     "question": {"type": "string"},
                     "tables": {"type": "array", "items": {"type": "string"}},
-                    "error_context": {"type": "string", "description": "Previous error if retrying"},
+                    "error_context": {
+                        "type": "string",
+                        "description": "Previous error if retrying",
+                    },
                 },
                 "required": ["question", "tables"],
             },
@@ -96,9 +99,7 @@ TOOLS = [
             "description": "Answer questions about database structure, tables, columns.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "question": {"type": "string"}
-                },
+                "properties": {"question": {"type": "string"}},
                 "required": ["question"],
             },
         },
@@ -110,9 +111,7 @@ TOOLS = [
             "description": "Answer general questions not related to the database.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "question": {"type": "string"}
-                },
+                "properties": {"question": {"type": "string"}},
                 "required": ["question"],
             },
         },
@@ -145,10 +144,17 @@ class AgentOrchestrator:
             f"(reasoning: {route_decision.reasoning}). "
             f"Use this as guidance but you can override if needed."
         )
-        logger.info("Router hint: %s → %s", route_decision.route, route_decision.reasoning)
+        logger.info(
+            "Router hint: %s → %s", route_decision.route, route_decision.reasoning
+        )
 
         messages = [
-            {"role": "system", "content": AGENT_SYSTEM_PROMPT.format(schema_summary=self.schema_summary)},
+            {
+                "role": "system",
+                "content": AGENT_SYSTEM_PROMPT.format(
+                    schema_summary=self.schema_summary
+                ),
+            },
             {"role": "system", "content": router_hint},
             {"role": "user", "content": self.user_question},
         ]
@@ -175,11 +181,13 @@ class AgentOrchestrator:
                 logger.info("Agent → %s(%s)", tool_name, list(tool_args.keys()))
 
                 result = self._run_tool(tool_name, tool_args)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(result, default=str),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
         return {"type": "error", "message": "Max steps reached."}
 
@@ -238,9 +246,20 @@ class AgentOrchestrator:
     def _build_result(self, message: str) -> dict:
         """Build final response dict."""
         if self._chart_fig:
-            return {"type": "chart", "figure": self._chart_fig, "data": self._dataframe, "sql": self._sql, "message": message}
+            return {
+                "type": "chart",
+                "figure": self._chart_fig,
+                "data": self._dataframe,
+                "sql": self._sql,
+                "message": message,
+            }
         elif self._dataframe is not None:
-            return {"type": "data", "data": self._dataframe, "sql": self._sql, "message": message}
+            return {
+                "type": "data",
+                "data": self._dataframe,
+                "sql": self._sql,
+                "message": message,
+            }
         else:
             return {"type": "text", "message": message}
 
@@ -251,13 +270,20 @@ class AgentOrchestrator:
         fig, ax = plt.subplots()
         ct = decision.chart_type
         x, y = df[decision.x_axis], df[decision.y_axis]
-        if ct == "line":      ax.plot(x, y)
-        elif ct == "bar":     ax.bar(x, y)
-        elif ct == "scatter": ax.scatter(x, y)
-        elif ct == "histogram": ax.hist(x, bins=10)
-        elif ct == "pie":     ax.pie(y, labels=x.astype(str).tolist(), autopct="%1.1f%%")
-        elif ct == "box":     ax.boxplot(y)
-        elif ct == "area":    ax.fill_between(x, y)
+        if ct == "line":
+            ax.plot(x, y)
+        elif ct == "bar":
+            ax.bar(x, y)
+        elif ct == "scatter":
+            ax.scatter(x, y)
+        elif ct == "histogram":
+            ax.hist(x, bins=10)
+        elif ct == "pie":
+            ax.pie(y, labels=x.astype(str).tolist(), autopct="%1.1f%%")
+        elif ct == "box":
+            ax.boxplot(y)
+        elif ct == "area":
+            ax.fill_between(x, y)
         ax.set_xlabel(decision.x_axis)
         ax.set_ylabel(decision.y_axis)
         return fig

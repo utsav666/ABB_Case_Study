@@ -76,7 +76,9 @@ def generate_sql(
 class SQLGenerationAgent:
     """Deprecated: use generate_sql() directly."""
 
-    def __init__(self, user_question: str, table_list: list[str], dialect: str = "PostgreSQL"):
+    def __init__(
+        self, user_question: str, table_list: list[str], dialect: str = "PostgreSQL"
+    ):
         self.user_question = user_question
         self.table_list = table_list
         self.dialect = dialect
@@ -105,8 +107,9 @@ if __name__ == "__main__":
     # Test with error_context (retry scenario)
     print("\n--- Testing generate_sql() with error_context (retry) ---")
     result_retry = generate_sql(
-        test_question, test_tables,
-        error_context="column 'actor_name' does not exist. Available columns: Name, PID"
+        test_question,
+        test_tables,
+        error_context="column 'actor_name' does not exist. Available columns: Name, PID",
     )
     print(f"Success: {result_retry['success']}")
     if result_retry["success"]:

@@ -381,8 +381,10 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
         payload["thread_id"] = result.get("thread_id")
         payload["suggestions"] = result.get("suggestions")
         payload["data"] = {
-            k: v for k, v in result.items()
-            if k not in ("type", "message", "hitl_type", "thread_id", "suggestions", "sql")
+            k: v
+            for k, v in result.items()
+            if k
+            not in ("type", "message", "hitl_type", "thread_id", "suggestions", "sql")
         }
         return payload
 
@@ -600,13 +602,15 @@ def post_schema_configuration(payload: SchemaConfigRequest) -> dict[str, Any]:
             # Auto-create an agent for this workspace
             from uuid import UUID as _UUID
 
-            new_agent = agent_repo.create_agent({
-                "workspace_id": _UUID(payload.workspace_id),
-                "name": "Data Assistant",
-                "model_version": "gpt-4o",
-                "config": schema_config,
-                "is_public_to_team": True,
-            })
+            new_agent = agent_repo.create_agent(
+                {
+                    "workspace_id": _UUID(payload.workspace_id),
+                    "name": "Data Assistant",
+                    "model_version": "gpt-4o",
+                    "config": schema_config,
+                    "is_public_to_team": True,
+                }
+            )
             if new_agent:
                 schema_config["agent_id"] = str(new_agent["id"])
 
@@ -678,8 +682,7 @@ def save_all_tables_config(payload: BulkTableConfigRequest) -> dict[str, Any]:
         if allowed_columns is not None:
             allowed_set = {c.lower() for c in allowed_columns}
             raw_columns = [
-                col for col in raw_columns
-                if col["column_name"].lower() in allowed_set
+                col for col in raw_columns if col["column_name"].lower() in allowed_set
             ]
 
         selected_table_row = selected_table_repo.upsert_table(
@@ -864,7 +867,9 @@ def update_agent(workspace_id: str, payload: AgentUpdate) -> dict[str, Any]:
     agent_repo = AgentRepository()
     agents = agent_repo.list_agents_by_workspace(workspace_id)
     if not agents:
-        raise HTTPException(status_code=404, detail="No agent found for this workspace.")
+        raise HTTPException(
+            status_code=404, detail="No agent found for this workspace."
+        )
 
     agent_id = str(agents[0]["id"])
     updates: dict[str, Any] = {}
@@ -891,7 +896,9 @@ def delete_agent(workspace_id: str) -> dict[str, str]:
     agent_repo = AgentRepository()
     agents = agent_repo.list_agents_by_workspace(workspace_id)
     if not agents:
-        raise HTTPException(status_code=404, detail="No agent found for this workspace.")
+        raise HTTPException(
+            status_code=404, detail="No agent found for this workspace."
+        )
 
     agent_id = str(agents[0]["id"])
     deleted = agent_repo.delete_agent(agent_id)
@@ -939,9 +946,12 @@ async def chat(
 
     buffer = io.StringIO()
     try:
+
         def _run_orchestrator() -> Any:
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-                return GraphOrchestrator(normalized_question, thread_id=thread_id).executor()
+                return GraphOrchestrator(
+                    normalized_question, thread_id=thread_id
+                ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
     except (FileNotFoundError, ModuleNotFoundError, ValueError) as error:
@@ -1000,6 +1010,7 @@ async def chat_resume(payload: HitlResumeRequest) -> dict[str, Any]:
 
     buffer = io.StringIO()
     try:
+
         def _resume() -> Any:
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
                 return GraphOrchestrator.resume(payload.thread_id, payload.decision)
