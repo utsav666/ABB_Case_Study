@@ -1,16 +1,22 @@
-import os
-import sys
+"""Tool: Identify relevant tables for a user question."""
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from typing import List
+from __future__ import annotations
 
-from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
+import logging
+from typing import Any, List
+
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from prompt.prompts import table_identify_prompts
 from pydantic import BaseModel, Field, SecretStr
-from utils.schema_summarizer import Summarizer
+
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import table_identify_prompts
+from app.utils.schema_summarizer import Summarizer
+
+logger = logging.getLogger(__name__)
+
+load_env()
 
 
 class TableIdentification(BaseModel):
@@ -20,39 +26,65 @@ class TableIdentification(BaseModel):
     )
 
 
-load_env()
+def identify_tables(user_question: str) -> dict[str, Any]:
+    """Identify relevant tables for a user question.
 
-
-class TableIdentiferAgent:
-    def __init__(self, user_question):
-        self.schema_summary = Summarizer.summarize_schema()
-        self.user_question = user_question
-
-        self.llm = ChatOpenAI(
-            model=get_openai_model(),
+    Returns
+    -------
+    {"success": True, "tables": [...]} or {"success": False, "error": "..."}
+    """
+    try:
+        schema_summary = Summarizer.summarize_schema()
+        llm = ChatOpenAI(
+            model="gpt-4",
             temperature=0,
             api_key=SecretStr(get_openai_api_key()),
         )
-
-    def run(self):
-        # Inject format instructions from parser (no need to instruct "return JSON")
         parser = JsonOutputParser(pydantic_object=TableIdentification)
-        tab_identify_agent_tamplate_prompt = ChatPromptTemplate.from_template(
-            table_identify_prompts
-        )
-        formatted_prompt = tab_identify_agent_tamplate_prompt.format_messages(
-            schema_summary=self.schema_summary,
-            user_question=self.user_question,
+        prompt = ChatPromptTemplate.from_template(table_identify_prompts)
+        formatted = prompt.format_messages(
+            schema_summary=schema_summary,
+            user_question=user_question,
             format_instructions=parser.get_format_instructions(),
         )
-        # Run the model
-        response = self.llm.invoke(formatted_prompt)
+        response = llm.invoke(formatted)
         parsed = parser.parse(str(response.content))
-        return parsed
+        logger.debug("Identified tables: %s", parsed.get("relevant_tables"))
+        return {"success": True, "tables": parsed.get("relevant_tables", [])}
+    except Exception as e:
+        logger.exception("Table identification failed")
+        return {"success": False, "error": str(e)}
 
 
-####### unit test ######
-# if __name__ == "__main__":
-#     TA = TableIdentiferAgent("list of all actor played in the movie 'Anand'")
-#     result=TA.run()
-#     print(result)
+# --- Backward compatibility ---
+class TableIdentiferAgent:
+    """Deprecated: use identify_tables() directly."""
+
+    def __init__(self, user_question: str):
+        self.user_question = user_question
+
+    def run(self) -> dict[str, Any]:
+        result = identify_tables(self.user_question)
+        if result["success"]:
+            return {"relevant_tables": result["tables"]}
+        raise RuntimeError(result["error"])
+
+
+# ====== Unit Tests ======
+if __name__ == "__main__":
+    test_question = "list of all actor played in the movie 'Anand'"
+
+    # Test new function API
+    print("--- Testing identify_tables() ---")
+    result = identify_tables(test_question)
+    print(f"Success: {result['success']}")
+    if result["success"]:
+        print(f"Tables: {result['tables']}")
+    else:
+        print(f"Error: {result['error']}")
+
+    # Test old class API (backward compat)
+    print("\n--- Testing TableIdentiferAgent (old API) ---")
+    agent = TableIdentiferAgent(test_question)
+    old_result = agent.run()
+    print(f"Result: {old_result}")

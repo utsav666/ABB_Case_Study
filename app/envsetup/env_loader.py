@@ -7,24 +7,37 @@ from dotenv import load_dotenv
 _env_loaded = False  # simple flag to avoid loading multiple times
 
 
-def load_env():
-    """
-    Load environment variables from the central .env file
-    no matter which module calls it.
-    """
+def _is_non_empty_env_value(env_name: str) -> bool:
+    """Return True when an environment variable exists and has non-whitespace content."""
+    env_value = os.getenv(env_name)
+    return bool(env_value and env_value.strip())
+
+
+def load_env() -> None:
+    """Load environment variables from the project `.env` file when available."""
     global _env_loaded
     if _env_loaded:
-        return  # prevent redundant loading
+        return
 
-    # Find project root (assuming this file lives in project/core/)
-    root_dir = Path(__file__).resolve().parents[1]
-    env_path = root_dir / "config" / ".env"
+    app_dir = Path(__file__).resolve().parents[1]
+    workspace_dir = app_dir.parent
 
-    if not env_path.exists():
-        raise FileNotFoundError(f".env file not found at: {env_path}")
+    env_paths = [
+        app_dir / "config" / ".env",
+        app_dir / ".env",
+        workspace_dir / ".env",
+    ]
 
-    # Override empty or stale process-level values with the project .env file.
-    load_dotenv(dotenv_path=env_path, override=True)
+    has_non_empty_openai_key = _is_non_empty_env_value("OPENAI_API_KEY")
+
+    for env_path in env_paths:
+        if not env_path.exists():
+            continue
+
+        # Keep deployment-provided values unless they are present but empty.
+        load_dotenv(dotenv_path=env_path, override=not has_non_empty_openai_key)
+        break
+
     _env_loaded = True
 
 
@@ -38,16 +51,17 @@ def get_openai_api_key() -> str:
     """Return the configured OpenAI API key from environment or .env."""
     load_env()
 
-    api_key = (
-        os.getenv("OPENAI_API_KEY")
-        or os.getenv("OPENAI_KEY")
-        or os.getenv("OPENAI_APIKEY")
-        or os.getenv("OPENAI")
-    )
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    openai_key = os.getenv("OPENAI_KEY")
+    openai_apikey = os.getenv("OPENAI_APIKEY")
+    openai_alias = os.getenv("OPENAI")
+
+    api_key = openai_api_key or openai_key or openai_apikey or openai_alias
 
     if not api_key:
         raise ValueError(
-            "OPENAI_API_KEY environment variable not set. Add it to app/config/.env or export OPENAI_API_KEY."
+            "OPENAI_API_KEY environment variable not set. Add it to app/config/.env, app/.env, "
+            "workspace .env, or export OPENAI_API_KEY."
         )
 
     return api_key.strip().strip("'\"")

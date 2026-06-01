@@ -1,0 +1,44 @@
+
+name: Docker Build and Push to ECR and Update Lambda
+
+on:
+  push:
+    branches: [ main, feature/changeToAPI ]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.ECR_IMAGE_NAME }}:latest .
+      
+      - name: Docker tag image
+        run: |
+          docker tag ${{ secrets.ECR_IMAGE_NAME }}:latest ${{ secrets.ECR_REPOSITORY }}/${{ secrets.ECR_IMAGE_NAME }}:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push ${{ secrets.ECR_REPOSITORY }}/${{ secrets.ECR_IMAGE_NAME }}:latest
+
+      - name: Update Lambda function with new image
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --image-uri ${{ secrets.ECR_REPOSITORY }}/${{ secrets.ECR_IMAGE_NAME }}:latest \
+            --region ${{ secrets.AWS_REGION }}

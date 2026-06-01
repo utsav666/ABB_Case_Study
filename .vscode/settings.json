@@ -1,3 +1,4 @@
 {
-  "git.sshCommand": "ssh -i /home/vscode/.ssh/id_ed25519-gharista -F /dev/null"
+  "git.sshCommand": "ssh -i /home/vscode/.ssh/id_ed25519-gharista -F /dev/null",
+  "python-envs.defaultEnvManager": "ms-python.python:system"
 }

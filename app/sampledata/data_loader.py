@@ -1,8 +1,6 @@
 import os
-import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.schema_config import SchemaConfigManager
+from app.utils.schema_config import SchemaConfigManager
 
 
 class DataLoader:
@@ -16,12 +14,13 @@ class DBLoader:
     @staticmethod
     def db_loader():
         # Load database credentials from environment variables
+        # Support both prefixed (SETTINGS_DB_*) and non-prefixed (DB_*) variable names
         db_creds = {
-            "host": os.getenv("DB_HOST"),
-            "port": int(os.getenv("DB_PORT", 5432)),
-            "database": os.getenv("DB_NAME"),
-            "user": os.getenv("DB_USER"),
-            "password": os.getenv("DB_PASSWORD"),
+            "host": os.getenv("DB_HOST") or os.getenv("SETTINGS_DB_HOST"),
+            "port": int(os.getenv("DB_PORT") or os.getenv("SETTINGS_DB_PORT", 5432)),
+            "database": os.getenv("DB_NAME") or os.getenv("SETTINGS_DB_NAME"),
+            "user": os.getenv("DB_USER") or os.getenv("SETTINGS_DB_USER"),
+            "password": os.getenv("DB_PASSWORD") or os.getenv("SETTINGS_DB_PASSWORD"),
         }
 
         # Check if all required credentials are provided

@@ -11,8 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from app.envsetup.env_loader import load_env
-from app.envsetup.env_loader import get_openai_model
+from app.envsetup.env_loader import get_openai_model, load_env
 
 # Load variables from .env file
 load_env()

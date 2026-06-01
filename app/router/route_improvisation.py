@@ -1,16 +1,13 @@
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from typing import Literal
 
-from envsetup.env_loader import get_openai_api_key, get_openai_model, load_env
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from prompt.prompts import sample_router_prompt_improvise
 from pydantic import BaseModel, SecretStr
-from utils.schema_summarizer import Summarizer
+
+from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.prompt.prompts import sample_router_prompt_improvise
+from app.utils.schema_summarizer import Summarizer
 
 # ------------------------
 # Schema-aware Router Model
@@ -42,7 +39,7 @@ class Router:
         self.schema_summary = Summarizer.summarize_schema()
 
         self.llm = ChatOpenAI(
-            model=get_openai_model(),
+            model="gpt-4o",
             temperature=0,
             api_key=SecretStr(get_openai_api_key()),
         )
