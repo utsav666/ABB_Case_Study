@@ -250,19 +250,92 @@ def refresh_oauth_token(refresh_token: str, request: Request) -> dict[str, Any]:
 
 
 def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
-    """Fetch the authenticated user's profile from the OAuth provider."""
+    """Fetch the authenticated user's profile from the OAuth provider.
+
+    For Microsoft OAuth, fetches both OIDC userinfo and Microsoft Graph /me endpoint
+    to get userPrincipalName (corporate email).
+    """
     if not access_token.strip():
         return {}
 
+    provider_name = get_oauth_provider_name()
+    timeout_seconds = get_oauth_http_timeout_seconds()
+
+    # Check if this is Microsoft OAuth
+    is_microsoft = "microsoft" in provider_name.lower() or "azure" in provider_name.lower()
+
+    if is_microsoft:
+        # For Microsoft, fetch from Graph API to get userPrincipalName
+        graph_url = "https://graph.microsoft.com/v1.0/me"
+        params = {
+            "$select": "userPrincipalName,mail,displayName,givenName,surname,id"
+        }
+
+        started_at = time.monotonic()
+        try:
+            graph_response = requests.get(
+                graph_url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+                timeout=timeout_seconds,
+            )
+        finally:
+            _log_timed_request("GET", graph_url, started_at)
+
+        graph_response.raise_for_status()
+        graph_payload = graph_response.json()
+
+        if not isinstance(graph_payload, dict):
+            raise ValueError("Microsoft Graph response must be a JSON object.")
+
+        logger.info("Microsoft Graph payload: userPrincipalName=%s, mail=%s",
+                   graph_payload.get("userPrincipalName"), graph_payload.get("mail"))
+
+        # Try to fetch user's profile photo
+        avatar_url = None
+        try:
+            photo_url = "https://graph.microsoft.com/v1.0/me/photo"
+            photo_started_at = time.monotonic()
+            try:
+                photo_response = requests.get(
+                    photo_url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=timeout_seconds,
+                )
+            finally:
+                _log_timed_request("GET", photo_url, photo_started_at)
+
+            if photo_response.status_code == 200:
+                photo_metadata = photo_response.json()
+                # Microsoft Graph photo metadata includes @odata.mediaContentType
+                # The actual photo URL would be /me/photo/$value but we'll store the endpoint
+                avatar_url = f"https://graph.microsoft.com/v1.0/me/photos/240x240/$value"
+                logger.info("User has profile photo available")
+            else:
+                logger.debug("No profile photo available for user")
+        except Exception as photo_error:
+            logger.debug("Could not fetch profile photo: %s", photo_error)
+
+        # Normalize to standard OIDC claims
+        user_payload = {
+            "sub": graph_payload.get("id"),
+            "name": graph_payload.get("displayName"),
+            "given_name": graph_payload.get("givenName"),
+            "family_name": graph_payload.get("surname"),
+            "email": graph_payload.get("userPrincipalName") or graph_payload.get("mail"),
+            "userPrincipalName": graph_payload.get("userPrincipalName"),
+            "mail": graph_payload.get("mail"),
+            "picture": avatar_url,
+        }
+
+        return user_payload
+
+    # For other providers, use standard OIDC userinfo endpoint
     userinfo_url = get_oauth_userinfo_url()
-    if  == "Microsoft":
-        userinfo_url = "https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,mail,displayName,businessPhones"
     if not userinfo_url:
         raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable user profile fetch.")
 
-    timeout_seconds = get_oauth_http_timeout_seconds()
     started_at = time.monotonic()
-
     try:
         user_response = requests.get(
             userinfo_url,
@@ -271,8 +344,10 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
         )
     finally:
         _log_timed_request("GET", userinfo_url, started_at)
+
     user_response.raise_for_status()
     user_payload = user_response.json()
+
     if not isinstance(user_payload, dict):
         raise ValueError("OAuth user info response must be a JSON object.")
 

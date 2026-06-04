@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 from app.settings_db.exceptions import (
     SettingsDatabaseConfigurationError,
@@ -36,13 +39,17 @@ class SettingsUserController:
         Returns:
             dict[str, Any]: User payload enriched with persisted settings user fields.
         """
-        email = str(user_payload.get("email", "")).strip().lower()
+        # Prefer userPrincipalName for Microsoft (corporate email)
+        email = str(user_payload.get("userPrincipalName", "")).strip().lower()
         if not email:
-            email = str(user_payload.get("userPrincipalName", "")).strip().lower()
-            if not email:
-                email = str(user_payload.get("mail", "")).strip().lower()
-                if not email:
-                    return user_payload
+            email = str(user_payload.get("email", "")).strip().lower()
+        if not email:
+            email = str(user_payload.get("mail", "")).strip().lower()
+        if not email:
+            return user_payload
+
+        logger.info("Creating/updating user with email: %s (from payload: %s)",
+                   email, {k: v for k, v in user_payload.items() if 'email' in k.lower() or 'principal' in k.lower()})
 
         full_name = str(user_payload.get("name", "")).strip() or None
         avatar_url = str(user_payload.get("picture", "")).strip() or None
