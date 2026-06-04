@@ -38,7 +38,11 @@ class SettingsUserController:
         """
         email = str(user_payload.get("email", "")).strip().lower()
         if not email:
-            return user_payload
+            email = str(user_payload.get("userPrincipalName", "")).strip().lower()
+            if not email:
+                email = str(user_payload.get("mail", "")).strip().lower()
+                if not email:
+                    return user_payload
 
         full_name = str(user_payload.get("name", "")).strip() or None
         avatar_url = str(user_payload.get("picture", "")).strip() or None
@@ -70,16 +74,20 @@ class DBConnectionController:
     def __init__(self, repository: DBConnectionRepository | None = None) -> None:
         self._repository = repository or DBConnectionRepository()
 
-    def create_connection(self, payload: DBConnectionCreate) -> dict[str, Any]:
+    def create_connection(
+        self, payload: DBConnectionCreate, skip_validation: bool = False
+    ) -> dict[str, Any]:
         """Create a settings DB connection record.
 
         Args:
             payload: Incoming connection payload.
+            skip_validation: If True, skip connection validation.
 
         Returns:
             dict[str, Any]: Serialized created connection payload.
         """
-        self.validate_connection(payload)
+        if not skip_validation:
+            self.validate_connection(payload)
         self._validate_engine(payload.engine)
         try:
             persisted_row = self._repository.insert_connection(payload)
@@ -126,6 +134,21 @@ class DBConnectionController:
 
         return persisted_row
 
+    def list_all_connections(self) -> list[dict[str, Any]]:
+        """Fetch all stored database connections.
+
+        Returns:
+            list[dict[str, Any]]: List of all connection rows.
+        """
+        try:
+            connections = self._repository.list_all_connections()
+        except SettingsDatabaseConfigurationError:
+            raise
+        except SettingsDatabaseQueryError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        return connections
+
     def _validate_engine(self, engine: str) -> None:
         """Validate the requested engine value.
 
@@ -154,16 +177,19 @@ def upsert_oauth_user(user_payload: dict[str, Any]) -> dict[str, Any]:
     return SettingsUserController().upsert_oauth_user(user_payload)
 
 
-def create_db_connection(payload: DBConnectionCreate) -> dict[str, Any]:
+def create_db_connection(
+    payload: DBConnectionCreate, skip_validation: bool = False
+) -> dict[str, Any]:
     """Create a new settings DB connection record.
 
     Args:
         payload: Connection creation payload.
+        skip_validation: If True, skip connection validation.
 
     Returns:
         dict[str, Any]: Serialized created connection payload.
     """
-    return DBConnectionController().create_connection(payload)
+    return DBConnectionController().create_connection(payload, skip_validation)
 
 
 def validate_db_connection(
@@ -188,3 +214,12 @@ def get_settings_connection_credentials(connection_id: str) -> dict[str, Any]:
         dict[str, Any]: Stored connection row.
     """
     return DBConnectionController().get_connection_credentials(connection_id)
+
+
+def list_all_db_connections() -> list[dict[str, Any]]:
+    """Fetch all stored database connections.
+
+    Returns:
+        list[dict[str, Any]]: List of all connection rows.
+    """
+    return DBConnectionController().list_all_connections()

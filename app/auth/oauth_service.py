@@ -255,6 +255,8 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
         return {}
 
     userinfo_url = get_oauth_userinfo_url()
+    if  == "Microsoft":
+        userinfo_url = "https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,mail,displayName,businessPhones"
     if not userinfo_url:
         raise ValueError("Set OAUTH_WELL_KNOWN_URL to enable user profile fetch.")
 
@@ -286,6 +288,7 @@ def persist_oauth_user_details(user_payload: dict[str, Any]) -> dict[str, Any]:
     Returns:
         dict[str, Any]: Persisted user payload.
     """
+    logger.info(user_payload)
     try:
         return upsert_oauth_user(user_payload)
     except (HTTPException, ModuleNotFoundError, SettingsDatabaseConfigurationError):

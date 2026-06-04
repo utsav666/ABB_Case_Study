@@ -100,17 +100,23 @@ def build_target_db_url(credentials: Mapping[str, Any]) -> str:
     if engine == "postgres":
         if use_ssl and "sslmode" not in query_options:
             query_options["sslmode"] = "require"
-        return str(
-            URL.create(
-                drivername="postgresql+psycopg2",
-                username=str(credentials.get("db_user", "")) or None,
-                password=str(credentials.get("db_password", "")) or None,
-                host=str(credentials.get("db_host", "")) or None,
-                port=int(credentials.get("db_port", 5432) or 5432),
-                database=str(credentials.get("db_name", "")) or None,
-                query=query_options,
-            )
-        )
+
+        # Use simple string concatenation (matches settings DB approach)
+        # This avoids URL.create() password encoding issues
+        db_user = str(credentials.get("db_user", ""))
+        db_password = str(credentials.get("db_password", ""))
+        db_host = str(credentials.get("db_host", ""))
+        db_port = int(credentials.get("db_port", 5432) or 5432)
+        db_name = str(credentials.get("db_name", ""))
+
+        base_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+        # Append query options if present
+        if query_options:
+            query_string = "&".join(f"{k}={v}" for k, v in query_options.items())
+            base_url = f"{base_url}?{query_string}"
+
+        return base_url
 
     if engine in {"mysql", "mariadb"}:
         if use_ssl and "ssl_disabled" not in query_options:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSON as PostgreSQLJSON
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -13,13 +13,50 @@ class SettingsBase(DeclarativeBase):
     """Base declarative model for the settings schema."""
 
 
+class WorkspaceEntity(SettingsBase):
+    """ORM entity for settings.workspaces."""
+
+    __tablename__ = "workspaces"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    owner_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    settings: Mapped[dict | None] = mapped_column(
+        PostgreSQLJSON,
+        nullable=True,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
 class SettingsUserEntity(SettingsBase):
     """ORM entity for settings.users."""
 
     __tablename__ = "users"
     __table_args__ = {"schema": "settings"}
 
-    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
@@ -45,7 +82,11 @@ class SettingsDBConnectionEntity(SettingsBase):
     __tablename__ = "db_connections"
     __table_args__ = {"schema": "settings"}
 
-    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
     workspace_id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True),
         nullable=False,
@@ -120,6 +161,37 @@ class ColumnDefinitionEntity(SettingsBase):
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+
+
+class WorkspaceMemberEntity(SettingsBase):
+    """ORM entity for settings.workspace_members."""
+
+    __tablename__ = "workspace_members"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    workspace_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    role: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        server_default=text("'VIEWER'::settings.user_role"),
+    )
+    joined_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         server_default=func.now(),

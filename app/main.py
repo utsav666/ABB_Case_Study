@@ -32,6 +32,7 @@ from app.settings_db.repositories import (
     SelectedTableRepository,
 )
 from app.settings_db.router import settings_db_router
+from app.settings_db.workspace_router import workspace_router
 from app.utils.db_column_config_view import (
     build_db_column_configuration_payload,
     get_table_configuration_payload,
@@ -104,6 +105,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(settings_db_router)
+app.include_router(workspace_router)
 
 
 @app.exception_handler(Exception)

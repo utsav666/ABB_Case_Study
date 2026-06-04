@@ -80,6 +80,34 @@ class SettingsUserRepository:
 
         return dict(row_mapping)
 
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        """Get user by email address.
+
+        Args:
+            email: User email address.
+
+        Returns:
+            dict[str, Any] | None: User record if found, None otherwise.
+        """
+        statement = select(
+            SettingsUserEntity.id,
+            SettingsUserEntity.email,
+            SettingsUserEntity.full_name,
+            SettingsUserEntity.avatar_url,
+            SettingsUserEntity.created_at,
+            SettingsUserEntity.updated_at,
+            SettingsUserEntity.last_login_at,
+            SettingsUserEntity.is_active,
+        ).where(SettingsUserEntity.email == email)
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+
+        if row_mapping is None:
+            return None
+
+        return dict(row_mapping)
+
 
 class DBConnectionRepository:
     """Data access for settings.db_connections records."""
@@ -169,6 +197,41 @@ class DBConnectionRepository:
 
         return dict(row_mapping)
 
+    def list_all_connections(self) -> list[dict[str, Any]]:
+        """Fetch all stored database connections.
+
+        Returns:
+            list[dict[str, Any]]: List of all connection rows.
+        """
+        statement = select(
+            SettingsDBConnectionEntity.id,
+            SettingsDBConnectionEntity.workspace_id,
+            SettingsDBConnectionEntity.name,
+            SettingsDBConnectionEntity.engine,
+            SettingsDBConnectionEntity.db_host,
+            SettingsDBConnectionEntity.db_port,
+            SettingsDBConnectionEntity.db_name,
+            SettingsDBConnectionEntity.db_user,
+            SettingsDBConnectionEntity.db_schema,
+            SettingsDBConnectionEntity.use_ssl,
+            SettingsDBConnectionEntity.is_healthy,
+            SettingsDBConnectionEntity.last_synced_at,
+            SettingsDBConnectionEntity.created_at,
+        ).order_by(SettingsDBConnectionEntity.created_at.desc())
+
+        with self._gateway.get_session() as session:
+            row_mappings = session.execute(statement).mappings().all()
+
+        # Convert UUIDs to strings for JSON serialization
+        results = []
+        for row in row_mappings:
+            row_dict = dict(row)
+            row_dict["id"] = str(row_dict["id"])
+            row_dict["workspace_id"] = str(row_dict["workspace_id"])
+            results.append(row_dict)
+
+        return results
+
 
 class SelectedTableRepository:
     """Data access for settings.selected_tables records."""
@@ -222,6 +285,91 @@ class SelectedTableRepository:
             return None
 
         return dict(row_mapping)
+
+    def get_selected_tables_by_connection(
+        self, connection_id: str
+    ) -> list[dict[str, Any]]:
+        """Fetch all selected tables for a connection.
+
+        Args:
+            connection_id: The db_connections UUID.
+
+        Returns:
+            list[dict[str, Any]]: List of selected table rows.
+        """
+        try:
+            parsed_connection_id = UUID(connection_id)
+        except ValueError:
+            return []
+
+        statement = select(
+            SelectedTableEntity.id,
+            SelectedTableEntity.db_connection_id,
+            SelectedTableEntity.schema_name,
+            SelectedTableEntity.table_name,
+            SelectedTableEntity.human_description,
+        ).where(SelectedTableEntity.db_connection_id == parsed_connection_id)
+
+        with self._gateway.get_session() as session:
+            row_mappings = session.execute(statement).mappings().all()
+
+        return [dict(row) for row in row_mappings]
+
+    def bulk_replace_selected_tables(
+        self, connection_id: str, table_names: list[str], schema_name: str = "public"
+    ) -> list[dict[str, Any]]:
+        """Replace all selected tables for a connection.
+
+        Args:
+            connection_id: The db_connections UUID.
+            table_names: List of table names to save.
+            schema_name: Schema name (default: public).
+
+        Returns:
+            list[dict[str, Any]]: List of saved table rows.
+        """
+        parsed_connection_id = UUID(connection_id)
+
+        # Delete existing selections for this connection
+        delete_statement = delete(SelectedTableEntity).where(
+            SelectedTableEntity.db_connection_id == parsed_connection_id
+        )
+
+        if not table_names:
+            with self._gateway.get_session() as session:
+                session.execute(delete_statement)
+                session.commit()
+            return []
+
+        # Insert new selections
+        insert_values = [
+            {
+                "db_connection_id": parsed_connection_id,
+                "schema_name": schema_name,
+                "table_name": table_name,
+                "human_description": None,
+            }
+            for table_name in table_names
+        ]
+
+        insert_statement = (
+            insert(SelectedTableEntity)
+            .values(insert_values)
+            .returning(
+                SelectedTableEntity.id,
+                SelectedTableEntity.db_connection_id,
+                SelectedTableEntity.schema_name,
+                SelectedTableEntity.table_name,
+                SelectedTableEntity.human_description,
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            session.execute(delete_statement)
+            row_mappings = session.execute(insert_statement).mappings().all()
+            session.commit()
+
+        return [dict(row) for row in row_mappings]
 
 
 class ColumnDefinitionRepository:

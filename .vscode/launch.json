@@ -7,10 +7,10 @@
 
         {
             "name": "FastAPI",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
-            "python": "/usr/local/python/current/bin/python",
+            "python": "/usr/local/bin/python",
             "args": [
                 "app.main:app",
                 "--host",
@@ -24,10 +24,10 @@
         },
         {
             "name": "Streamlit: brick_chat",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "streamlit",
-            "python": "/usr/local/python/current/bin/python",
+            "python": "/usr/local/bin/python",
             "args": [
                 "run",
                 "app/brick_chat.py"
