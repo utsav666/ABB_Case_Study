@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.settings_db.gateway import SettingsDatabaseGateway
@@ -11,6 +11,8 @@ from app.settings_db.models import DBConnectionCreate
 from app.settings_db.orm_models import (
     AgentEntity,
     ColumnDefinitionEntity,
+    ColumnRelationEntity,
+    SchemaGraphEntity,
     SelectedTableEntity,
     SettingsDBConnectionEntity,
     SettingsUserEntity,
@@ -215,6 +217,7 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_schema,
             SettingsDBConnectionEntity.use_ssl,
             SettingsDBConnectionEntity.is_healthy,
+            SettingsDBConnectionEntity.is_active,
             SettingsDBConnectionEntity.last_synced_at,
             SettingsDBConnectionEntity.created_at,
         ).order_by(SettingsDBConnectionEntity.created_at.desc())
@@ -231,6 +234,45 @@ class DBConnectionRepository:
             results.append(row_dict)
 
         return results
+
+    def set_connection_active(
+        self, connection_id: str, is_active: bool
+    ) -> dict[str, Any] | None:
+        """Enable or disable a stored connection.
+
+        Args:
+            connection_id: Stored connection identifier.
+            is_active: Target active state.
+
+        Returns:
+            dict[str, Any] | None: Updated row when found.
+        """
+        try:
+            parsed_connection_id = UUID(connection_id)
+        except ValueError:
+            return None
+
+        statement = (
+            update(SettingsDBConnectionEntity)
+            .where(SettingsDBConnectionEntity.id == parsed_connection_id)
+            .values(is_active=is_active)
+            .returning(
+                SettingsDBConnectionEntity.id,
+                SettingsDBConnectionEntity.is_active,
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+            session.commit()
+
+        if row_mapping is None:
+            return None
+
+        return {
+            "id": str(row_mapping["id"]),
+            "is_active": row_mapping["is_active"],
+        }
 
 
 class SelectedTableRepository:
@@ -424,6 +466,305 @@ class ColumnDefinitionRepository:
             session.commit()
 
         return [dict(row) for row in row_mappings]
+
+    def get_columns_grouped_by_connection(
+        self, connection_id: str
+    ) -> list[dict[str, Any]]:
+        """Return selected tables with their column definitions for a connection.
+
+        Joins settings.selected_tables to settings.column_definitions so the UI
+        can render columns grouped per table in a single call.
+
+        Args:
+            connection_id: The db_connections UUID.
+
+        Returns:
+            list[dict[str, Any]]: One entry per selected table, each with a
+            "columns" list (possibly empty if the async sync hasn't finished).
+        """
+        try:
+            parsed_connection_id = UUID(connection_id)
+        except ValueError:
+            return []
+
+        tables_statement = (
+            select(
+                SelectedTableEntity.id,
+                SelectedTableEntity.schema_name,
+                SelectedTableEntity.table_name,
+                SelectedTableEntity.human_description,
+            )
+            .where(SelectedTableEntity.db_connection_id == parsed_connection_id)
+            .order_by(SelectedTableEntity.table_name)
+        )
+
+        columns_statement = (
+            select(
+                ColumnDefinitionEntity.id,
+                ColumnDefinitionEntity.table_id,
+                ColumnDefinitionEntity.raw_name,
+                ColumnDefinitionEntity.logical_name,
+                ColumnDefinitionEntity.description,
+                ColumnDefinitionEntity.data_type,
+                ColumnDefinitionEntity.is_pii,
+                ColumnDefinitionEntity.is_filterable,
+                ColumnDefinitionEntity.example_values,
+            )
+            .join(
+                SelectedTableEntity,
+                SelectedTableEntity.id == ColumnDefinitionEntity.table_id,
+            )
+            .where(SelectedTableEntity.db_connection_id == parsed_connection_id)
+            .order_by(ColumnDefinitionEntity.raw_name)
+        )
+
+        with self._gateway.get_session() as session:
+            table_rows = session.execute(tables_statement).mappings().all()
+            column_rows = session.execute(columns_statement).mappings().all()
+
+        # Group columns by their parent table_id
+        columns_by_table: dict[str, list[dict[str, Any]]] = {}
+        for column in column_rows:
+            column_dict = dict(column)
+            column_dict["id"] = str(column_dict["id"])
+            table_id = str(column_dict["table_id"])
+            column_dict["table_id"] = table_id
+            columns_by_table.setdefault(table_id, []).append(column_dict)
+
+        results: list[dict[str, Any]] = []
+        for table in table_rows:
+            table_id = str(table["id"])
+            results.append(
+                {
+                    "table_id": table_id,
+                    "schema_name": table["schema_name"],
+                    "table_name": table["table_name"],
+                    "human_description": table["human_description"],
+                    "columns": columns_by_table.get(table_id, []),
+                }
+            )
+
+        return results
+
+    def update_column_semantics(
+        self,
+        column_id: UUID,
+        logical_name: str | None,
+        description: str | None,
+    ) -> None:
+        """Set logical_name and description for a single column definition."""
+        statement = (
+            update(ColumnDefinitionEntity)
+            .where(ColumnDefinitionEntity.id == column_id)
+            .values(
+                logical_name=logical_name,
+                description=description,
+                updated_at=func.now(),
+            )
+        )
+        with self._gateway.get_session() as session:
+            session.execute(statement)
+            session.commit()
+
+    def update_column_logical_name(
+        self,
+        column_id: str,
+        logical_name: str | None,
+    ) -> dict[str, Any] | None:
+        """Update only the logical_name of a column and return the updated row."""
+        try:
+            parsed_column_id = UUID(column_id)
+        except ValueError:
+            return None
+
+        statement = (
+            update(ColumnDefinitionEntity)
+            .where(ColumnDefinitionEntity.id == parsed_column_id)
+            .values(logical_name=logical_name, updated_at=func.now())
+            .returning(
+                ColumnDefinitionEntity.id,
+                ColumnDefinitionEntity.raw_name,
+                ColumnDefinitionEntity.logical_name,
+                ColumnDefinitionEntity.description,
+                ColumnDefinitionEntity.data_type,
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+            session.commit()
+
+        if row_mapping is None:
+            return None
+
+        row_dict = dict(row_mapping)
+        row_dict["id"] = str(row_dict["id"])
+        return row_dict
+
+
+class ColumnRelationRepository:
+    """Data access for settings.column_relations records."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def replace_relations_for_connection(
+        self,
+        connection_id: str,
+        relations: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Replace all stored relations for a connection.
+
+        Args:
+            connection_id: The db_connections UUID.
+            relations: List of dicts with keys from_table_id, from_column,
+                to_table_id, to_column, constraint_name.
+
+        Returns:
+            list[dict[str, Any]]: Inserted relation rows.
+        """
+        parsed_connection_id = UUID(connection_id)
+
+        delete_statement = delete(ColumnRelationEntity).where(
+            ColumnRelationEntity.db_connection_id == parsed_connection_id
+        )
+
+        if not relations:
+            with self._gateway.get_session() as session:
+                session.execute(delete_statement)
+                session.commit()
+            return []
+
+        insert_values = [
+            {
+                "db_connection_id": parsed_connection_id,
+                "from_table_id": relation["from_table_id"],
+                "from_column": relation["from_column"],
+                "to_table_id": relation["to_table_id"],
+                "to_column": relation["to_column"],
+                "constraint_name": relation.get("constraint_name"),
+            }
+            for relation in relations
+        ]
+
+        insert_statement = (
+            insert(ColumnRelationEntity)
+            .values(insert_values)
+            .returning(
+                ColumnRelationEntity.id,
+                ColumnRelationEntity.from_table_id,
+                ColumnRelationEntity.from_column,
+                ColumnRelationEntity.to_table_id,
+                ColumnRelationEntity.to_column,
+                ColumnRelationEntity.constraint_name,
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            session.execute(delete_statement)
+            row_mappings = session.execute(insert_statement).mappings().all()
+            session.commit()
+
+        return [dict(row) for row in row_mappings]
+
+    def get_relations_by_connection(
+        self, connection_id: str
+    ) -> list[dict[str, Any]]:
+        """Return all stored relations for a connection."""
+        try:
+            parsed_connection_id = UUID(connection_id)
+        except ValueError:
+            return []
+
+        statement = select(
+            ColumnRelationEntity.id,
+            ColumnRelationEntity.from_table_id,
+            ColumnRelationEntity.from_column,
+            ColumnRelationEntity.to_table_id,
+            ColumnRelationEntity.to_column,
+            ColumnRelationEntity.constraint_name,
+        ).where(ColumnRelationEntity.db_connection_id == parsed_connection_id)
+
+        with self._gateway.get_session() as session:
+            row_mappings = session.execute(statement).mappings().all()
+
+        results = []
+        for row in row_mappings:
+            row_dict = dict(row)
+            row_dict["id"] = str(row_dict["id"])
+            row_dict["from_table_id"] = str(row_dict["from_table_id"])
+            row_dict["to_table_id"] = str(row_dict["to_table_id"])
+            results.append(row_dict)
+        return results
+
+
+class SchemaGraphRepository:
+    """Data access for settings.schema_graphs records."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def upsert_graph(
+        self, connection_id: str, graph: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Insert or replace the stored schema graph for a connection."""
+        parsed_connection_id = UUID(connection_id)
+
+        statement = insert(SchemaGraphEntity).values(
+            db_connection_id=parsed_connection_id,
+            graph=graph,
+            updated_at=func.now(),
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="schema_graphs_connection_unique",
+            set_={
+                "graph": statement.excluded.graph,
+                "updated_at": func.now(),
+            },
+        )
+        statement = statement.returning(
+            SchemaGraphEntity.id,
+            SchemaGraphEntity.db_connection_id,
+            SchemaGraphEntity.graph,
+            SchemaGraphEntity.updated_at,
+        )
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+            session.commit()
+
+        if row_mapping is None:
+            return None
+
+        row_dict = dict(row_mapping)
+        row_dict["id"] = str(row_dict["id"])
+        row_dict["db_connection_id"] = str(row_dict["db_connection_id"])
+        return row_dict
+
+    def get_graph_by_connection(self, connection_id: str) -> dict[str, Any] | None:
+        """Return the stored schema graph for a connection, if any."""
+        try:
+            parsed_connection_id = UUID(connection_id)
+        except ValueError:
+            return None
+
+        statement = select(
+            SchemaGraphEntity.id,
+            SchemaGraphEntity.db_connection_id,
+            SchemaGraphEntity.graph,
+            SchemaGraphEntity.updated_at,
+        ).where(SchemaGraphEntity.db_connection_id == parsed_connection_id)
+
+        with self._gateway.get_session() as session:
+            row_mapping = session.execute(statement).mappings().first()
+
+        if row_mapping is None:
+            return None
+
+        row_dict = dict(row_mapping)
+        row_dict["id"] = str(row_dict["id"])
+        row_dict["db_connection_id"] = str(row_dict["db_connection_id"])
+        return row_dict
 
 
 class AgentRepository:

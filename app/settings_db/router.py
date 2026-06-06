@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.settings_db.controllers import (
     create_db_connection,
@@ -10,9 +10,20 @@ from app.settings_db.controllers import (
     list_all_db_connections,
     validate_db_connection,
 )
-from app.target_db.controllers import get_tables_for_connection
+from app.target_db.controllers import (
+    generate_sql_from_graph,
+    get_tables_for_connection,
+    sync_column_definitions_for_connection,
+    validate_sql_for_connection,
+)
 from app.settings_db.models import DBConnectionCreate, DBConnectionValidationRequest
-from app.settings_db.repositories import SelectedTableRepository
+from app.settings_db.repositories import (
+    ColumnDefinitionRepository,
+    ColumnRelationRepository,
+    DBConnectionRepository,
+    SchemaGraphRepository,
+    SelectedTableRepository,
+)
 from pydantic import BaseModel
 
 settings_db_router = APIRouter(
@@ -51,6 +62,24 @@ def save_db_connection(
     return create_db_connection(payload, skip_validation)
 
 
+class UpdateConnectionActiveRequest(BaseModel):
+    """Request body for enabling/disabling a connection."""
+    is_active: bool
+
+
+@settings_db_router.patch("/{connection_id}/active")
+def set_connection_active(
+    connection_id: str,
+    payload: UpdateConnectionActiveRequest,
+) -> dict[str, Any]:
+    """Enable or disable a saved database connection."""
+    repository = DBConnectionRepository()
+    updated = repository.set_connection_active(connection_id, payload.is_active)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    return {"connection": updated}
+
+
 @settings_db_router.get("/{connection_id}/tables")
 def get_connection_tables(
     connection_id: str,
@@ -70,14 +99,29 @@ class SaveSelectedTablesRequest(BaseModel):
 def save_selected_tables(
     connection_id: str,
     payload: SaveSelectedTablesRequest,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    """Save selected tables for a connection."""
+    """Save selected tables for a connection.
+
+    After persisting the selection, schedules an async background job that
+    fetches each table's columns from the target database and stores them in
+    settings.column_definitions.
+    """
     repository = SelectedTableRepository()
     saved_tables = repository.bulk_replace_selected_tables(
         connection_id,
         payload.table_names,
         payload.schema_name,
     )
+
+    # Fire-and-forget: fetch & persist column metadata after responding.
+    if saved_tables:
+        background_tasks.add_task(
+            sync_column_definitions_for_connection,
+            connection_id,
+            payload.schema_name,
+        )
+
     return {
         "connection_id": connection_id,
         "selected_tables": saved_tables,
@@ -95,3 +139,92 @@ def get_selected_tables(connection_id: str) -> dict[str, Any]:
         "selected_tables": selected_tables,
         "count": len(selected_tables),
     }
+
+
+@settings_db_router.get("/{connection_id}/column-definitions")
+def get_column_definitions(connection_id: str) -> dict[str, Any]:
+    """Get selected tables with their stored column definitions for a connection."""
+    repository = ColumnDefinitionRepository()
+    tables = repository.get_columns_grouped_by_connection(connection_id)
+    return {
+        "connection_id": connection_id,
+        "tables": tables,
+        "table_count": len(tables),
+    }
+
+
+class UpdateColumnLogicalNameRequest(BaseModel):
+    """Request body for editing a column's logical name."""
+    logical_name: str | None = None
+
+
+@settings_db_router.patch("/columns/{column_id}/logical-name")
+def update_column_logical_name(
+    column_id: str,
+    payload: UpdateColumnLogicalNameRequest,
+) -> dict[str, Any]:
+    """Update a single column's logical name."""
+    repository = ColumnDefinitionRepository()
+    # Normalize empty string to NULL so cleared values are stored as empty.
+    logical_name = (payload.logical_name or "").strip() or None
+    updated = repository.update_column_logical_name(column_id, logical_name)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Column not found")
+    return {"column": updated}
+
+
+@settings_db_router.get("/{connection_id}/relations")
+def get_column_relations(connection_id: str) -> dict[str, Any]:
+    """Get stored column relationships for a connection."""
+    repository = ColumnRelationRepository()
+    relations = repository.get_relations_by_connection(connection_id)
+    return {
+        "connection_id": connection_id,
+        "relations": relations,
+        "count": len(relations),
+    }
+
+
+@settings_db_router.get("/{connection_id}/schema-graph")
+def get_schema_graph(connection_id: str) -> dict[str, Any]:
+    """Get the stored schema graph (nodes + edges) for a connection."""
+    record = SchemaGraphRepository().get_graph_by_connection(connection_id)
+    if record is None:
+        return {"connection_id": connection_id, "graph": None}
+    return {"connection_id": connection_id, "graph": record["graph"]}
+
+
+class GenerateSqlRequest(BaseModel):
+    """Request body for NL->SQL generation."""
+    question: str
+    dialect: str = "PostgreSQL"
+
+
+@settings_db_router.post("/{connection_id}/generate-sql")
+def generate_sql_for_connection(
+    connection_id: str,
+    payload: GenerateSqlRequest,
+) -> dict[str, Any]:
+    """Generate SQL for a natural-language question using the schema graph."""
+    if not payload.question.strip():
+        raise HTTPException(status_code=400, detail="Question is required")
+    result = generate_sql_from_graph(
+        connection_id,
+        payload.question.strip(),
+        payload.dialect,
+    )
+    return result
+
+
+class ValidateSqlRequest(BaseModel):
+    """Request body for validating SQL via EXPLAIN."""
+    sql: str
+
+
+@settings_db_router.post("/{connection_id}/validate-sql")
+def validate_sql(
+    connection_id: str,
+    payload: ValidateSqlRequest,
+) -> dict[str, Any]:
+    """Validate user-edited SQL against the customer DB using EXPLAIN."""
+    return validate_sql_for_connection(connection_id, payload.sql)

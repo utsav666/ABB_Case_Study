@@ -102,6 +102,12 @@ class SettingsDBConnectionEntity(SettingsBase):
     use_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_options: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_healthy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+        default=True,
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -161,6 +167,71 @@ class ColumnDefinitionEntity(SettingsBase):
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+
+
+class ColumnRelationEntity(SettingsBase):
+    """ORM entity for settings.column_relations."""
+
+    __tablename__ = "column_relations"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    db_connection_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    from_table_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=False,
+    )
+    from_column: Mapped[str] = mapped_column(Text, nullable=False)
+    to_table_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=False,
+    )
+    to_column: Mapped[str] = mapped_column(Text, nullable=False)
+    constraint_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+
+
+class SchemaGraphEntity(SettingsBase):
+    """ORM entity for settings.schema_graphs."""
+
+    __tablename__ = "schema_graphs"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    db_connection_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=False,
+    )
+    graph: Mapped[dict | None] = mapped_column(
+        PostgreSQLJSON,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         server_default=func.now(),

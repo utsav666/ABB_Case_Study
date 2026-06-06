@@ -108,6 +108,16 @@ app.include_router(settings_db_router)
 app.include_router(workspace_router)
 
 
+@app.on_event("shutdown")
+def _dispose_pooled_db_engines() -> None:
+    """Release pooled DB connections so restarts/reloads are clean."""
+    from app.settings_db.gateway import dispose_all_engines
+    from app.target_db.gateway import dispose_all_target_engines
+
+    dispose_all_engines()
+    dispose_all_target_engines()
+
+
 @app.exception_handler(Exception)
 async def handle_unexpected_exception(
     request: Request,

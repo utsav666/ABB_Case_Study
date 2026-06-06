@@ -21,6 +21,7 @@ def generate_sql(
     table_list: list[str],
     dialect: str = "PostgreSQL",
     error_context: str = "",
+    table_structure: str | None = None,
 ) -> dict[str, Any]:
     """Generate SQL for a user question.
 
@@ -30,6 +31,9 @@ def generate_sql(
     table_list: List of relevant table names.
     dialect: SQL dialect (PostgreSQL, Snowflake, etc.)
     error_context: If retrying, the previous error message to help the LLM fix it.
+    table_structure: Optional pre-built table-structure string. When provided,
+        it overrides the default sample-data source (TabStrucCreation) — used to
+        feed a connection's real schema graph to the generator.
 
     Returns
     -------
@@ -37,7 +41,8 @@ def generate_sql(
     """
     try:
         openai.api_key = get_openai_api_key()
-        table_structure = TabStrucCreation(table_list).struc_creation()
+        if table_structure is None:
+            table_structure = TabStrucCreation(table_list).struc_creation()
 
         prompt = sql_gen_prompts.format(
             table_structure=table_structure,
