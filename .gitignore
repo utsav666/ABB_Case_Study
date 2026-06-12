@@ -2,3 +2,6 @@
 *.env
 model_config.json
 *.pyc
+
+# Python virtual environment
+.venv/

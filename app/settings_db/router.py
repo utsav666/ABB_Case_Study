@@ -11,6 +11,7 @@ from app.settings_db.controllers import (
     validate_db_connection,
 )
 from app.target_db.controllers import (
+    build_and_store_schema_graph,
     generate_sql_from_graph,
     get_tables_for_connection,
     sync_column_definitions_for_connection,
@@ -215,6 +216,22 @@ class GenerateSqlRequest(BaseModel):
     dialect: str = "PostgreSQL"
 
 
+class RelationPayload(BaseModel):
+    """A single table relationship payload."""
+
+    from_table_id: str
+    from_column: str
+    to_table_id: str
+    to_column: str
+    constraint_name: str | None = None
+
+
+class ReplaceRelationsRequest(BaseModel):
+    """Request body for replacing connection relationships."""
+
+    relations: list[RelationPayload]
+
+
 @settings_db_router.post("/{connection_id}/generate-sql")
 def generate_sql_for_connection(
     connection_id: str,
@@ -229,6 +246,46 @@ def generate_sql_for_connection(
         payload.dialect,
     )
     return result
+
+
+@settings_db_router.put("/{connection_id}/relations")
+def replace_column_relations(
+    connection_id: str,
+    payload: ReplaceRelationsRequest,
+) -> dict[str, Any]:
+    """Replace stored relationships and rebuild schema graph."""
+    repository = ColumnRelationRepository()
+
+    normalized_relations: list[dict[str, Any]] = []
+    for relation in payload.relations:
+        from_column = relation.from_column.strip()
+        to_column = relation.to_column.strip()
+        if not from_column or not to_column:
+            raise HTTPException(
+                status_code=400,
+                detail="Both from_column and to_column are required",
+            )
+
+        normalized_relations.append(
+            {
+                "from_table_id": relation.from_table_id,
+                "from_column": from_column,
+                "to_table_id": relation.to_table_id,
+                "to_column": to_column,
+                "constraint_name": (relation.constraint_name or "").strip() or None,
+            }
+        )
+
+    saved_relations = repository.replace_relations_for_connection(
+        connection_id,
+        normalized_relations,
+    )
+    build_and_store_schema_graph(connection_id)
+    return {
+        "connection_id": connection_id,
+        "relations": saved_relations,
+        "count": len(saved_relations),
+    }
 
 
 class ValidateSqlRequest(BaseModel):

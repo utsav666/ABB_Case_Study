@@ -12,6 +12,8 @@ from app.settings_db.orm_models import (
     AgentEntity,
     ColumnDefinitionEntity,
     ColumnRelationEntity,
+    ConversationMessageEntity,
+    ConversationThreadEntity,
     SchemaGraphEntity,
     SelectedTableEntity,
     SettingsDBConnectionEntity,
@@ -881,4 +883,217 @@ class AgentRepository:
         with self._gateway.get_session() as session:
             result = session.execute(statement)
             session.commit()
+        return result.rowcount > 0
+
+
+class ConversationRepository:
+    """Data access for conversation threads and messages."""
+
+    def __init__(self, gateway: SettingsDatabaseGateway | None = None) -> None:
+        self._gateway = gateway or SettingsDatabaseGateway()
+
+    def create_conversation(
+        self,
+        workspace_id: str,
+        connection_id: str | None,
+        title: str,
+        thread_id: str,
+    ) -> dict[str, Any]:
+        """Create a new conversation thread.
+
+        Args:
+            workspace_id: The workspace UUID string.
+            connection_id: Optional DB connection UUID string.
+            title: First message text (truncated) used as conversation title.
+            thread_id: Caller-provided unique identifier.
+
+        Returns:
+            dict with thread_id, title, created_at.
+        """
+        statement = insert(ConversationThreadEntity).values(
+            id=thread_id,
+            workspace_id=UUID(workspace_id),
+            connection_id=UUID(connection_id) if connection_id else None,
+            title=title,
+            message_count=0,
+        ).returning(
+            ConversationThreadEntity.id,
+            ConversationThreadEntity.workspace_id,
+            ConversationThreadEntity.connection_id,
+            ConversationThreadEntity.title,
+            ConversationThreadEntity.message_count,
+            ConversationThreadEntity.created_at,
+            ConversationThreadEntity.updated_at,
+        )
+
+        with self._gateway.get_session() as session:
+            row = session.execute(statement).mappings().first()
+            session.commit()
+
+        if row is None:
+            return {}
+
+        result = dict(row)
+        result["id"] = str(result["id"])
+        result["workspace_id"] = str(result["workspace_id"])
+        result["connection_id"] = str(result["connection_id"]) if result["connection_id"] else None
+        return result
+
+    def conversation_exists(self, thread_id: str) -> bool:
+        """Check whether a conversation thread exists."""
+        statement = (
+            select(ConversationThreadEntity.id)
+            .where(ConversationThreadEntity.id == thread_id)
+            .limit(1)
+        )
+
+        with self._gateway.get_session() as session:
+            row = session.execute(statement).first()
+
+        return row is not None
+
+    def add_message(
+        self,
+        thread_id: str,
+        role: str,
+        content: str,
+    ) -> dict[str, Any]:
+        """Append a message to a conversation thread.
+
+        Args:
+            thread_id: Conversation thread identifier.
+            role: "user" or "assistant".
+            content: Message text.
+
+        Returns:
+            dict with message id and created_at.
+        """
+        message_statement = insert(ConversationMessageEntity).values(
+            thread_id=thread_id,
+            role=role,
+            content=content,
+        ).returning(
+            ConversationMessageEntity.id,
+            ConversationMessageEntity.thread_id,
+            ConversationMessageEntity.role,
+            ConversationMessageEntity.content,
+            ConversationMessageEntity.created_at,
+        )
+
+        # Increment message_count and update updated_at on the thread
+        thread_update = (
+            update(ConversationThreadEntity)
+            .where(ConversationThreadEntity.id == thread_id)
+            .values(
+                message_count=ConversationThreadEntity.message_count + 1,
+                updated_at=func.now(),
+            )
+        )
+
+        with self._gateway.get_session() as session:
+            row = session.execute(message_statement).mappings().first()
+            session.execute(thread_update)
+            session.commit()
+
+        if row is None:
+            return {}
+
+        result = dict(row)
+        result["id"] = str(result["id"])
+        return result
+
+    def get_messages_by_thread(self, thread_id: str) -> list[dict[str, Any]]:
+        """Retrieve all messages for a thread in chronological order.
+
+        Args:
+            thread_id: Conversation thread identifier.
+
+        Returns:
+            list of {role, content, created_at} dicts.
+        """
+        statement = select(
+            ConversationMessageEntity.id,
+            ConversationMessageEntity.role,
+            ConversationMessageEntity.content,
+            ConversationMessageEntity.created_at,
+        ).where(
+            ConversationMessageEntity.thread_id == thread_id
+        ).order_by(ConversationMessageEntity.created_at.asc())
+
+        with self._gateway.get_session() as session:
+            rows = session.execute(statement).mappings().all()
+
+        return [
+            {
+                "id": str(row["id"]),
+                "role": row["role"],
+                "content": row["content"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            }
+            for row in rows
+        ]
+
+    def get_conversations_by_workspace(
+        self,
+        workspace_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List conversation threads for a workspace, newest first.
+
+        Args:
+            workspace_id: The workspace UUID string.
+            limit: Maximum number of threads to return.
+
+        Returns:
+            list of {id, title, message_count, connection_id, created_at, updated_at}.
+        """
+        statement = select(
+            ConversationThreadEntity.id,
+            ConversationThreadEntity.connection_id,
+            ConversationThreadEntity.title,
+            ConversationThreadEntity.message_count,
+            ConversationThreadEntity.created_at,
+            ConversationThreadEntity.updated_at,
+        ).where(
+            ConversationThreadEntity.workspace_id == UUID(workspace_id)
+        ).order_by(
+            ConversationThreadEntity.updated_at.desc()
+        ).limit(limit)
+
+        with self._gateway.get_session() as session:
+            rows = session.execute(statement).mappings().all()
+
+        return [
+            {
+                "id": str(row["id"]),
+                "connection_id": str(row["connection_id"]) if row["connection_id"] else None,
+                "title": row["title"],
+                "message_count": row["message_count"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            }
+            for row in rows
+        ]
+
+    def delete_conversation(self, thread_id: str) -> bool:
+        """Delete a thread and all its messages.
+
+        Args:
+            thread_id: Conversation thread identifier.
+
+        Returns:
+            True if the thread was found and deleted.
+        """
+        messages_delete = delete(ConversationMessageEntity).where(
+            ConversationMessageEntity.thread_id == thread_id
+        )
+        thread_delete = delete(ConversationThreadEntity).where(
+            ConversationThreadEntity.id == thread_id
+        )
+
+        with self._gateway.get_session() as session:
+            session.execute(messages_delete)
+            result = session.execute(thread_delete)
+            session.commit()
+
         return result.rowcount > 0

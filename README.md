@@ -61,6 +61,83 @@ If the user question is **too general**, **not database-specific**, or **non-tec
 
 ---
 
+## Backend Request Workflow (Exact Agents + Models)
+
+This section documents the runtime flow for `POST /chat` in the FastAPI backend,
+including the exact orchestrator node path, agent module, and model used.
+
+### Entry Point
+
+- API endpoint: `app/main.py` -> `@app.post("/chat")`
+- Orchestrator: `app/orchestrator/orch_graph.py` -> `GraphOrchestrator`
+- Input payload fields used: `question` (or `message/query/prompt/text`) and optional `connection_id`
+
+### End-to-End Flow Chart
+
+```mermaid
+flowchart TD
+  A[Client POST /chat] --> B[app/main.py: chat()]
+  B --> C[GraphOrchestrator.executor()]
+  C --> D[router_node]
+
+  D -->|sql_query or sql_and_chart| E[table_resolver_node]
+  E --> F[generate_sql_node]
+  F --> G[cardinality_resolver_node]
+  G --> H[validate_sql_node]
+  H -->|valid| I[execute_sql_node]
+  H -->|invalid + retries left| F
+  H -->|invalid + max retries| N[build_data_response_node]
+  I -->|success| J[verify_result_node]
+  I -->|error + retries left| F
+  I -->|error + max retries| N
+  J -->|chart requested| K[chart_approval_node]
+  J -->|table/text response| N
+  K --> Z[final_response]
+  N --> Z
+
+  D -->|schema_info| L[schema_info_node]
+  D -->|general_answer| M[general_answer_node]
+  D -->|ga_query| O[ga_agent_node]
+
+  L --> Z
+  M --> Z
+  O --> Z
+  Z --> P[app/main.py: build_chat_response() -> JSON]
+```
+
+### Agent and Model Map
+
+| Stage | Orchestrator Node | Agent Module | Model | Notes |
+|---|---|---|---|---|
+| Route intent | `router_node` | `app/router/route_improvisation.py` (`Router`) | `gpt-4o` | Chooses route: SQL, chart, schema, general, GA |
+| Identify tables | `table_resolver_node` | `app/agent/table_identification_agent.py` (`identify_tables`) | `gpt-4` | Skipped when only one table is available |
+| Generate SQL | `generate_sql_node` | `app/agent/sql_generation_agent.py` (`generate_sql`) | `SQL_GENERATION_MODEL` env, default `gpt-4` | Returns SQL plus token usage and estimated cost |
+| Resolve ambiguous filter values | `cardinality_resolver_node` | `app/agent/value_resolver_agent.py` (`resolve_filter_value`) | `gpt-4o` | Triggers HITL when confidence is low |
+| Validate SQL syntax | `validate_sql_node` | `app/utils/sql_validator.py` | No LLM | SQL parser validation only |
+| Execute SQL | `execute_sql_node` | `app/utils/sql_executor.py` (`SqlExec`) | No LLM | Executes against target DB |
+| Schema Q&A | `schema_info_node` | `app/agent/schema_info_agent.py` (`explain_schema`) | `gpt-4` | Used when route is `schema_info` |
+| General fallback | `general_answer_node` | `app/agent/fall_back.py` (`general_answer`) | `gpt-4o` | Non-database questions |
+| Chart decision | `chart_approval_node` | `app/agent/chart_gen_agent.py` (`decide_chart`) | `gpt-4o` | Recommends chart config before render |
+| GA report spec | `ga_agent_node` | `app/agent/ga_query_agent.py` (`generate_ga_report_spec`) | `gpt-4o` | Only for Google Analytics connections |
+
+### Data Objects Passed Between Nodes
+
+- `GraphState` keys used in flow:
+  - `question`, `connection_id`, `route`, `tables`, `sql`, `sql_error`, `retry_count`, `data`, `final_response`
+- SQL path state transitions:
+  - question -> tables -> sql -> validated sql -> query data -> final response
+- If `connection_id` is provided:
+  - orchestrator loads stored schema graph and uses it for routing/table selection/SQL generation context
+
+### Retry and HITL Behavior
+
+- Retry limit: `MAX_RETRIES = 2` in `app/orchestrator/orch_graph.py`
+- SQL retry happens after validation or execution errors
+- HITL points:
+  - value resolution ambiguity in `cardinality_resolver_node`
+  - chart approval path in `chart_approval_node`
+- Resume endpoint for HITL: `POST /chat/resume`
+
 
 # Basic Flow Diagram
 ![Image 1](DMIA_flow_diagram.png)

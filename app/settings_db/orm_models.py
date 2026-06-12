@@ -249,6 +249,57 @@ class SchemaGraphEntity(SettingsBase):
     )
 
 
+class ConversationThreadEntity(SettingsBase):
+    """ORM entity for settings.conversation_threads."""
+
+    __tablename__ = "conversation_threads"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=False,
+    )
+    connection_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class ConversationMessageEntity(SettingsBase):
+    """ORM entity for settings.conversation_messages."""
+
+    __tablename__ = "conversation_messages"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    thread_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)  # "user" or "assistant"
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class WorkspaceMemberEntity(SettingsBase):
     """ORM entity for settings.workspace_members."""
 

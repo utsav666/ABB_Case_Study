@@ -63,6 +63,7 @@ class GraphState(TypedDict, total=False):
 
     question: str
     connection_id: str  # Selected DB connection scoping this run (optional)
+    conversation_history: str  # Prior conversation context from LangChain memory
     route: str
     route_reasoning: str
     tables: list[str]
@@ -225,6 +226,7 @@ def generate_sql_node(state: GraphState) -> GraphState:
     question = state["question"]
     tables = state.get("tables", [])
     error_context = state.get("sql_error", "")
+    conversation_history = state.get("conversation_history", "")
 
     # When a connection is selected, feed the agent its real schema graph.
     graph = _connection_graph(state)
@@ -237,9 +239,15 @@ def generate_sql_node(state: GraphState) -> GraphState:
             tables or all_tables,
             error_context=error_context,
             table_structure=table_structure,
+            conversation_history=conversation_history,
         )
     else:
-        result = generate_sql(question, tables, error_context=error_context)
+        result = generate_sql(
+            question,
+            tables,
+            error_context=error_context,
+            conversation_history=conversation_history,
+        )
 
     if result["success"]:
         logger.info("SQL generated: %s", result["sql"][:100])
@@ -740,12 +748,15 @@ class GraphOrchestrator:
         user_question: str,
         thread_id: str | None = None,
         connection_id: str | None = None,
+        conversation_history: str = "",
     ):
         self.user_question = user_question
         # ### HITL — thread_id enables state persistence for interrupt/resume
         self.thread_id = thread_id or f"thread-{id(self)}"
         # Optional DB connection that scopes this run to a real schema graph.
         self.connection_id = connection_id
+        # Prior conversation history formatted as text for LLM context
+        self.conversation_history = conversation_history
 
     def executor(self) -> dict[str, Any]:
         """Run the graph and return the result.
@@ -756,6 +767,7 @@ class GraphOrchestrator:
         initial_state: GraphState = {
             "question": self.user_question,
             "connection_id": self.connection_id or "",
+            "conversation_history": self.conversation_history,
             "route": "",
             "route_reasoning": "",
             "tables": [],

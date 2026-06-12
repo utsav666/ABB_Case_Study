@@ -29,6 +29,7 @@ from app.settings_db.models import AgentCreate, AgentUpdate
 from app.settings_db.repositories import (
     AgentRepository,
     ColumnDefinitionRepository,
+    ConversationRepository,
     SelectedTableRepository,
 )
 from app.settings_db.router import settings_db_router
@@ -138,6 +139,18 @@ class ChatRequest(BaseModel):
     question: str = Field(default="", description="User question to answer.")
     message: str = Field(
         default="", description="Alternate frontend field for the user question."
+    )
+    thread_id: str | None = Field(
+        default=None,
+        description="Conversation thread ID for continuing an existing conversation.",
+    )
+    connection_id: str | None = Field(
+        default=None,
+        description="DB connection ID scoping the query.",
+    )
+    workspace_id: str | None = Field(
+        default=None,
+        description="Workspace ID for conversation persistence.",
     )
 
     @model_validator(mode="after")
@@ -453,6 +466,32 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
     payload["answer_type"] = "text"
     payload["message"] = str(result)
     return payload
+
+
+def build_persisted_assistant_content(response_payload: dict[str, Any]) -> str:
+    """Serialize a stable assistant payload for conversation history storage."""
+    persisted_payload = {
+        "answer_type": response_payload.get("answer_type"),
+        "message": response_payload.get("message"),
+        "data": response_payload.get("data"),
+        "chart_image_base64": response_payload.get("chart_image_base64"),
+        "sql": response_payload.get("sql"),
+    }
+
+    try:
+        return json.dumps(
+            {
+                "kind": "assistant_payload_v1",
+                "payload": persisted_payload,
+            },
+            ensure_ascii=True,
+            default=str,
+        )
+    except (TypeError, ValueError):
+        fallback_message = response_payload.get("message")
+        if isinstance(fallback_message, str) and fallback_message.strip():
+            return fallback_message
+        return "Request completed."
 
 
 @app.get("/")
@@ -936,11 +975,19 @@ async def chat(
     if not normalized_question:
         normalized_question = extract_question_from_payload(body_payload)
 
-    connection_id = None
+    connection_id: str | None = None
+    thread_id_from_client: str | None = None
+    workspace_id: str | None = None
     if isinstance(body_payload, dict):
         raw_connection_id = body_payload.get("connection_id")
         if isinstance(raw_connection_id, str) and raw_connection_id.strip():
             connection_id = raw_connection_id.strip()
+        raw_thread_id = body_payload.get("thread_id")
+        if isinstance(raw_thread_id, str) and raw_thread_id.strip():
+            thread_id_from_client = raw_thread_id.strip()
+        raw_workspace_id = body_payload.get("workspace_id")
+        if isinstance(raw_workspace_id, str) and raw_workspace_id.strip():
+            workspace_id = raw_workspace_id.strip()
 
     if not normalized_question:
         return jsonable_encoder(
@@ -960,9 +1007,33 @@ async def chat(
     import asyncio
     import uuid
     from app.orchestrator.orch_graph import GraphOrchestrator
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
 
-    ### HITL — Generate a thread_id for this conversation
-    thread_id = str(uuid.uuid4())
+    # Use the client-provided thread_id or generate a new one for HITL
+    thread_id = thread_id_from_client or str(uuid.uuid4())
+
+    # Retrieve conversation history for an existing thread
+    conversation_manager = ConversationHistoryManager()
+    prior_history_text: str = ""
+    if thread_id_from_client:
+        prior_history_text = conversation_manager.format_history_for_context(thread_id)
+
+    # Ensure thread row exists before inserting messages.
+    if workspace_id:
+        conversation_manager.ensure_conversation(
+            workspace_id=workspace_id,
+            connection_id=connection_id,
+            title=normalized_question[:80],
+            thread_id=thread_id,
+        )
+
+    # Persist the user's message
+    if workspace_id:
+        conversation_manager.add_message(
+            thread_id=thread_id,
+            role="user",
+            content=normalized_question,
+        )
 
     buffer = io.StringIO()
     try:
@@ -973,6 +1044,7 @@ async def chat(
                     normalized_question,
                     thread_id=thread_id,
                     connection_id=connection_id,
+                    conversation_history=prior_history_text,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
@@ -1003,9 +1075,54 @@ async def chat(
 
     response_payload = {
         "question": normalized_question,
+        "thread_id": thread_id,
         **build_chat_response(result, buffer.getvalue()),
     }
+
+    # Persist the assistant's reply in a structured format for reload hydration.
+    assistant_content = build_persisted_assistant_content(response_payload)
+    if workspace_id and assistant_content:
+        conversation_manager.add_message(
+            thread_id=thread_id,
+            role="assistant",
+            content=assistant_content,
+        )
+
     return jsonable_encoder(response_payload)
+
+
+# ============================================================
+# Conversation history endpoints
+# ============================================================
+
+@app.get("/conversations")
+async def list_conversations(workspace_id: str = Query(..., description="Workspace UUID")) -> list[dict[str, Any]]:
+    """List all conversation threads for a workspace, newest first."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    return manager.get_workspace_conversations(workspace_id)
+
+
+@app.get("/conversations/{thread_id}/messages")
+async def get_conversation_messages(thread_id: str) -> list[dict[str, Any]]:
+    """Retrieve all messages in a conversation thread."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    return manager.get_conversation_history(thread_id)
+
+
+@app.delete("/conversations/{thread_id}")
+async def delete_conversation(thread_id: str) -> dict[str, Any]:
+    """Delete a conversation thread and all its messages."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    deleted = manager.delete_conversation(thread_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"status": "deleted", "thread_id": thread_id}
 
 
 # ============================================================
