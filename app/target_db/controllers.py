@@ -332,33 +332,24 @@ def validate_sql_for_connection(
         return {"valid": False, "error": message}
 
 
-def generate_sql_from_graph(
-    connection_id: str,
-    user_question: str,
-    dialect: str = "PostgreSQL",
-) -> dict[str, Any]:
-    """Generate SQL for a question using the connection's stored schema graph.
+def load_schema_graph(connection_id: str) -> dict[str, Any] | None:
+    """Return the stored schema graph dict for a connection, or None."""
+    from app.settings_db.repositories import SchemaGraphRepository
 
-    Loads the persisted graph, renders it into the table-structure format the
-    SQL agent expects, and delegates to generate_sql().
+    record = SchemaGraphRepository().get_graph_by_connection(connection_id)
+    if not record or not record.get("graph", {}).get("nodes"):
+        return None
+    return record["graph"]
 
-    Returns {"success": True, "sql": ...} or {"success": False, "error": ...}.
+
+def render_graph_table_structure(graph: dict[str, Any]) -> tuple[str, list[str]]:
+    """Render a schema graph into a (table_structure_json, table_list) pair.
+
+    The JSON matches the structure the SQL agent's prompt expects, including a
+    __relationships__ block describing valid joins.
     """
     import json
 
-    from app.agent.sql_generation_agent import generate_sql
-    from app.settings_db.repositories import SchemaGraphRepository
-
-    graph_record = SchemaGraphRepository().get_graph_by_connection(connection_id)
-    if not graph_record or not graph_record.get("graph", {}).get("nodes"):
-        return {
-            "success": False,
-            "error": "No schema graph available. Select tables first to build it.",
-        }
-
-    graph = graph_record["graph"]
-
-    # Render the graph as a compact JSON table-structure for the prompt.
     table_structure_payload: dict[str, Any] = {}
     table_list: list[str] = []
     for node in graph.get("nodes", []):
@@ -377,7 +368,6 @@ def generate_sql_from_graph(
             },
         }
 
-    # Include relationships so the LLM knows valid joins.
     table_structure_payload["__relationships__"] = [
         {
             "from": f"{edge['from_table']}.{edge['from_column']}",
@@ -386,7 +376,60 @@ def generate_sql_from_graph(
         for edge in graph.get("edges", [])
     ]
 
-    table_structure = json.dumps(table_structure_payload, indent=2, default=str)
+    return json.dumps(table_structure_payload, indent=2, default=str), table_list
+
+
+def render_graph_summary(graph: dict[str, Any]) -> str:
+    """Render a schema graph into a compact summary string for the router.
+
+    Mirrors the shape produced by Summarizer.summarize_schema():
+      schema.table(col (Logical Name), ...) FK: from→to
+    """
+    table_summaries: list[str] = []
+    for node in graph.get("nodes", []):
+        qualified = node["qualified_name"]
+        column_summaries: list[str] = []
+        for col in node.get("columns", []):
+            raw = col["raw_name"]
+            logical = (col.get("logical_name") or "").strip()
+            column_summaries.append(f"{raw} ({logical})" if logical else raw)
+        summary = f"{qualified}({', '.join(column_summaries)})"
+        table_summaries.append(summary)
+
+    foreign_keys = [
+        f"{edge['from_table']}.{edge['from_column']}→"
+        f"{edge['to_table']}.{edge['to_column']}"
+        for edge in graph.get("edges", [])
+    ]
+
+    result = " ".join(table_summaries)
+    if foreign_keys:
+        result += f" FK: {', '.join(foreign_keys)}"
+    return result
+
+
+def generate_sql_from_graph(
+    connection_id: str,
+    user_question: str,
+    dialect: str = "PostgreSQL",
+) -> dict[str, Any]:
+    """Generate SQL for a question using the connection's stored schema graph.
+
+    Loads the persisted graph, renders it into the table-structure format the
+    SQL agent expects, and delegates to generate_sql().
+
+    Returns {"success": True, "sql": ...} or {"success": False, "error": ...}.
+    """
+    from app.agent.sql_generation_agent import generate_sql
+
+    graph = load_schema_graph(connection_id)
+    if graph is None:
+        return {
+            "success": False,
+            "error": "No schema graph available. Select tables first to build it.",
+        }
+
+    table_structure, table_list = render_graph_table_structure(graph)
 
     return generate_sql(
         user_question=user_question,

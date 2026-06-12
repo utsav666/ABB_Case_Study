@@ -11,7 +11,12 @@ from app.settings_db.exceptions import (
     SettingsDatabaseConfigurationError,
     SettingsDatabaseQueryError,
 )
-from app.settings_db.models import DBConnectionCreate, DBConnectionValidationRequest
+from app.ga_analytics.connection_validation import validate_ga_connection
+from app.settings_db.models import (
+    CONNECTION_TYPE_GOOGLE_ANALYTICS,
+    DBConnectionCreate,
+    DBConnectionValidationRequest,
+)
 from app.settings_db.repositories import DBConnectionRepository, SettingsUserRepository
 from app.settings_db.views import (
     build_db_connection_response,
@@ -95,7 +100,11 @@ class DBConnectionController:
         """
         if not skip_validation:
             self.validate_connection(payload)
-        self._validate_engine(payload.engine)
+        # Engine validation only applies to SQL database connections.
+        if payload.connection_type == CONNECTION_TYPE_GOOGLE_ANALYTICS:
+            pass
+        else:
+            self._validate_engine(payload.engine)
         try:
             persisted_row = self._repository.insert_connection(payload)
         except SettingsDatabaseConfigurationError:
@@ -113,6 +122,10 @@ class DBConnectionController:
         payload: DBConnectionValidationRequest | DBConnectionCreate,
     ) -> dict[str, Any]:
         """Validate a connection payload without persisting it."""
+        if payload.connection_type == CONNECTION_TYPE_GOOGLE_ANALYTICS:
+            validation_result = validate_ga_connection(payload.model_dump())
+            return build_db_connection_validation_response(validation_result)
+
         self._validate_engine(payload.engine)
         validation_result = validate_target_connection_settings(payload.model_dump())
         return build_db_connection_validation_response(validation_result)

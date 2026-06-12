@@ -62,6 +62,7 @@ class GraphState(TypedDict, total=False):
     """Typed state that flows through the graph."""
 
     question: str
+    connection_id: str  # Selected DB connection scoping this run (optional)
     route: str
     route_reasoning: str
     tables: list[str]
@@ -82,10 +83,44 @@ class GraphState(TypedDict, total=False):
 # ============================================================
 
 
+def _connection_graph(state: GraphState):
+    """Return the stored schema graph for the state's connection, or None."""
+    connection_id = state.get("connection_id")
+    if not connection_id:
+        return None
+    try:
+        from app.target_db.controllers import load_schema_graph
+
+        return load_schema_graph(connection_id)
+    except Exception:  # noqa: BLE001 - fall back to default schema on any error
+        logger.exception("Failed to load schema graph for connection %s", connection_id)
+        return None
+
+
+def _is_google_analytics(graph) -> bool:
+    """Return True if the stored graph is a Google Analytics context."""
+    return bool(graph) and graph.get("connection_type") == "google_analytics"
+
+
 def router_node(state: GraphState) -> GraphState:
     """Node 1: Classify user intent."""
     question = state["question"]
-    router = Router()
+    graph = _connection_graph(state)
+
+    # Google Analytics connections always route to the GA agent — there is no
+    # SQL path for them.
+    if _is_google_analytics(graph):
+        logger.info("Router: connection is Google Analytics → route=ga_query")
+        return {"route": "ga_query", "route_reasoning": "Google Analytics connection."}
+
+    # When a SQL connection is selected, route against its real schema graph.
+    if graph is not None:
+        from app.target_db.controllers import render_graph_summary
+
+        router = Router(schema_summary=render_graph_summary(graph))
+    else:
+        router = Router()
+
     decision = router.route_question(question)
     logger.info("Router: route=%s, reasoning=%s", decision.route, decision.reasoning)
     return {
@@ -94,13 +129,77 @@ def router_node(state: GraphState) -> GraphState:
     }
 
 
+def ga_agent_node(state: GraphState) -> GraphState:
+    """Node: answer a question against a Google Analytics connection.
+
+    Generates a GA4 runReport spec from the question + GA context, executes it,
+    and packages the result rows in the same shape build_data_response uses.
+    """
+    question = state["question"]
+    connection_id = state.get("connection_id", "")
+    graph = _connection_graph(state)
+
+    from app.agent.ga_query_agent import generate_ga_report_spec
+    from app.ga_analytics.context_builder import render_ga_summary
+    from app.ga_analytics.report_service import run_ga_report
+
+    ga_context = render_ga_summary(graph) if graph else ""
+    spec_result = generate_ga_report_spec(question, ga_context)
+    if not spec_result["success"]:
+        return {
+            "final_response": {
+                "type": "error",
+                "message": f"Could not build the analytics query: {spec_result['error']}",
+            }
+        }
+
+    try:
+        df = run_ga_report(connection_id, spec_result["spec"])
+    except Exception as error:  # noqa: BLE001 - surface to the user
+        logger.exception("GA report execution failed")
+        return {
+            "final_response": {
+                "type": "error",
+                "message": f"Analytics query failed: {error}",
+            }
+        }
+
+    return {
+        "data": df.to_dict(orient="records"),
+        "final_response": {
+            "type": "data",
+            "data": df.to_dict(orient="records"),
+            "ga_spec": spec_result["spec"],
+        },
+    }
+
+
 def table_resolver_node(state: GraphState) -> GraphState:
     """Node 2: Identify relevant tables. Skip LLM if only 1 table exists."""
     question = state["question"]
 
-    # Check how many tables exist in schema
-    schema_summary = Summarizer.summarize_schema()
-    # Quick check: if schema has only 1 table, skip LLM
+    # When a connection is selected, resolve tables from its schema graph.
+    graph = _connection_graph(state)
+    if graph is not None:
+        from app.target_db.controllers import render_graph_summary
+
+        all_tables = [node["qualified_name"] for node in graph.get("nodes", [])]
+        if len(all_tables) <= 1:
+            logger.info("Connection has <=1 table — skipping table identification")
+            return {"tables": all_tables}
+        # Identify against the connection's real schema, not sample data.
+        result = identify_tables(
+            question, schema_summary=render_graph_summary(graph)
+        )
+        if result["success"] and result["tables"]:
+            logger.info("Tables identified: %s", result["tables"])
+            return {"tables": result["tables"]}
+        logger.warning(
+            "Table identification empty/failed; using all connection tables"
+        )
+        return {"tables": all_tables}
+
+    # Default (sample/config) schema path
     from app.sampledata.data_loader import DataLoader
 
     data = DataLoader.load_data()
@@ -127,7 +226,20 @@ def generate_sql_node(state: GraphState) -> GraphState:
     tables = state.get("tables", [])
     error_context = state.get("sql_error", "")
 
-    result = generate_sql(question, tables, error_context=error_context)
+    # When a connection is selected, feed the agent its real schema graph.
+    graph = _connection_graph(state)
+    if graph is not None:
+        from app.target_db.controllers import render_graph_table_structure
+
+        table_structure, all_tables = render_graph_table_structure(graph)
+        result = generate_sql(
+            question,
+            tables or all_tables,
+            error_context=error_context,
+            table_structure=table_structure,
+        )
+    else:
+        result = generate_sql(question, tables, error_context=error_context)
 
     if result["success"]:
         logger.info("SQL generated: %s", result["sql"][:100])
@@ -468,6 +580,8 @@ def increment_retry_node(state: GraphState) -> GraphState:
 def route_after_router(state: GraphState) -> str:
     """After router: which path to take?"""
     route = state.get("route", "")
+    if route == "ga_query":
+        return "ga_agent"
     if route in ("sql_query", "sql_and_chart"):
         return "sql_path"
     elif route == "schema_info":
@@ -534,6 +648,7 @@ def build_graph() -> StateGraph:
     graph.add_node("general_answer", general_answer_node)
     graph.add_node("build_data_response", build_data_response_node)
     graph.add_node("increment_retry", increment_retry_node)
+    graph.add_node("ga_agent", ga_agent_node)  # Google Analytics path
 
     # Entry point
     graph.set_entry_point("router")
@@ -546,6 +661,7 @@ def build_graph() -> StateGraph:
             "sql_path": "table_resolver",
             "schema_info": "schema_info",
             "general": "general_answer",
+            "ga_agent": "ga_agent",
         },
     )
 
@@ -596,6 +712,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("build_data_response", END)
     graph.add_edge("schema_info", END)
     graph.add_edge("general_answer", END)
+    graph.add_edge("ga_agent", END)  # Google Analytics path terminates here
 
     return graph
 
@@ -618,10 +735,17 @@ class GraphOrchestrator:
     - Use resume() class method to continue after human input
     """
 
-    def __init__(self, user_question: str, thread_id: str | None = None):
+    def __init__(
+        self,
+        user_question: str,
+        thread_id: str | None = None,
+        connection_id: str | None = None,
+    ):
         self.user_question = user_question
         # ### HITL — thread_id enables state persistence for interrupt/resume
         self.thread_id = thread_id or f"thread-{id(self)}"
+        # Optional DB connection that scopes this run to a real schema graph.
+        self.connection_id = connection_id
 
     def executor(self) -> dict[str, Any]:
         """Run the graph and return the result.
@@ -631,6 +755,7 @@ class GraphOrchestrator:
         """
         initial_state: GraphState = {
             "question": self.user_question,
+            "connection_id": self.connection_id or "",
             "route": "",
             "route_reasoning": "",
             "tables": [],

@@ -27,6 +27,7 @@ class RoutingDecision(BaseModel):
         "general_answer",
         "explanation",
         "follow_up",
+        "ga_query",
     ]
     reasoning: str
 
@@ -35,8 +36,14 @@ class RoutingDecision(BaseModel):
 # Router Agent (Decision Only)
 # ----------------------------
 class Router:
-    def __init__(self):
-        self.schema_summary = Summarizer.summarize_schema()
+    def __init__(self, schema_summary: str | None = None):
+        # Allow callers to inject a connection-scoped schema summary; fall back
+        # to the default (sample/config) summary when none is provided.
+        self.schema_summary = (
+            schema_summary
+            if schema_summary is not None
+            else Summarizer.summarize_schema()
+        )
 
         self.llm = ChatOpenAI(
             model="gpt-4o",

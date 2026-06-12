@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 load_env()
 
 
+def _strip_sql_fences(text: str) -> str:
+    """Remove surrounding markdown code fences (```sql ... ```) if present."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        newline = cleaned.find("\n")
+        if newline != -1:
+            cleaned = cleaned[newline + 1 :]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[: cleaned.rfind("```")]
+    return cleaned.strip()
+
+
 def generate_sql(
     user_question: str,
     table_list: list[str],
@@ -63,13 +75,18 @@ def generate_sql(
             messages=[
                 {
                     "role": "system",
-                    "content": f"You are a world-class {dialect} SQL generator.",
+                    "content": (
+                        f"You are a world-class {dialect} SQL generator. "
+                        "Return ONLY the SQL query — no explanation, no prose, "
+                        "no markdown code fences. If a previous attempt failed, "
+                        "return a corrected SQL query, never a description of the error."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0,
         )
-        sql = response.choices[0].message.content.strip()
+        sql = _strip_sql_fences(response.choices[0].message.content.strip())
         logger.debug("Generated SQL: %s", sql)
         return {"success": True, "sql": sql}
     except Exception as e:

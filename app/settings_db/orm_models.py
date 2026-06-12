@@ -92,15 +92,26 @@ class SettingsDBConnectionEntity(SettingsBase):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    engine: Mapped[str] = mapped_column(String(50), nullable=False)
-    db_host: Mapped[str] = mapped_column(String(255), nullable=False)
-    db_port: Mapped[int] = mapped_column(Integer, nullable=False)
-    db_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    db_user: Mapped[str] = mapped_column(String(255), nullable=False)
-    db_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Discriminator: 'database' (SQL) or 'google_analytics' (GA4).
+    connection_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default=text("'database'"),
+        default="database",
+    )
+    # SQL fields — nullable so non-database connection types can omit them.
+    engine: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    db_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    db_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    db_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    db_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    db_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     db_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
     use_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_options: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Google Analytics (GA4) fields.
+    ga_property_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ga_service_account_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_healthy: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean,

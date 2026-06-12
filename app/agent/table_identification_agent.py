@@ -26,15 +26,24 @@ class TableIdentification(BaseModel):
     )
 
 
-def identify_tables(user_question: str) -> dict[str, Any]:
+def identify_tables(
+    user_question: str, schema_summary: str | None = None
+) -> dict[str, Any]:
     """Identify relevant tables for a user question.
+
+    Parameters
+    ----------
+    user_question: The natural-language question.
+    schema_summary: Optional connection-scoped schema summary; falls back to the
+        default (sample/config) summary when not provided.
 
     Returns
     -------
     {"success": True, "tables": [...]} or {"success": False, "error": "..."}
     """
     try:
-        schema_summary = Summarizer.summarize_schema()
+        if schema_summary is None:
+            schema_summary = Summarizer.summarize_schema()
         llm = ChatOpenAI(
             model="gpt-4",
             temperature=0,

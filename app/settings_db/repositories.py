@@ -129,20 +129,24 @@ class DBConnectionRepository:
         statement = insert(SettingsDBConnectionEntity).values(
             workspace_id=payload.workspace_id,
             name=payload.name,
-            engine=payload.engine,
-            db_host=payload.db_host,
+            connection_type=payload.connection_type,
+            engine=payload.engine or None,
+            db_host=payload.db_host or None,
             db_port=payload.db_port,
-            db_name=payload.db_name,
-            db_user=payload.db_user,
-            db_password=payload.db_password,
+            db_name=payload.db_name or None,
+            db_user=payload.db_user or None,
+            db_password=payload.db_password or None,
             db_schema=payload.db_schema,
             use_ssl=payload.use_ssl,
             extra_options=payload.extra_options or None,
+            ga_property_id=payload.ga_property_id or None,
+            ga_service_account_json=payload.ga_service_account_json or None,
         )
         statement = statement.returning(
             SettingsDBConnectionEntity.id,
             SettingsDBConnectionEntity.workspace_id,
             SettingsDBConnectionEntity.name,
+            SettingsDBConnectionEntity.connection_type,
             SettingsDBConnectionEntity.engine,
             SettingsDBConnectionEntity.db_host,
             SettingsDBConnectionEntity.db_port,
@@ -151,7 +155,9 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_schema,
             SettingsDBConnectionEntity.use_ssl,
             SettingsDBConnectionEntity.extra_options,
+            SettingsDBConnectionEntity.ga_property_id,
             SettingsDBConnectionEntity.is_healthy,
+            SettingsDBConnectionEntity.is_active,
             SettingsDBConnectionEntity.last_synced_at,
             SettingsDBConnectionEntity.created_at,
         )
@@ -180,6 +186,7 @@ class DBConnectionRepository:
 
         statement = select(
             SettingsDBConnectionEntity.id,
+            SettingsDBConnectionEntity.connection_type,
             SettingsDBConnectionEntity.engine,
             SettingsDBConnectionEntity.db_host,
             SettingsDBConnectionEntity.db_port,
@@ -189,6 +196,8 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_schema,
             SettingsDBConnectionEntity.use_ssl,
             SettingsDBConnectionEntity.extra_options,
+            SettingsDBConnectionEntity.ga_property_id,
+            SettingsDBConnectionEntity.ga_service_account_json,
         ).where(SettingsDBConnectionEntity.id == parsed_connection_id)
 
         with self._gateway.get_session() as session:
@@ -205,10 +214,13 @@ class DBConnectionRepository:
         Returns:
             list[dict[str, Any]]: List of all connection rows.
         """
+        # Note: ga_service_account_json is intentionally NOT selected here (it's
+        # a secret, like db_password, which is also excluded from listings).
         statement = select(
             SettingsDBConnectionEntity.id,
             SettingsDBConnectionEntity.workspace_id,
             SettingsDBConnectionEntity.name,
+            SettingsDBConnectionEntity.connection_type,
             SettingsDBConnectionEntity.engine,
             SettingsDBConnectionEntity.db_host,
             SettingsDBConnectionEntity.db_port,
@@ -216,6 +228,7 @@ class DBConnectionRepository:
             SettingsDBConnectionEntity.db_user,
             SettingsDBConnectionEntity.db_schema,
             SettingsDBConnectionEntity.use_ssl,
+            SettingsDBConnectionEntity.ga_property_id,
             SettingsDBConnectionEntity.is_healthy,
             SettingsDBConnectionEntity.is_active,
             SettingsDBConnectionEntity.last_synced_at,

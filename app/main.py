@@ -930,9 +930,17 @@ async def chat(
 ) -> dict[str, Any]:
     """Run the orchestrator and return a JSON response."""
     normalized_question = (question or message or query or prompt or text or "").strip()
+    # Read the body once so we can pull both the question (fallback) and the
+    # optional connection_id that scopes the run to a real schema graph.
+    body_payload = await read_request_payload(request)
     if not normalized_question:
-        payload = await read_request_payload(request)
-        normalized_question = extract_question_from_payload(payload)
+        normalized_question = extract_question_from_payload(body_payload)
+
+    connection_id = None
+    if isinstance(body_payload, dict):
+        raw_connection_id = body_payload.get("connection_id")
+        if isinstance(raw_connection_id, str) and raw_connection_id.strip():
+            connection_id = raw_connection_id.strip()
 
     if not normalized_question:
         return jsonable_encoder(
@@ -962,7 +970,9 @@ async def chat(
         def _run_orchestrator() -> Any:
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
                 return GraphOrchestrator(
-                    normalized_question, thread_id=thread_id
+                    normalized_question,
+                    thread_id=thread_id,
+                    connection_id=connection_id,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
