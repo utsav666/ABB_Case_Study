@@ -20,6 +20,7 @@ class SqlExec:
     def sql_executor(self, sql_query: str) -> Union[pd.DataFrame, str]:
         try:
             db_details = self.data_path["data_base_detail"]
+            # Build connection URL with search_path to include both public and other schemas
             url = f"postgresql://{db_details['user']}:{db_details['password']}@{db_details['host']}:{db_details['port']}/{db_details['database']}"
             engine = create_engine(url)
             df = pd.read_sql_query(sql_query, engine)

@@ -64,6 +64,7 @@ class GraphState(TypedDict, total=False):
     question: str
     connection_id: str  # Selected DB connection scoping this run (optional)
     conversation_history: str  # Prior conversation context from LangChain memory
+    thread_id: str  # Conversation thread ID for LLM tracking
     route: str
     route_reasoning: str
     tables: list[str]
@@ -77,6 +78,8 @@ class GraphState(TypedDict, total=False):
     hitl_triggered: bool  # Whether HITL was triggered in this run
     hitl_type: str  # "cardinality_filter" or "chart_approval"
     chart_suggestion: dict[str, Any]  # Suggested chart config before human approval
+    ### LLM Cost Tracking
+    user_message_id: str | None  # UUID of user message for LLM tracking
 
 
 # ============================================================
@@ -122,7 +125,28 @@ def router_node(state: GraphState) -> GraphState:
     else:
         router = Router()
 
-    decision = router.route_question(question)
+    decision, response = router.route_question(question)
+
+    # Track LLM call for routing
+    if state.get("user_message_id"):
+        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        from app.settings_db.repositories import ConversationRepository
+
+        usage = extract_langchain_usage(response)
+        model = get_model_from_langchain_response(response, default="gpt-4o")
+
+        repo = ConversationRepository()
+        track_llm_call(
+            repo=repo,
+            message_id=state["user_message_id"],
+            thread_id=state.get("thread_id", ""),
+            llm_purpose="routing",
+            model=model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+
     logger.info("Router: route=%s, reasoning=%s", decision.route, decision.reasoning)
     return {
         "route": decision.route,
@@ -192,6 +216,28 @@ def table_resolver_node(state: GraphState) -> GraphState:
         result = identify_tables(
             question, schema_summary=render_graph_summary(graph)
         )
+
+        # Track LLM call for table identification
+        if result.get("success") and result.get("response") and state.get("user_message_id"):
+            from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+            from app.settings_db.repositories import ConversationRepository
+
+            response = result["response"]
+            usage = extract_langchain_usage(response)
+            model = get_model_from_langchain_response(response, default="gpt-4")
+
+            repo = ConversationRepository()
+            track_llm_call(
+                repo=repo,
+                message_id=state["user_message_id"],
+                thread_id=state.get("thread_id", ""),
+                llm_purpose="table-identifier",
+                model=model,
+                prompt_tokens=usage["prompt_tokens"],
+                completion_tokens=usage["completion_tokens"],
+                total_tokens=usage["total_tokens"],
+            )
+
         if result["success"] and result["tables"]:
             logger.info("Tables identified: %s", result["tables"])
             return {"tables": result["tables"]}
@@ -212,6 +258,28 @@ def table_resolver_node(state: GraphState) -> GraphState:
 
     # Multiple tables — use LLM to identify relevant ones
     result = identify_tables(question)
+
+    # Track LLM call for table identification
+    if result.get("success") and result.get("response") and state.get("user_message_id") :
+        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        from app.settings_db.repositories import ConversationRepository
+
+        response = result["response"]
+        usage = extract_langchain_usage(response)
+        model = get_model_from_langchain_response(response, default="gpt-4")
+
+        repo = ConversationRepository()
+        track_llm_call(
+            repo=repo,
+            message_id=state["user_message_id"],
+            thread_id=state.get("thread_id", ""),
+            llm_purpose="table-identifier",
+            model=model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+
     if result["success"]:
         logger.info("Tables identified: %s", result["tables"])
         return {"tables": result["tables"]}
@@ -247,6 +315,28 @@ def generate_sql_node(state: GraphState) -> GraphState:
             tables,
             error_context=error_context,
             conversation_history=conversation_history,
+        )
+
+    # Track LLM call for SQL generation
+    if result.get("success") and state.get("user_message_id") :
+        from app.utils.llm_tracker import track_llm_call
+        from app.settings_db.repositories import ConversationRepository
+
+        usage = result.get("usage", {})
+        cost_info = result.get("cost", {})
+        retry_count = state.get("retry_count", 0)
+
+        repo = ConversationRepository()
+        track_llm_call(
+            repo=repo,
+            message_id=state["user_message_id"],
+            thread_id=state.get("thread_id", ""),
+            llm_purpose="sql-generator",
+            model=cost_info.get("model", "gpt-4"),
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
+            metadata={"retry_attempt": retry_count} if retry_count > 0 else None,
         )
 
     if result["success"]:
@@ -458,6 +548,27 @@ def chart_approval_node(state: GraphState) -> GraphState:
     chart_context = ChartContext.build_chart_context(data)
     result = decide_chart(question, chart_context)
 
+    # Track LLM call for chart generation
+    if result.get("success") and result.get("response") and state.get("user_message_id") :
+        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        from app.settings_db.repositories import ConversationRepository
+
+        response = result["response"]
+        usage = extract_langchain_usage(response)
+        model = get_model_from_langchain_response(response, default="gpt-4o")
+
+        repo = ConversationRepository()
+        track_llm_call(
+            repo=repo,
+            message_id=state["user_message_id"],
+            thread_id=state.get("thread_id", ""),
+            llm_purpose="chart-generator",
+            model=model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+
     if not result["success"]:
         return {
             "final_response": {
@@ -555,6 +666,28 @@ def general_answer_node(state: GraphState) -> GraphState:
     result = general_answer(
         state["question"], router_reasoning=state.get("route_reasoning", "")
     )
+
+    # Track LLM call for fallback/general answers
+    if result.get("success") and result.get("response") and state.get("user_message_id") :
+        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        from app.settings_db.repositories import ConversationRepository
+
+        response = result["response"]
+        usage = extract_langchain_usage(response)
+        model = get_model_from_langchain_response(response, default="gpt-4o")
+
+        repo = ConversationRepository()
+        track_llm_call(
+            repo=repo,
+            message_id=state["user_message_id"],
+            thread_id=state.get("thread_id", ""),
+            llm_purpose="fallback-answer",
+            model=model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+
     if result["success"]:
         return {"final_response": {"type": "text", "message": result["answer"]}}
     return {"final_response": {"type": "error", "message": result["error"]}}
@@ -749,6 +882,7 @@ class GraphOrchestrator:
         thread_id: str | None = None,
         connection_id: str | None = None,
         conversation_history: str = "",
+        user_message_id: str | None = None,
     ):
         self.user_question = user_question
         # ### HITL — thread_id enables state persistence for interrupt/resume
@@ -757,6 +891,8 @@ class GraphOrchestrator:
         self.connection_id = connection_id
         # Prior conversation history formatted as text for LLM context
         self.conversation_history = conversation_history
+        # LLM cost tracking
+        self.user_message_id = user_message_id
 
     def executor(self) -> dict[str, Any]:
         """Run the graph and return the result.
@@ -766,8 +902,10 @@ class GraphOrchestrator:
         """
         initial_state: GraphState = {
             "question": self.user_question,
+            "thread_id": self.thread_id,
             "connection_id": self.connection_id or "",
             "conversation_history": self.conversation_history,
+            "user_message_id": self.user_message_id,
             "route": "",
             "route_reasoning": "",
             "tables": [],

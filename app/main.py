@@ -1027,13 +1027,15 @@ async def chat(
             thread_id=thread_id,
         )
 
-    # Persist the user's message
+    # Persist the user's message and capture message_id for LLM tracking
+    user_message_id = None
     if workspace_id:
-        conversation_manager.add_message(
+        user_msg = conversation_manager.add_message(
             thread_id=thread_id,
             role="user",
             content=normalized_question,
         )
+        user_message_id = user_msg.get("id")
 
     buffer = io.StringIO()
     try:
@@ -1045,6 +1047,7 @@ async def chat(
                     thread_id=thread_id,
                     connection_id=connection_id,
                     conversation_history=prior_history_text,
+                    user_message_id=user_message_id,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)

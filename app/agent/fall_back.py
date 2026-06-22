@@ -25,7 +25,7 @@ def general_answer(
 
     Returns
     -------
-    {"success": True, "answer": "..."} or {"success": False, "error": "..."}
+    {"success": True, "answer": "...", "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
         llm = ChatOpenAI(
@@ -48,7 +48,7 @@ def general_answer(
 
         response = llm.invoke(messages)
         logger.debug("General answer generated")
-        return {"success": True, "answer": response.content}
+        return {"success": True, "answer": response.content, "response": response}
     except Exception as e:
         logger.exception("General answer failed")
         return {"success": False, "error": str(e)}

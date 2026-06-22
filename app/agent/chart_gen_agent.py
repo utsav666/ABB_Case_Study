@@ -35,7 +35,7 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
 
     Returns
     -------
-    {"success": True, "chart": ChartDecision} or {"success": False, "error": "..."}
+    {"success": True, "chart": ChartDecision, "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
         llm = ChatOpenAI(
@@ -50,7 +50,7 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
         parsed = parser.parse(str(response.content))
         decision = ChartDecision(**parsed)
         logger.debug("Chart decision: %s", decision)
-        return {"success": True, "chart": decision}
+        return {"success": True, "chart": decision, "response": response}
     except Exception as e:
         logger.exception("Chart decision failed")
         return {"success": False, "error": str(e)}

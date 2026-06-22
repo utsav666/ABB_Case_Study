@@ -39,7 +39,7 @@ def identify_tables(
 
     Returns
     -------
-    {"success": True, "tables": [...]} or {"success": False, "error": "..."}
+    {"success": True, "tables": [...], "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
         if schema_summary is None:
@@ -59,7 +59,11 @@ def identify_tables(
         response = llm.invoke(formatted)
         parsed = parser.parse(str(response.content))
         logger.debug("Identified tables: %s", parsed.get("relevant_tables"))
-        return {"success": True, "tables": parsed.get("relevant_tables", [])}
+        return {
+            "success": True,
+            "tables": parsed.get("relevant_tables", []),
+            "response": response,  # Include response for token tracking
+        }
     except Exception as e:
         logger.exception("Table identification failed")
         return {"success": False, "error": str(e)}

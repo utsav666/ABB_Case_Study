@@ -60,7 +60,12 @@ class Router:
     # ----------------------------
     # PUBLIC METHOD
     # ----------------------------
-    def route_question(self, question: str) -> RoutingDecision:
+    def route_question(self, question: str) -> tuple[RoutingDecision, any]:
+        """Route a question and return both decision and response for tracking.
+
+        Returns:
+            Tuple of (RoutingDecision, response) where response contains usage metadata
+        """
         # Prepare full prompt
         messages = self.prompt.format_messages(
             schema_summary=self.schema_summary, chat_history="", question=question
@@ -71,7 +76,7 @@ class Router:
 
         # Parse into RoutingDecision
         parsed = self.parser.parse(str(response.content))
-        return RoutingDecision(**parsed)
+        return RoutingDecision(**parsed), response
 
 
 # if __name__ == "__main__":
