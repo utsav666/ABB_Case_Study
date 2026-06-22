@@ -14,6 +14,7 @@ from app.settings_db.orm_models import (
     ColumnRelationEntity,
     ConversationMessageEntity,
     ConversationThreadEntity,
+    LLMCallEntity,
     SchemaGraphEntity,
     SelectedTableEntity,
     SettingsDBConnectionEntity,
@@ -993,6 +994,66 @@ class ConversationRepository:
         with self._gateway.get_session() as session:
             row = session.execute(message_statement).mappings().first()
             session.execute(thread_update)
+            session.commit()
+
+        if row is None:
+            return {}
+
+        result = dict(row)
+        result["id"] = str(result["id"])
+        return result
+
+    def add_llm_call(
+        self,
+        message_id: str,
+        thread_id: str,
+        llm_model: str,
+        llm_provider: str,
+        llm_purpose: str,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int = 0,
+        cost_usd: float = 0.0,
+        duration_ms: int | None = None,
+        request_metadata: dict | None = None,
+    ) -> dict[str, Any]:
+        """Track an individual LLM API call for a message.
+
+        Args:
+            message_id: UUID of the conversation message.
+            thread_id: Conversation thread identifier.
+            llm_model: LLM model used (e.g., "gpt-4", "gpt-3.5-turbo").
+            llm_provider: Provider name (e.g., "openai", "anthropic").
+            llm_purpose: Purpose of the call (e.g., "sql-generator", "table-identifier").
+            prompt_tokens: Number of input tokens.
+            completion_tokens: Number of output tokens.
+            total_tokens: Total tokens used.
+            cost_usd: Cost in USD.
+            duration_ms: Duration of the API call in milliseconds.
+            request_metadata: Additional metadata (retry attempt, error info, etc.).
+
+        Returns:
+            dict with llm_call id and created_at.
+        """
+        llm_call_statement = insert(LLMCallEntity).values(
+            message_id=message_id,
+            thread_id=thread_id,
+            llm_model=llm_model,
+            llm_provider=llm_provider,
+            llm_purpose=llm_purpose,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost_usd,
+            duration_ms=duration_ms,
+            request_metadata=request_metadata,
+        ).returning(
+            LLMCallEntity.id,
+            LLMCallEntity.created_at,
+        )
+
+        with self._gateway.get_session() as session:
+            row = session.execute(llm_call_statement).mappings().first()
             session.commit()
 
         if row is None:

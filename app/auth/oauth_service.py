@@ -24,6 +24,8 @@ DEFAULT_OAUTH_SESSION_PATH = "/auth/session"
 logger = logging.getLogger(__name__)
 
 _WELL_KNOWN_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_USERINFO_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_USERINFO_CACHE_TTL_SECONDS = 300  # Cache userinfo for 5 minutes
 
 
 def get_oauth_http_timeout_seconds() -> tuple[float, float]:
@@ -254,9 +256,24 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
 
     For Microsoft OAuth, fetches both OIDC userinfo and Microsoft Graph /me endpoint
     to get userPrincipalName (corporate email).
+
+    Results are cached for 5 minutes to reduce API calls and prevent rate limiting.
     """
     if not access_token.strip():
         return {}
+
+    # Check cache first (use first 32 chars of token as cache key for security)
+    cache_key = access_token[:32]
+    current_time = time.monotonic()
+
+    if cache_key in _USERINFO_CACHE:
+        cached_time, cached_data = _USERINFO_CACHE[cache_key]
+        if current_time - cached_time < _USERINFO_CACHE_TTL_SECONDS:
+            logger.debug("Using cached userinfo (age: %.1fs)", current_time - cached_time)
+            return cached_data
+        else:
+            # Remove stale cache entry
+            del _USERINFO_CACHE[cache_key]
 
     provider_name = get_oauth_provider_name()
     timeout_seconds = get_oauth_http_timeout_seconds()
@@ -328,6 +345,10 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
             "picture": avatar_url,
         }
 
+        # Cache the result
+        _USERINFO_CACHE[cache_key] = (current_time, user_payload)
+        logger.debug("Cached userinfo for token prefix %s", cache_key[:8])
+
         return user_payload
 
     # For other providers, use standard OIDC userinfo endpoint
@@ -350,6 +371,10 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
 
     if not isinstance(user_payload, dict):
         raise ValueError("OAuth user info response must be a JSON object.")
+
+    # Cache the result
+    _USERINFO_CACHE[cache_key] = (current_time, user_payload)
+    logger.debug("Cached userinfo for token prefix %s", cache_key[:8])
 
     return user_payload
 

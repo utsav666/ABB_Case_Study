@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text, func, text
+from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSON as PostgreSQLJSON
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -298,6 +298,49 @@ class ConversationMessageEntity(SettingsBase):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class LLMCallEntity(SettingsBase):
+    """ORM entity for settings.llm_calls - tracks individual LLM API calls."""
+
+    __tablename__ = "llm_calls"
+    __table_args__ = {"schema": "settings"}
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.uuid_generate_v4(),
+    )
+    message_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("settings.conversation_messages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    thread_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # LLM details
+    llm_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    llm_provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    llm_purpose: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # Token usage
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Cost
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Timing
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Metadata (for storing additional context like retry attempts, errors, etc.)
+    request_metadata: Mapped[dict | None] = mapped_column(PostgreSQLJSON, nullable=True)
 
 
 class WorkspaceMemberEntity(SettingsBase):

@@ -157,16 +157,27 @@ def get_column_distinct_values(
     # ### HITL — Resolve schema from schema_preserve.json (not hardcoded)
     from app.sampledata.data_loader import DataLoader
 
-    schema_data = DataLoader.load_data()
-    table_schema = ""
-    if "tables" in schema_data and table_name in schema_data["tables"]:
-        table_schema = schema_data["tables"][table_name].get("schema", "")
+    # Parse table_name which might be "schema.table" or just "table"
+    if "." in table_name:
+        parts = table_name.split(".", 1)
+        table_schema = parts[0]
+        actual_table_name = parts[1]
+    else:
+        # Try to get schema from config
+        schema_data = DataLoader.load_data()
+        table_schema = ""
+        if "tables" in schema_data and table_name in schema_data["tables"]:
+            table_schema = schema_data["tables"][table_name].get("schema", "")
+        actual_table_name = table_name
 
     qualified_table = (
-        f'{table_schema}."{table_name}"' if table_schema else f'"{table_name}"'
+        f'"{table_schema}"."{actual_table_name}"' if table_schema else f'"{actual_table_name}"'
     )
 
+    logger.info("### DEBUG — table_name=%s, table_schema=%s, actual_table_name=%s, qualified_table=%s",
+                table_name, table_schema, actual_table_name, qualified_table)
     count_sql = f'SELECT COUNT(DISTINCT "{column_name}") as cnt FROM {qualified_table}'
+    logger.info("### DEBUG — Generated count_sql: %s", count_sql)
     count_result = executor.sql_executor(count_sql)
 
     if isinstance(count_result, str):

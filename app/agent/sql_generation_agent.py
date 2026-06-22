@@ -159,6 +159,20 @@ def generate_sql(
         token_usage = _extract_token_usage(response)
         cost_summary = _build_cost_summary(DEFAULT_SQL_MODEL, token_usage)
         logger.debug("Generated SQL: %s", sql)
+
+        # Validate that the response is actually SQL, not an error message
+        sql_lower = sql.lower().strip()
+        if not sql_lower or any(sql_lower.startswith(prefix) for prefix in [
+            "sorry", "i cannot", "i can't", "unable to", "error:",
+            "the provided", "there is no", "no column", "not possible"
+        ]):
+            error_msg = sql if len(sql) < 200 else sql[:200] + "..."
+            logger.warning("LLM returned error message instead of SQL: %s", error_msg)
+            return {
+                "success": False,
+                "error": f"Cannot generate SQL: {error_msg}"
+            }
+
         return {
             "success": True,
             "sql": sql,

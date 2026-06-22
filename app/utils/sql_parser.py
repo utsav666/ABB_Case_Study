@@ -43,8 +43,11 @@ def extract_where_filters(sql: str, dialect: str = "postgres") -> list[FilterCol
 
     try:
         parsed = sqlglot.parse_one(sql, read=dialect)
-    except sqlglot.errors.ParseError as e:
+    except (sqlglot.errors.ParseError, sqlglot.errors.TokenError) as e:
         logger.warning("### HITL — SQL parse failed: %s", e)
+        return filters
+    except Exception as e:
+        logger.warning("### HITL — Unexpected SQL parse error: %s", e)
         return filters
 
     # Find all WHERE conditions
