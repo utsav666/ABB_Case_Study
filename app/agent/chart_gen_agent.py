@@ -7,11 +7,11 @@ from typing import Any, Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_chart_prompt
+from app.utils.llm_factory import create_chat_llm
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,7 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
     {"success": True, "chart": ChartDecision, "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        llm = create_chat_llm(purpose="chart_generation", temperature=0)
         parser = JsonOutputParser(pydantic_object=ChartDecision)
         prompt = ChatPromptTemplate.from_template(sample_chart_prompt)
         messages = prompt.format_messages(question=question, context=context)

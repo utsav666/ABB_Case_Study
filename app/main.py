@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.auth.oauth_router import auth_router
-from app.envsetup.env_loader import load_env
+from app.envsetup.env_loader import get_llm_model, load_env
 from app.settings_db.controllers import (
     create_db_connection as create_settings_db_connection,
 )
@@ -657,7 +657,7 @@ def post_schema_configuration(payload: SchemaConfigRequest) -> dict[str, Any]:
                 {
                     "workspace_id": _UUID(payload.workspace_id),
                     "name": "Data Assistant",
-                    "model_version": "gpt-4o",
+                    "model_version": get_llm_model(),
                     "config": schema_config,
                     "is_public_to_team": True,
                 }

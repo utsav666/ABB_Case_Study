@@ -6,17 +6,16 @@ import logging
 import os
 from typing import Any
 
-import openai
-
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import get_llm_model, load_env
 from app.prompt.prompts import sql_gen_prompts
+from app.utils.llm_factory import create_chat_llm
 from app.utils.table_struc_creation import TabStrucCreation
 
 logger = logging.getLogger(__name__)
 
 load_env()
 
-DEFAULT_SQL_MODEL = os.getenv("SQL_GENERATION_MODEL", "gpt-4")
+DEFAULT_SQL_MODEL = os.getenv("SQL_GENERATION_MODEL", "").strip().strip("'\"")
 
 # Estimated USD pricing per 1M tokens (input, output).
 MODEL_PRICING_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
@@ -46,14 +45,15 @@ def _normalize_model_name(model_name: str) -> str:
 
 
 def _extract_token_usage(response: Any) -> dict[str, int]:
-    """Extract token usage fields from an OpenAI response object."""
-    usage = getattr(response, "usage", None)
-    if usage is None:
+    """Extract token usage fields from a LangChain AIMessage response."""
+    metadata = getattr(response, "response_metadata", {})
+    usage = metadata.get("token_usage", {})
+    if not usage:
         return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-    completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
-    total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+    prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+    completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+    total_tokens = int(usage.get("total_tokens", 0) or 0)
     return {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
@@ -114,7 +114,12 @@ def generate_sql(
     {"success": True, "sql": "..."} or {"success": False, "error": "..."}
     """
     try:
-        openai.api_key = get_openai_api_key()
+        selected_sql_model = DEFAULT_SQL_MODEL or get_llm_model("sql_generation")
+        llm = create_chat_llm(
+            purpose="sql_generation",
+            model=selected_sql_model,
+            temperature=0,
+        )
         if table_structure is None:
             table_structure = TabStrucCreation(table_list).struc_creation()
 
@@ -139,25 +144,26 @@ def generate_sql(
                 f"Please fix the SQL query based on this error.\n"
             )
 
-        response = openai.chat.completions.create(
-            model=DEFAULT_SQL_MODEL,
-            messages=[
+        response = llm.invoke(
+            [
                 {
                     "role": "system",
                     "content": (
                         f"You are a world-class {dialect} SQL generator. "
-                        "Return ONLY the SQL query — no explanation, no prose, "
+                        "Return ONLY the SQL query - no explanation, no prose, "
                         "no markdown code fences. If a previous attempt failed, "
                         "return a corrected SQL query, never a description of the error."
                     ),
                 },
                 {"role": "user", "content": prompt},
-            ],
-            temperature=0,
+            ]
         )
-        sql = _strip_sql_fences(response.choices[0].message.content.strip())
+        sql = _strip_sql_fences(str(response.content).strip())
         token_usage = _extract_token_usage(response)
-        cost_summary = _build_cost_summary(DEFAULT_SQL_MODEL, token_usage)
+        model_from_response = getattr(response, "response_metadata", {}).get(
+            "model_name", selected_sql_model
+        )
+        cost_summary = _build_cost_summary(model_from_response, token_usage)
         logger.debug("Generated SQL: %s", sql)
 
         # Validate that the response is actually SQL, not an error message

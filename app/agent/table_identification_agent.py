@@ -7,11 +7,11 @@ from typing import Any, List
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import table_identify_prompts
+from app.utils.llm_factory import create_chat_llm
 from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
@@ -44,11 +44,7 @@ def identify_tables(
     try:
         if schema_summary is None:
             schema_summary = Summarizer.summarize_schema()
-        llm = ChatOpenAI(
-            model="gpt-4",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        llm = create_chat_llm(purpose="table_identification", temperature=0)
         parser = JsonOutputParser(pydantic_object=TableIdentification)
         prompt = ChatPromptTemplate.from_template(table_identify_prompts)
         formatted = prompt.format_messages(

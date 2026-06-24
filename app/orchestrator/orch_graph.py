@@ -39,7 +39,7 @@ from app.agent.value_resolver_agent import (  ### HITL
     get_fuzzy_matches,
     resolve_filter_value,
 )
-from app.envsetup.env_loader import load_env
+from app.envsetup.env_loader import get_llm_model, load_env
 from app.router.route_improvisation import Router
 from app.utils.char_context import ChartContext
 from app.utils.schema_summarizer import Summarizer
@@ -133,7 +133,9 @@ def router_node(state: GraphState) -> GraphState:
         from app.settings_db.repositories import ConversationRepository
 
         usage = extract_langchain_usage(response)
-        model = get_model_from_langchain_response(response, default="gpt-4o")
+        model = get_model_from_langchain_response(
+            response, default=get_llm_model("router")
+        )
 
         repo = ConversationRepository()
         track_llm_call(
@@ -224,7 +226,9 @@ def table_resolver_node(state: GraphState) -> GraphState:
 
             response = result["response"]
             usage = extract_langchain_usage(response)
-            model = get_model_from_langchain_response(response, default="gpt-4")
+            model = get_model_from_langchain_response(
+                response, default=get_llm_model("table_identification")
+            )
 
             repo = ConversationRepository()
             track_llm_call(
@@ -266,7 +270,9 @@ def table_resolver_node(state: GraphState) -> GraphState:
 
         response = result["response"]
         usage = extract_langchain_usage(response)
-        model = get_model_from_langchain_response(response, default="gpt-4")
+        model = get_model_from_langchain_response(
+            response, default=get_llm_model("table_identification")
+        )
 
         repo = ConversationRepository()
         track_llm_call(
@@ -555,7 +561,9 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
         response = result["response"]
         usage = extract_langchain_usage(response)
-        model = get_model_from_langchain_response(response, default="gpt-4o")
+        model = get_model_from_langchain_response(
+            response, default=get_llm_model("chart_generation")
+        )
 
         repo = ConversationRepository()
         track_llm_call(
@@ -674,7 +682,9 @@ def general_answer_node(state: GraphState) -> GraphState:
 
         response = result["response"]
         usage = extract_langchain_usage(response)
-        model = get_model_from_langchain_response(response, default="gpt-4o")
+        model = get_model_from_langchain_response(
+            response, default=get_llm_model("general_answer")
+        )
 
         repo = ConversationRepository()
         track_llm_call(

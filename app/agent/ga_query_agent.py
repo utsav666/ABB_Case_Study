@@ -12,9 +12,8 @@ import json
 import logging
 from typing import Any
 
-import openai
-
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
+from app.utils.llm_factory import create_chat_llm
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ def generate_ga_report_spec(
     Returns {"success": True, "spec": {...}} or {"success": False, "error": ...}.
     """
     try:
-        openai.api_key = get_openai_api_key()
+        llm = create_chat_llm(purpose="ga_query", temperature=0)
         prompt = _GA_USER_TEMPLATE.format(
             ga_context=ga_context,
             question=user_question,
@@ -75,16 +74,20 @@ def generate_ga_report_spec(
                 f"Return a corrected runReport JSON.\n"
             )
 
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[
+        response = llm.invoke(
+            [
                 {"role": "system", "content": _GA_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
+            ]
         )
-        raw = response.choices[0].message.content.strip()
+        raw = str(response.content).strip()
+        if raw.startswith("```"):
+            first_newline = raw.find("\n")
+            if first_newline != -1:
+                raw = raw[first_newline + 1 :]
+            if raw.endswith("```"):
+                raw = raw[: raw.rfind("```")]
+            raw = raw.strip()
         spec = json.loads(raw)
 
         # Light normalization / guardrails.

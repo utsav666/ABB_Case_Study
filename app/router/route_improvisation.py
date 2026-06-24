@@ -2,11 +2,11 @@ from typing import Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_router_prompt_improvise
+from app.utils.llm_factory import create_chat_llm
 from app.utils.schema_summarizer import Summarizer
 
 # ------------------------
@@ -45,11 +45,7 @@ class Router:
             else Summarizer.summarize_schema()
         )
 
-        self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        self.llm = create_chat_llm(purpose="router", temperature=0)
 
         # Output parser
         self.parser = JsonOutputParser(pydantic_object=RoutingDecision)

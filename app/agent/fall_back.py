@@ -5,11 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
-
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import fall_back_prompt
+from app.utils.llm_factory import create_chat_llm
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +26,7 @@ def general_answer(
     {"success": True, "answer": "...", "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0.2,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        llm = create_chat_llm(purpose="general_answer", temperature=0.2)
 
         messages = [{"role": "system", "content": fall_back_prompt}]
 
@@ -58,7 +52,7 @@ def general_answer(
 class GeneralAnswerAgent:
     """Deprecated: use general_answer() directly."""
 
-    def __init__(self, model="gpt-4o", temperature=0.2):
+    def __init__(self, model: str | None = None, temperature: float = 0.2):
         pass
 
     def run(self, conversation_history, user_question, router_reasoning) -> str:
