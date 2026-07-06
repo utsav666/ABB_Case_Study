@@ -19,9 +19,22 @@ load_env()
 
 
 class ChartDecision(BaseModel):
-    chart_type: Literal["bar", "line", "scatter", "histogram", "pie", "box", "area"]
+    chart_type: Literal[
+        "bar",
+        "line",
+        "scatter",
+        "histogram",
+        "pie",
+        "box",
+        "area",
+        "dual_axis_column",  # Two metrics, different scales, both as columns
+        "column_line",  # One metric as column, another as line overlay
+        "grouped_column",  # Multiple series side-by-side
+        "stacked_column",  # Multiple series stacked
+    ]
     x_axis: str
-    y_axis: str
+    y_axis: str | list[str]  # Single axis or list for multi-metric charts
+    y_axis_secondary: str | None = None  # For dual-axis charts
     reasoning: str
 
 

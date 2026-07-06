@@ -101,21 +101,10 @@ def _connection_graph(state: GraphState):
         return None
 
 
-def _is_google_analytics(graph) -> bool:
-    """Return True if the stored graph is a Google Analytics context."""
-    return bool(graph) and graph.get("connection_type") == "google_analytics"
-
-
 def router_node(state: GraphState) -> GraphState:
     """Node 1: Classify user intent."""
     question = state["question"]
     graph = _connection_graph(state)
-
-    # Google Analytics connections always route to the GA agent — there is no
-    # SQL path for them.
-    if _is_google_analytics(graph):
-        logger.info("Router: connection is Google Analytics → route=ga_query")
-        return {"route": "ga_query", "route_reasoning": "Google Analytics connection."}
 
     # When a SQL connection is selected, route against its real schema graph.
     if graph is not None:
@@ -153,51 +142,6 @@ def router_node(state: GraphState) -> GraphState:
     return {
         "route": decision.route,
         "route_reasoning": decision.reasoning,
-    }
-
-
-def ga_agent_node(state: GraphState) -> GraphState:
-    """Node: answer a question against a Google Analytics connection.
-
-    Generates a GA4 runReport spec from the question + GA context, executes it,
-    and packages the result rows in the same shape build_data_response uses.
-    """
-    question = state["question"]
-    connection_id = state.get("connection_id", "")
-    graph = _connection_graph(state)
-
-    from app.agent.ga_query_agent import generate_ga_report_spec
-    from app.ga_analytics.context_builder import render_ga_summary
-    from app.ga_analytics.report_service import run_ga_report
-
-    ga_context = render_ga_summary(graph) if graph else ""
-    spec_result = generate_ga_report_spec(question, ga_context)
-    if not spec_result["success"]:
-        return {
-            "final_response": {
-                "type": "error",
-                "message": f"Could not build the analytics query: {spec_result['error']}",
-            }
-        }
-
-    try:
-        df = run_ga_report(connection_id, spec_result["spec"])
-    except Exception as error:  # noqa: BLE001 - surface to the user
-        logger.exception("GA report execution failed")
-        return {
-            "final_response": {
-                "type": "error",
-                "message": f"Analytics query failed: {error}",
-            }
-        }
-
-    return {
-        "data": df.to_dict(orient="records"),
-        "final_response": {
-            "type": "data",
-            "data": df.to_dict(orient="records"),
-            "ga_spec": spec_result["spec"],
-        },
     }
 
 
@@ -539,16 +483,40 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
 
 
 def chart_approval_node(state: GraphState) -> GraphState:
-    """### HITL — Ask human to approve or change the suggested chart type.
+    """Auto-generate and approve chart based on LLM suggestion.
 
-    LLM suggests a chart configuration, then we pause for human approval.
-    Human can approve as-is or pick a different chart type/axes.
+    LLM analyzes the data and question to suggest the best chart type,
+    then automatically generates it without requiring approval.
+    Users can request changes via follow-up questions if needed.
     """
     question = state["question"]
     data = _state_data_to_dataframe(state.get("data"))
 
     if data is None:
         return {"final_response": {"type": "error", "message": "No data to chart."}}
+
+    # Get column logical names from schema for better labels
+    connection_id = state.get("connection_id")
+    column_labels = {}
+    if connection_id:
+        try:
+            graph_json = _connection_graph(state)
+            if graph_json:
+                # Parse JSON if it's a string
+                if isinstance(graph_json, str):
+                    import json
+                    graph_json = json.loads(graph_json)
+
+                # Extract column display names from schema graph
+                # Graph structure: {"nodes": [{"table": "...", "columns": [{"raw_name": "...", "logical_name": "..."}]}]}
+                for node in graph_json.get("nodes", []):
+                    for col_info in node.get("columns", []):
+                        raw_name = col_info.get("raw_name", "")
+                        logical_name = col_info.get("logical_name", "")
+                        if logical_name and logical_name != raw_name:
+                            column_labels[raw_name.lower()] = logical_name
+        except Exception as e:
+            logger.warning("Could not fetch column labels: %s", e)
 
     # Get LLM's chart suggestion
     chart_context = ChartContext.build_chart_context(data)
@@ -589,50 +557,21 @@ def chart_approval_node(state: GraphState) -> GraphState:
     decision = result["chart"]
     available_columns = list(data.columns)
 
-    # ### HITL — Interrupt for human chart approval
-    human_choice = interrupt(
-        {
-            "hitl_type": "chart_approval",
-            "suggested_chart_type": decision.chart_type,
-            "suggested_x_axis": decision.x_axis,
-            "suggested_y_axis": decision.y_axis,
-            "reasoning": decision.reasoning,
-            "available_columns": available_columns,
-            "available_chart_types": [
-                "bar",
-                "line",
-                "scatter",
-                "histogram",
-                "pie",
-                "box",
-                "area",
-            ],
-            "message": (
-                f"I suggest a **{decision.chart_type}** chart "
-                f"(x={decision.x_axis}, y={decision.y_axis}). "
-                f"Approve or choose differently."
-            ),
-        }
-    )
+    # Auto-approve the chart (HITL disabled for smoother UX)
+    # User can still modify chart via follow-up questions if needed
+    chart_type = decision.chart_type
+    x_axis = decision.x_axis
+    y_axis = decision.y_axis
+    y_axis_secondary = getattr(decision, 'y_axis_secondary', None)
 
-    # Parse human response
-    if isinstance(human_choice, dict):
-        chart_type = human_choice.get("chart_type", decision.chart_type)
-        x_axis = human_choice.get("x_axis", decision.x_axis)
-        y_axis = human_choice.get("y_axis", decision.y_axis)
-    elif isinstance(human_choice, str) and human_choice.lower() == "approve":
-        chart_type = decision.chart_type
-        x_axis = decision.x_axis
-        y_axis = decision.y_axis
-    else:
-        # Assume it's a chart type string
-        chart_type = str(human_choice)
-        x_axis = decision.x_axis
-        y_axis = decision.y_axis
+    # Validate axes exist in data
+    # Handle both single y_axis and list (for multi-series charts)
+    y_axes_to_check = y_axis if isinstance(y_axis, list) else [y_axis]
+    if y_axis_secondary:
+        y_axes_to_check.append(y_axis_secondary)
 
-    # Validate axes exist
-    if x_axis not in data.columns or y_axis not in data.columns:
-        logger.warning("### HITL — Chart axes not in columns after human choice")
+    if x_axis not in data.columns or not all(y in data.columns for y in y_axes_to_check if y):
+        logger.warning("Chart axes not in columns, falling back to table view")
         return {
             "final_response": {
                 "type": "data",
@@ -641,20 +580,218 @@ def chart_approval_node(state: GraphState) -> GraphState:
             }
         }
 
-    # ### HITL — Store chart config (serializable), render Figure in executor()
+    # Chart auto-approved
     logger.info(
-        "### HITL — Chart approved: %s (x=%s, y=%s)", chart_type, x_axis, y_axis
+        "Chart auto-approved: %s (x=%s, y=%s%s)",
+        chart_type, x_axis, y_axis,
+        f", y2={y_axis_secondary}" if y_axis_secondary else ""
     )
 
+    chart_config = {
+        "chart_type": chart_type,
+        "x_axis": x_axis,
+        "y_axis": y_axis,
+    }
+    # Add secondary axis for dual-axis charts
+    if y_axis_secondary:
+        chart_config["y_axis_secondary"] = y_axis_secondary
+
+    # Detect date granularity for smart X-axis formatting
+    def detect_date_granularity(df, col_name):
+        """Detect if column is date and what granularity (day/week/month/year)."""
+        try:
+            import pandas as pd
+            if col_name not in df.columns:
+                return None
+
+            col = df[col_name]
+            # Try to parse as datetime
+            if pd.api.types.is_datetime64_any_dtype(col):
+                dates = col
+            else:
+                try:
+                    dates = pd.to_datetime(col, errors='coerce')
+                except Exception:
+                    return None
+
+            # Filter out NaT values
+            dates = dates.dropna()
+            if len(dates) < 2:
+                return None
+
+            # Sort and calculate average difference
+            dates_sorted = dates.sort_values()
+            diffs = dates_sorted.diff().dropna()
+            avg_diff_days = diffs.mean().total_seconds() / (60 * 60 * 24)
+
+            # Classify granularity
+            if avg_diff_days < 2:
+                return 'day'
+            elif avg_diff_days < 10:
+                return 'week'
+            elif avg_diff_days < 60:
+                return 'month'
+            else:
+                return 'year'
+        except Exception:
+            return None
+
+    x_date_format = detect_date_granularity(data, x_axis)
+    if x_date_format:
+        chart_config["x_axis_format"] = x_date_format
+
+    # Get display configuration from connection settings
+    def get_display_config():
+        """Fetch display_config from the connection settings."""
+        if not connection_id:
+            return None
+        try:
+            from app.settings_db.repositories import DBConnectionRepository
+            conn = DBConnectionRepository().get_connection_by_id(connection_id)
+            return conn.get("display_config") if conn else None
+        except Exception:
+            return None
+
+    display_config = get_display_config()
+
+    # Detect number formatting for Y-axis
+    def detect_number_format(df, col_names, config):
+        """Detect appropriate number formatting based on value ranges and config."""
+        try:
+            import pandas as pd
+
+            # If config disables number formatting, return None
+            if config and not config.get("number_format_enabled", True):
+                return None
+
+            # Collect all numeric values from specified columns
+            all_values = []
+            for col in col_names:
+                if col and col in df.columns:
+                    col_data = pd.to_numeric(df[col], errors='coerce').dropna()
+                    all_values.extend(col_data.values)
+
+            if not all_values:
+                return None
+
+            max_val = max(abs(v) for v in all_values)
+
+            # Use thresholds and suffixes from config, or defaults
+            if config:
+                thresholds = config.get("number_format_thresholds", {})
+                suffixes = config.get("number_format_suffixes", {})
+                decimals = config.get("decimal_places", 1)
+            else:
+                thresholds = {"billion": 1e9, "million": 1e6, "thousand": 1e3}
+                suffixes = {"billion": "B", "million": "M", "thousand": "K"}
+                decimals = 1
+
+            # Determine format based on max value
+            if max_val >= thresholds.get("billion", 1e9):
+                return {'suffix': suffixes.get("billion", "B"), 'divisor': thresholds.get("billion", 1e9), 'decimals': decimals}
+            elif max_val >= thresholds.get("million", 1e6):
+                return {'suffix': suffixes.get("million", "M"), 'divisor': thresholds.get("million", 1e6), 'decimals': decimals}
+            elif max_val >= thresholds.get("thousand", 1e3):
+                return {'suffix': suffixes.get("thousand", "K"), 'divisor': thresholds.get("thousand", 1e3), 'decimals': decimals}
+            else:
+                return {'suffix': '', 'divisor': 1, 'decimals': 0}
+        except Exception:
+            return None
+
+    # Collect all Y-axis columns
+    y_cols = []
+    if isinstance(y_axis, list):
+        y_cols.extend(y_axis)
+    else:
+        y_cols.append(y_axis)
+    if y_axis_secondary:
+        y_cols.append(y_axis_secondary)
+
+    y_number_format = detect_number_format(data, y_cols, display_config)
+    if y_number_format:
+        chart_config["y_axis_format"] = y_number_format
+
+    # Add color configuration from display_config
+    if display_config and "chart_colors" in display_config:
+        chart_config["colors"] = display_config["chart_colors"]
+    else:
+        # Default colors if not configured
+        chart_config["colors"] = {
+            "primary": "#3b82f6",
+            "secondary": "#ef4444",
+            "palette": ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"]
+        }
+
+    # Add human-readable labels from column configuration
+    # These will override the automatic snake_case → Title Case formatting
+    if column_labels:
+        def get_display_name(col_name):
+            """Get display name for a column, stripping aggregation prefixes."""
+            col_lower = col_name.lower()
+            agg_type = None
+
+            # Try exact match first
+            if col_lower in column_labels:
+                return column_labels[col_lower]
+
+            # Strip common aggregation prefixes and try again
+            # Map abbreviated prefixes to their display names
+            prefix_map = {
+                'average_': 'Average',
+                'total_': 'Total',
+                'sum_': 'Sum',
+                'avg_': 'Average',
+                'count_': 'Count',
+                'max_': 'Maximum',
+                'min_': 'Minimum',
+            }
+
+            for prefix, agg_display in prefix_map.items():
+                if col_lower.startswith(prefix):
+                    agg_type = agg_display
+                    base_name = col_lower[len(prefix):]
+
+                    # Try exact match on base name
+                    if base_name in column_labels:
+                        return f"{agg_type} {column_labels[base_name]}"
+
+                    # Try partial match: find columns ending with base_name
+                    # e.g., "sales" matches "actual_sales"
+                    for col_key, display_name in column_labels.items():
+                        if col_key.endswith(base_name) or base_name in col_key:
+                            return f"{agg_type} {display_name}"
+
+                    break  # Found aggregation prefix, don't try others
+
+            return None
+
+        labels = {}
+        # Map each axis to its display name
+        display = get_display_name(x_axis)
+        if display:
+            labels["x_axis_label"] = display
+
+        # Handle y_axis (could be string or list)
+        y_axes = y_axis if isinstance(y_axis, list) else [y_axis]
+        for i, y in enumerate(y_axes):
+            display = get_display_name(y)
+            if display:
+                key = "y_axis_label" if i == 0 else f"y_axis_{i}_label"
+                labels[key] = display
+
+        if y_axis_secondary:
+            display = get_display_name(y_axis_secondary)
+            if display:
+                labels["y_axis_secondary_label"] = display
+
+        if labels:
+            chart_config["labels"] = labels
+
     return {
-        "hitl_triggered": True,
+        "hitl_triggered": False,  # No longer requiring approval
         "final_response": {
             "type": "chart",
-            "chart_config": {
-                "chart_type": chart_type,
-                "x_axis": x_axis,
-                "y_axis": y_axis,
-            },
+            "chart_config": chart_config,
             "data": state.get("data"),  # already records (list of dicts)
             "sql": state.get("sql", ""),
         },
@@ -731,8 +868,6 @@ def increment_retry_node(state: GraphState) -> GraphState:
 def route_after_router(state: GraphState) -> str:
     """After router: which path to take?"""
     route = state.get("route", "")
-    if route == "ga_query":
-        return "ga_agent"
     if route in ("sql_query", "sql_and_chart"):
         return "sql_path"
     elif route == "schema_info":
@@ -799,7 +934,6 @@ def build_graph() -> StateGraph:
     graph.add_node("general_answer", general_answer_node)
     graph.add_node("build_data_response", build_data_response_node)
     graph.add_node("increment_retry", increment_retry_node)
-    graph.add_node("ga_agent", ga_agent_node)  # Google Analytics path
 
     # Entry point
     graph.set_entry_point("router")
@@ -812,7 +946,6 @@ def build_graph() -> StateGraph:
             "sql_path": "table_resolver",
             "schema_info": "schema_info",
             "general": "general_answer",
-            "ga_agent": "ga_agent",
         },
     )
 
@@ -863,7 +996,6 @@ def build_graph() -> StateGraph:
     graph.add_edge("build_data_response", END)
     graph.add_edge("schema_info", END)
     graph.add_edge("general_answer", END)
-    graph.add_edge("ga_agent", END)  # Google Analytics path terminates here
 
     return graph
 
@@ -996,47 +1128,21 @@ class GraphOrchestrator:
 
 
 def _hydrate_response(response: dict[str, Any]) -> dict[str, Any]:
-    """### HITL — Render chart Figure and convert data records to DataFrame.
+    """### HITL — Convert data records to DataFrame for legacy compatibility.
 
     State stores everything as serializable (list of dicts, chart_config).
-    This converts back to DataFrame + matplotlib Figure for the UI layer.
+    For charts, we now keep chart_config and send it to frontend as-is.
+    Data stays as list of dicts for frontend rendering.
     """
-    # Convert data records → DataFrame
-    data = response.get("data")
-    if isinstance(data, list) and data:
-        response["data"] = DataFrame(data)
+    # For non-chart responses, convert data records → DataFrame
+    if response.get("type") != "chart":
+        data = response.get("data")
+        if isinstance(data, list) and data:
+            response["data"] = DataFrame(data)
 
-    # Render chart from config
-    if response.get("type") == "chart" and "chart_config" in response:
-        cfg = response.pop("chart_config")
-        df = response.get("data")
-        if df is not None and isinstance(df, DataFrame):
-            chart_type = cfg["chart_type"]
-            x_axis = cfg["x_axis"]
-            y_axis = cfg["y_axis"]
-
-            fig, ax = plt.subplots()
-            x, y = df[x_axis], df[y_axis]
-
-            if chart_type == "line":
-                ax.plot(x, y)
-            elif chart_type == "bar":
-                ax.bar(x, y)
-            elif chart_type == "scatter":
-                ax.scatter(x, y)
-            elif chart_type == "histogram":
-                ax.hist(x, bins=10)
-            elif chart_type == "pie":
-                ax.pie(y, labels=x.astype(str).tolist(), autopct="%1.1f%%")
-            elif chart_type == "box":
-                ax.boxplot(y)
-            elif chart_type == "area":
-                ax.fill_between(x, y)
-
-            ax.set_xlabel(x_axis)
-            ax.set_ylabel(y_axis)
-            ax.set_title(f"{chart_type.title()} Chart")
-            response["figure"] = fig
+    # For chart responses: keep chart_config and data as list of dicts
+    # Frontend will handle rendering via Recharts
+    # No matplotlib rendering needed anymore
 
     return response
 

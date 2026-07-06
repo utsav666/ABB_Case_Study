@@ -57,24 +57,10 @@ def get_all_db_connections() -> dict[str, list[dict[str, Any]]]:
 @settings_db_router.post("")
 def save_db_connection(
     payload: DBConnectionCreate,
-    background_tasks: BackgroundTasks,
     skip_validation: bool = Query(default=False, description="Skip connection validation"),
 ) -> dict[str, Any]:
-    """Validate and persist a database connection payload.
-
-    For Google Analytics connections, schedules a background job that discovers
-    the property's dimensions/metrics and stores the GA schema graph.
-    """
+    """Validate and persist a database connection payload."""
     result = create_db_connection(payload, skip_validation)
-
-    if payload.connection_type == "google_analytics":
-        connection = result.get("connection", {})
-        connection_id = connection.get("id")
-        if connection_id:
-            from app.ga_analytics.context_builder import build_ga_graph
-
-            background_tasks.add_task(build_ga_graph, connection_id)
-
     return result
 
 

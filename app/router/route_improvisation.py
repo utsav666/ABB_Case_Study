@@ -27,7 +27,6 @@ class RoutingDecision(BaseModel):
         "general_answer",
         "explanation",
         "follow_up",
-        "ga_query",
     ]
     reasoning: str
 

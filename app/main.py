@@ -419,14 +419,28 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
 
         if result_type == "chart":
             chart_figure = result.get("figure")
+            chart_config = result.get("chart_config")
             chart_data = result.get("data")
             payload["answer_type"] = "chart"
             payload["message"] = "Here is your chart."
-            payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
-            if isinstance(chart_data, pd.DataFrame):
-                payload["data"] = serialize_dataframe(chart_data)
-            else:
-                payload["data"] = chart_data
+
+            # New format: chart_config + data (for frontend rendering)
+            if chart_config:
+                payload["chart_config"] = chart_config
+                if isinstance(chart_data, pd.DataFrame):
+                    payload["data"] = chart_data.to_dict(orient="records")
+                elif isinstance(chart_data, list):
+                    payload["data"] = chart_data
+                else:
+                    payload["data"] = []
+            # Legacy format: matplotlib figure as base64 image
+            elif chart_figure:
+                payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
+                if isinstance(chart_data, pd.DataFrame):
+                    payload["data"] = serialize_dataframe(chart_data)
+                else:
+                    payload["data"] = chart_data
+
             return payload
 
         if result_type == "data":
@@ -479,7 +493,8 @@ def build_persisted_assistant_content(response_payload: dict[str, Any]) -> str:
         "answer_type": response_payload.get("answer_type"),
         "message": response_payload.get("message"),
         "data": response_payload.get("data"),
-        "chart_image_base64": response_payload.get("chart_image_base64"),
+        "chart_config": response_payload.get("chart_config"),  # New chart format
+        "chart_image_base64": response_payload.get("chart_image_base64"),  # Legacy
         "sql": response_payload.get("sql"),
     }
 
