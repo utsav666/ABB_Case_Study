@@ -27,6 +27,19 @@ class FilterColumn:
     filter_value: Any  # The literal value being filtered on
 
 
+def _build_alias_map(parsed: exp.Expression) -> dict[str, str]:
+    """Build a mapping of table alias → real table name from FROM/JOIN clauses."""
+    alias_map: dict[str, str] = {}
+    for table in parsed.find_all(exp.Table):
+        real_name = table.name
+        alias = table.alias
+        if alias:
+            alias_map[alias] = real_name
+        # Also map real name to itself (for unaliased references)
+        alias_map[real_name] = real_name
+    return alias_map
+
+
 def extract_where_filters(sql: str, dialect: str = "postgres") -> list[FilterColumn]:
     """### HITL — Parse SQL and extract all WHERE clause filter columns + values.
 
@@ -49,6 +62,9 @@ def extract_where_filters(sql: str, dialect: str = "postgres") -> list[FilterCol
     except Exception as e:
         logger.warning("### HITL — Unexpected SQL parse error: %s", e)
         return filters
+
+    # Build alias → real table name mapping from FROM/JOIN clauses
+    alias_map = _build_alias_map(parsed)
 
     # Find all WHERE conditions
     where = parsed.find(exp.Where)
@@ -85,6 +101,11 @@ def extract_where_filters(sql: str, dialect: str = "postgres") -> list[FilterCol
             col_info = _extract_in_values(node)
             if col_info:
                 filters.append(col_info)
+
+    # Resolve aliases to real table names so downstream code uses actual table names
+    for f in filters:
+        if f.table:
+            f.table = alias_map.get(f.table, f.table)
 
     logger.info("### HITL — Extracted %d filter(s) from SQL", len(filters))
     for f in filters:
@@ -165,6 +186,7 @@ def rewrite_sql_filter(
 
 # ====== Unit Test ======
 if __name__ == "__main__":
+    print("--- Test 1: Unaliased query (existing behavior) ---")
     test_sql = """
     SELECT * FROM customers
     WHERE customer_name = 'ABC Corp'
@@ -174,3 +196,27 @@ if __name__ == "__main__":
     results = extract_where_filters(test_sql)
     for r in results:
         print(f"  {r.table}.{r.column} {r.operator} {r.filter_value!r}")
+
+    print("\n--- Test 2: Aliased multi-join query (was broken) ---")
+    test_sql_alias = """
+    SELECT m.title FROM movie m
+    JOIN m_country mc ON m.mid = mc.mid
+    JOIN country c ON mc.cid = c.cid
+    WHERE c.name = 'India'
+    """
+    results2 = extract_where_filters(test_sql_alias)
+    for r in results2:
+        print(f"  {r.table}.{r.column} {r.operator} {r.filter_value!r}")
+    # Should print: country.name = 'India' (not c.name)
+
+    print("\n--- Test 3: Mixed aliased + unaliased ---")
+    test_sql_mixed = """
+    SELECT m.title, l.name FROM movie m
+    JOIN m_language ml ON m.mid = ml.mid
+    JOIN language l ON ml.laid = l.laid
+    WHERE l.name = 'Hindi' AND m.year > 2010
+    """
+    results3 = extract_where_filters(test_sql_mixed)
+    for r in results3:
+        print(f"  {r.table}.{r.column} {r.operator} {r.filter_value!r}")
+    # Should print: language.name = 'Hindi' (not l.name)

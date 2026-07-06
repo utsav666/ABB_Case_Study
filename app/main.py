@@ -445,6 +445,11 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
             payload["data"] = result.get("data")
             return payload
 
+        if result_type == "text":
+            payload["answer_type"] = "text"
+            payload["message"] = result.get("message", "Here is the response.")
+            return payload
+
         if result_type == "error":
             payload["answer_type"] = "error"
             payload["message"] = result.get("message", "An error occurred.")

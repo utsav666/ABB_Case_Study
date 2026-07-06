@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.envsetup.env_loader import load_env
 from app.utils.llm_factory import create_chat_llm
+from app.utils.schema_config import SchemaConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +158,11 @@ def get_column_distinct_values(
         table_schema = parts[0]
         actual_table_name = parts[1]
     else:
-        # No schema in table name, assume "public" or use table name as-is
-        table_schema = "public"  # Default PostgreSQL schema
+        # Look up actual schema from schema_preserve.json
+        
+        raw_schema = SchemaConfigManager.load_raw_schema()
+        tables = raw_schema.get("tables", {})
+        table_schema = tables.get(table_name, {}).get("schema", "public")
         actual_table_name = table_name
 
     qualified_table = f'"{table_schema}"."{actual_table_name}"'
