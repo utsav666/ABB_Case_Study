@@ -1,0 +1,574 @@
+================================================================================
+COMPARISON: Graph Approach vs schema_preserve.json
+Connection ID: 3403e1d0-c16c-450a-886b-4c5a929f21bb
+Questions: 40
+================================================================================
+
+[01/40] [Easy] List all products in the Mountain product line....
+  Graph:    OK (91 rows) (15.8s)
+  Preserve: OK (91 rows) (15.2s)
+
+[02/40] [Easy] How many products are there in each color?...
+  Graph:    OK (9 rows) (14.6s)
+  Preserve: OK (9 rows) (15.1s)
+
+[03/40] [Easy] What are the 4 product categories?...
+  Graph:    OK (4 rows) (15.3s)
+  Preserve: OK (4 rows) (14.9s)
+
+[04/40] [Easy] Find all products with a list price greater than $1000....
+  Graph:    OK (86 rows) (14.9s)
+  Preserve: OK (86 rows) (15.0s)
+
+[05/40] [Easy] Which products have never been sold (sell end date is in the past)?...
+  Graph:    OK (29 rows) (15.2s)
+  Preserve: OK (4 rows) (17.1s)
+
+[06/40] [Easy] How many products are manufactured in-house vs purchased?...
+  Graph:    OK (2 rows) (15.3s)
+  Preserve: OK (2 rows) (15.5s)
+
+[07/40] [Easy] List all manufacturing locations and their hourly cost rates....
+  Graph:    OK (14 rows) (14.4s)
+  Preserve: OK (14 rows) (15.2s)
+
+[08/40] [Easy] What are the different scrap reasons for defective work orders?...
+  Graph:    OK (16 rows) (14.4s)
+  Preserve: OK (16 rows) (15.9s)
+
+[09/40] [Easy] Find all products that weigh more than 100 pounds....
+  Graph:    OK (0 rows - EMPTY) (15.2s)
+  Preserve: OK (0 rows - EMPTY) (15.9s)
+
+[10/40] [Easy] Show all products available in size Large or Extra Large....
+  Graph:    OK (14 rows) (14.6s)
+  Preserve: OK (14 rows) (15.9s)
+
+[11/40] [Medium] How many products are in each subcategory?...
+  Graph:    OK (37 rows) (14.9s)
+  Preserve: OK (37 rows) (16.1s)
+
+[12/40] [Medium] What is the average list price for Bikes vs Clothing vs Components vs ...
+  Graph:    OK (4 rows) (15.3s)
+  Preserve: OK (4 rows) (16.6s)
+
+[13/40] [Medium] Which products are currently in inventory at the Final Assembly locati...
+  Graph:    OK (141 rows) (15.7s)
+  Preserve: OK (141 rows) (16.1s)
+
+[14/40] [Medium] Show the total inventory quantity by product category....
+  Graph:    OK (4 rows) (14.9s)
+  Preserve: OK (4 rows) (16.3s)
+
+[15/40] [Medium] List all products that have had a price increase (multiple entries in ...
+  Graph:    OK (77 rows) (17.3s)
+  Preserve: OK (77 rows) (17.2s)
+
+[16/40] [Medium] Find the top 10 most expensive components (class = High) by list price...
+  Graph:    OK (10 rows) (16.0s)
+  Preserve: OK (10 rows) (16.4s)
+
+[17/40] [Medium] What is the total quantity currently on each shelf in the Metal Storag...
+  Graph:    OK (8 rows) (15.5s)
+  Preserve: OK (8 rows) (15.5s)
+
+[18/40] [Medium] Find products that have reviews with a rating of 5....
+  Graph:    OK (2 rows) (15.4s)
+  Preserve: OK (2 rows) (16.1s)
+
+[19/40] [Medium] How many products in each category are currently for sale (sellenddate...
+  Graph:    OK (4 rows) (15.6s)
+  Preserve: OK (4 rows) (16.2s)
+
+[20/40] [Medium] Show the products with the highest margin (listprice - standardcost), ...
+  Graph:    OK (10 rows) (15.4s)
+  Preserve: OK (10 rows) (15.3s)
+
+[21/40] [Hard] For each product category, what is the average number of days to manuf...
+  Graph:    OK (4 rows) (15.0s)
+  Preserve: OK (4 rows) (16.5s)
+
+[22/40] [Hard] Which products had their cost increase by more than 20% between any tw...
+  Graph:    OK (25 rows) (17.0s)
+  Preserve: OK (25 rows) (18.1s)
+
+[23/40] [Hard] Show the bill of materials tree for all assemblies: the assembly produ...
+  Graph:    OK (2679 rows) (18.3s)
+  Preserve: OK (2679 rows) (19.3s)
+
+[24/40] [Hard] For each location, show the total inventory value (quantity times prod...
+  Graph:    OK (14 rows) (15.8s)
+  Preserve: OK (14 rows) (16.9s)
+
+[25/40] [Hard] Find all products that are components in a bill of materials but are N...
+  Graph:    OK (85 rows) (15.6s)
+  Preserve: OK (85 rows) (17.1s)
+
+[26/40] [Hard] What is the scrap rate (scrapped qty / order qty) by product subcatego...
+  Graph:    OK (13 rows) (15.3s)
+  Preserve: OK (13 rows) (16.4s)
+
+[27/40] [Hard] Rank products within each subcategory by their list price using DENSE_...
+  Graph:    OK (295 rows) (17.2s)
+  Preserve: OK (295 rows) (16.2s)
+
+[28/40] [Hard] Show products whose current list price differs from their standard cos...
+  Graph:    OK (0 rows - EMPTY) (15.4s)
+  Preserve: OK (0 rows - EMPTY) (16.3s)
+
+[29/40] [Hard] For each product model, show how many products use it and the English ...
+  Graph:    OK (128 rows) (17.5s)
+  Preserve: OK (128 rows) (19.8s)
+
+[30/40] [Hard] Find products that have zero inventory across all locations....
+  Graph:    OK (4 rows) (16.4s)
+  Preserve: OK (4 rows) (18.5s)
+
+[31/40] [Expert] For each product category, show the month-over-month sales transaction...
+  Graph:    OK (45 rows) (18.4s)
+  Preserve: OK (45 rows) (19.0s)
+
+[32/40] [Expert] Find the top 5 products by total work order quantity in each category,...
+  Graph:    OK (10 rows) (20.1s)
+  Preserve: OK (10 rows) (20.5s)
+
+[33/40] [Expert] Build a complete product cost analysis: for each product currently for...
+  Graph:    OK (406 rows) (19.8s)
+  Preserve: OK (406 rows) (19.5s)
+
+[34/40] [Expert] Compare the actual vs planned cost for work order routings, grouped by...
+  Graph:    OK (8 rows) (19.2s)
+  Preserve: OK (10 rows) (19.4s)
+
+[35/40] [Expert] Find all products that are BOTH a component in a bill of materials AND...
+  Graph:    OK (1720 rows) (19.7s)
+  Preserve: OK (253 rows) (18.2s)
+
+[36/40] [Expert] For products with multiple price history records, calculate the cumula...
+  Graph:    OK (77 rows) (18.6s)
+  Preserve: OK (77 rows) (22.5s)
+
+[37/40] [Expert] Create a routing efficiency report: for each location, show the averag...
+  Graph:    OK (7 rows) (18.2s)
+  Preserve: OK (7 rows) (19.4s)
+
+[38/40] [Expert] Using the transaction history and archive combined (UNION), find the y...
+  Graph:    OK (16 rows) (19.4s)
+  Preserve: ERROR:app.utils.sql_executor:SQL execution failed
+Traceback (most recent call last):
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.GroupingError: column "tv.total_value" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 4:     total_value,
+            ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/sinhauts/Desktop/Learning_Repo/cia/ABB_Case_Study/tests/../app/utils/sql_executor.py", line 26, in sql_executor
+    df = pd.read_sql_query(sql_query, engine)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 528, in read_sql_query
+    return pandas_sql.read_query(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        sql,
+        ^^^^
+    ...<6 lines>...
+        dtype_backend=dtype_backend,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1848, in read_query
+    result = self.execute(sql, params)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1671, in execute
+    return self.con.exec_driver_sql(sql, *args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1779, in exec_driver_sql
+    ret = self._execute_context(
+        dialect,
+    ...<5 lines>...
+        distilled_parameters,
+    )
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.GroupingError) column "tv.total_value" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 4:     total_value,
+            ^
+
+[SQL: SELECT 
+    pc.name AS category_name,
+    yr,
+    total_value,
+    LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr) AS prev_year_value,
+    total_value - LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr) AS yoy_change,
+    CASE 
+        WHEN LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr) > 0 
+        THEN ROUND(((total_value - LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr)) / LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr)) * 100, 2)
+        ELSE NULL 
+    END AS yoy_change_pct,
+    CASE 
+        WHEN total_value < LAG(total_value) OVER (PARTITION BY pc.name ORDER BY yr) 
+        THEN 'Declining'
+        ELSE 'Not Declining'
+    END AS trend
+FROM (
+    SELECT 
+        t.productid,
+        EXTRACT(YEAR FROM t.transactiondate) AS yr,
+        SUM(t.actualcost * t.quantity) AS total_value
+    FROM (
+        SELECT productid, transactiondate, actualcost, quantity
+        FROM production.transactionhistory
+        UNION ALL
+        SELECT productid, transactiondate, actualcost, quantity
+        FROM production.transactionhistoryarchive
+    ) t
+    GROUP BY t.productid, EXTRACT(YEAR FROM t.transactiondate)
+) tv
+JOIN production.product p ON p.productid = tv.productid
+JOIN production.productsubcategory psc ON psc.productsubcategoryid = p.productsubcategoryid
+JOIN production.productcategory pc ON pc.productcategoryid = psc.productcategoryid
+GROUP BY pc.name, yr
+ORDER BY pc.name, yr;]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+EXEC ERROR: (psycopg2.errors.GroupingError) column "tv.total_v (21.8s)
+
+[39/40] [Expert] Identify at-risk products: those where current inventory is below the ...
+  Graph:    OK (0 rows - EMPTY) (19.5s)
+  Preserve: OK (0 rows - EMPTY) (19.8s)
+
+[40/40] [Expert] For the Bikes category, show a hierarchical bill of materials explosio...
+  Graph:    ERROR:app.utils.sql_executor:SQL execution failed
+Traceback (most recent call last):
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.DatatypeMismatch: recursive query "bom_explosion" column 8 has type numeric(8,2) in non-recursive term but type numeric overall
+LINE 18:         bom.perassemblyqty AS cumulative_qty,
+                 ^
+HINT:  Cast the output of the non-recursive term to the correct type.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/sinhauts/Desktop/Learning_Repo/cia/ABB_Case_Study/tests/../app/utils/sql_executor.py", line 26, in sql_executor
+    df = pd.read_sql_query(sql_query, engine)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 528, in read_sql_query
+    return pandas_sql.read_query(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        sql,
+        ^^^^
+    ...<6 lines>...
+        dtype_backend=dtype_backend,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1848, in read_query
+    result = self.execute(sql, params)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1671, in execute
+    return self.con.exec_driver_sql(sql, *args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1779, in exec_driver_sql
+    ret = self._execute_context(
+        dialect,
+    ...<5 lines>...
+        distilled_parameters,
+    )
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.DatatypeMismatch) recursive query "bom_explosion" column 8 has type numeric(8,2) in non-recursive term but type numeric overall
+LINE 18:         bom.perassemblyqty AS cumulative_qty,
+                 ^
+HINT:  Cast the output of the non-recursive term to the correct type.
+
+[SQL: WITH RECURSIVE bike_products AS (
+    SELECT p.productid, p.name, p.standardcost
+    FROM production.product p
+    JOIN production.productsubcategory psc ON p.productsubcategoryid = psc.productsubcategoryid
+    JOIN production.productcategory pc ON psc.productcategoryid = pc.productcategoryid
+    WHERE pc.name = 'Bikes'
+),
+bom_explosion AS (
+    -- Base case: top-level components of bike assemblies
+    SELECT 
+        bp.productid AS root_product_id,
+        bp.name AS root_product_name,
+        bp.standardcost AS root_standard_cost,
+        bom.componentid,
+        bom.productassemblyid,
+        bom.bomlevel,
+        bom.perassemblyqty,
+        bom.perassemblyqty AS cumulative_qty,
+        pc.name AS component_name,
+        pc.standardcost AS component_cost
+    FROM bike_products bp
+    JOIN production.billofmaterials bom ON bom.productassemblyid = bp.productid
+        AND bom.enddate IS NULL
+    JOIN production.product pc ON bom.componentid = pc.productid
+    
+    UNION ALL
+    
+    -- Recursive case: sub-components
+    SELECT 
+        be.root_product_id,
+        be.root_product_name,
+        be.root_standard_cost,
+        bom.componentid,
+        bom.productassemblyid,
+        bom.bomlevel,
+        bom.perassemblyqty,
+        be.cumulative_qty * bom.perassemblyqty AS cumulative_qty,
+        pc.name AS component_name,
+        pc.standardcost AS component_cost
+    FROM bom_explosion be
+    JOIN production.billofmaterials bom ON bom.productassemblyid = be.componentid
+        AND bom.enddate IS NULL
+    JOIN production.product pc ON bom.componentid = pc.productid
+)
+SELECT 
+    root_product_id,
+    root_product_name,
+    root_standard_cost,
+    componentid,
+    component_name,
+    bomlevel,
+    perassemblyqty,
+    cumulative_qty,
+    ROUND(cumulative_qty * component_cost, 4) AS total_cost_contribution,
+    CASE 
+        WHEN root_standard_cost > 0 
+        THEN ROUND((cumulative_qty * component_cost / root_standard_cost) * 100, 2)
+        ELSE 0
+    END AS pct_of_final_product_cost
+FROM bom_explosion
+ORDER BY root_product_id, bomlevel, component_name;]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+EXEC ERROR: (psycopg2.errors.DatatypeMismatch) recursive query (22.8s)
+  Preserve: ERROR:app.utils.sql_executor:SQL execution failed
+Traceback (most recent call last):
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.DatatypeMismatch: recursive query "bom_explosion" column 8 has type numeric(8,2) in non-recursive term but type numeric overall
+LINE 18:         bom.perassemblyqty AS cumulative_qty,
+                 ^
+HINT:  Cast the output of the non-recursive term to the correct type.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/sinhauts/Desktop/Learning_Repo/cia/ABB_Case_Study/tests/../app/utils/sql_executor.py", line 26, in sql_executor
+    df = pd.read_sql_query(sql_query, engine)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 528, in read_sql_query
+    return pandas_sql.read_query(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        sql,
+        ^^^^
+    ...<6 lines>...
+        dtype_backend=dtype_backend,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1848, in read_query
+    result = self.execute(sql, params)
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/pandas/io/sql.py", line 1671, in execute
+    return self.con.exec_driver_sql(sql, *args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1779, in exec_driver_sql
+    ret = self._execute_context(
+        dialect,
+    ...<5 lines>...
+        distilled_parameters,
+    )
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.DatatypeMismatch) recursive query "bom_explosion" column 8 has type numeric(8,2) in non-recursive term but type numeric overall
+LINE 18:         bom.perassemblyqty AS cumulative_qty,
+                 ^
+HINT:  Cast the output of the non-recursive term to the correct type.
+
+[SQL: WITH RECURSIVE bike_products AS (
+    SELECT p.productid, p.name, p.standardcost
+    FROM production.product p
+    JOIN production.productsubcategory psc ON p.productsubcategoryid = psc.productsubcategoryid
+    JOIN production.productcategory pc ON psc.productcategoryid = pc.productcategoryid
+    WHERE pc.name = 'Bikes'
+),
+bom_explosion AS (
+    -- Base level: direct components of bike assemblies
+    SELECT 
+        bp.productid AS root_product_id,
+        bp.name AS root_product_name,
+        bp.standardcost AS root_product_cost,
+        bom.componentid,
+        comp.name AS component_name,
+        bom.bomlevel,
+        bom.perassemblyqty,
+        bom.perassemblyqty AS cumulative_qty,
+        comp.standardcost AS component_cost,
+        bom.perassemblyqty * comp.standardcost AS total_cost_contribution
+    FROM bike_products bp
+    JOIN production.billofmaterials bom ON bom.productassemblyid = bp.productid
+        AND bom.enddate IS NULL
+    JOIN production.product comp ON bom.componentid = comp.productid
+    
+    UNION ALL
+    
+    -- Recursive: components of components
+    SELECT 
+        be.root_product_id,
+        be.root_product_name,
+        be.root_product_cost,
+        bom.componentid,
+        comp.name AS component_name,
+        bom.bomlevel,
+        bom.perassemblyqty,
+        be.cumulative_qty * bom.perassemblyqty AS cumulative_qty,
+        comp.standardcost AS component_cost,
+        be.cumulative_qty * bom.perassemblyqty * comp.standardcost AS total_cost_contribution
+    FROM bom_explosion be
+    JOIN production.billofmaterials bom ON bom.productassemblyid = be.componentid
+        AND bom.enddate IS NULL
+    JOIN production.product comp ON bom.componentid = comp.productid
+)
+SELECT 
+    root_product_name,
+    root_product_cost,
+    bomlevel,
+    component_name,
+    perassemblyqty,
+    cumulative_qty,
+    component_cost,
+    ROUND(total_cost_contribution, 4) AS total_cost_contribution,
+    CASE 
+        WHEN root_product_cost > 0 THEN ROUND((total_cost_contribution / root_product_cost) * 100, 2)
+        ELSE 0
+    END AS pct_of_final_product_cost
+FROM bom_explosion
+ORDER BY root_product_name, bomlevel, component_name;]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+EXEC ERROR: (psycopg2.errors.DatatypeMismatch) recursive query (26.9s)
+
+================================================================================
+SUMMARY
+================================================================================
+
+  [Graph (connection_id)]
+  SQL Generated:    40/40 (100%)
+  Valid SQL:        40/40 (100%)
+  Executed on DB:   39/40 (98%)
+  Non-empty result: 36/40 (90%)
+  Avg time/query:   16.6s
+
+  [schema_preserve.json]
+  SQL Generated:    40/40 (100%)
+  Valid SQL:        40/40 (100%)
+  Executed on DB:   38/40 (95%)
+  Non-empty result: 35/40 (88%)
+  Avg time/query:   17.5s
+
+--------------------------------------------------------------------------------
+BREAKDOWN BY DIFFICULTY
+--------------------------------------------------------------------------------
+  Easy    : Graph 9/10 success, 0/10 errors | Preserve 9/10 success, 0/10 errors
+  Medium  : Graph 10/10 success, 0/10 errors | Preserve 10/10 success, 0/10 errors
+  Hard    : Graph 9/10 success, 0/10 errors | Preserve 9/10 success, 0/10 errors
+  Expert  : Graph 8/10 success, 1/10 errors | Preserve 7/10 success, 2/10 errors
+
+Detailed results saved to: /Users/sinhauts/Desktop/Learning_Repo/cia/ABB_Case_Study/tests/comparison_results.json
