@@ -80,6 +80,9 @@ class GraphState(TypedDict, total=False):
     chart_suggestion: dict[str, Any]  # Suggested chart config before human approval
     ### LLM Cost Tracking
     user_message_id: str | None  # UUID of user message for LLM tracking
+    ### Per-request LLM provider/model override (from agent/workspace settings)
+    llm_provider: str | None  # e.g. "openai", "azure_openai", "claude_merck"
+    llm_model: str | None  # e.g. "gpt-4o", "claude-opus-4-6-v1"
 
 
 # ============================================================
@@ -105,14 +108,16 @@ def router_node(state: GraphState) -> GraphState:
     """Node 1: Classify user intent."""
     question = state["question"]
     graph = _connection_graph(state)
+    _provider = state.get("llm_provider")
+    _model = state.get("llm_model")
 
     # When a SQL connection is selected, route against its real schema graph.
     if graph is not None:
         from app.target_db.controllers import render_graph_summary
 
-        router = Router(schema_summary=render_graph_summary(graph))
+        router = Router(schema_summary=render_graph_summary(graph), provider=_provider, model=_model)
     else:
-        router = Router()
+        router = Router(provider=_provider, model=_model)
 
     decision, response = router.route_question(question)
 
@@ -148,6 +153,8 @@ def router_node(state: GraphState) -> GraphState:
 def table_resolver_node(state: GraphState) -> GraphState:
     """Node 2: Identify relevant tables. Skip LLM if only 1 table exists."""
     question = state["question"]
+    _provider = state.get("llm_provider")
+    _model = state.get("llm_model")
 
     # When a connection is selected, resolve tables from its schema graph.
     graph = _connection_graph(state)
@@ -160,7 +167,8 @@ def table_resolver_node(state: GraphState) -> GraphState:
             return {"tables": all_tables}
         # Identify against the connection's real schema, not sample data.
         result = identify_tables(
-            question, schema_summary=render_graph_summary(graph)
+            question, schema_summary=render_graph_summary(graph),
+            provider=_provider, model=_model,
         )
 
         # Track LLM call for table identification
@@ -205,7 +213,7 @@ def table_resolver_node(state: GraphState) -> GraphState:
         return {"tables": all_tables}
 
     # Multiple tables — use LLM to identify relevant ones
-    result = identify_tables(question)
+    result = identify_tables(question, provider=_provider, model=_model)
 
     # Track LLM call for table identification
     if result.get("success") and result.get("response") and state.get("user_message_id") :
@@ -245,6 +253,8 @@ def generate_sql_node(state: GraphState) -> GraphState:
     tables = state.get("tables", [])
     error_context = state.get("sql_error", "")
     conversation_history = state.get("conversation_history", "")
+    _provider = state.get("llm_provider")
+    _model = state.get("llm_model")
 
     # When a connection is selected, feed the agent its real schema graph.
     graph = _connection_graph(state)
@@ -258,6 +268,8 @@ def generate_sql_node(state: GraphState) -> GraphState:
             error_context=error_context,
             table_structure=table_structure,
             conversation_history=conversation_history,
+            provider=_provider,
+            model=_model,
         )
     else:
         result = generate_sql(
@@ -265,6 +277,8 @@ def generate_sql_node(state: GraphState) -> GraphState:
             tables,
             error_context=error_context,
             conversation_history=conversation_history,
+            provider=_provider,
+            model=_model,
         )
 
     # Track LLM call for SQL generation
@@ -430,6 +444,8 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
             user_value=user_value,
             actual_values=fuzzy_sorted,
             cardinality=cardinality,
+            provider=state.get("llm_provider"),
+            model=state.get("llm_model"),
         )
 
         if resolution["confidence"] == "high" and resolution["match"]:
@@ -520,7 +536,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     # Get LLM's chart suggestion
     chart_context = ChartContext.build_chart_context(data)
-    result = decide_chart(question, chart_context)
+    result = decide_chart(question, chart_context, provider=state.get("llm_provider"), model=state.get("llm_model"))
 
     # Track LLM call for chart generation
     if result.get("success") and result.get("response") and state.get("user_message_id") :
@@ -800,7 +816,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
 def schema_info_node(state: GraphState) -> GraphState:
     """Node: Answer schema questions (LLM)."""
-    result = explain_schema(state["question"], context=state.get("route_reasoning", ""))
+    result = explain_schema(state["question"], context=state.get("route_reasoning", ""), provider=state.get("llm_provider"), model=state.get("llm_model"))
     if result["success"]:
         return {"final_response": {"type": "text", "message": result["answer"]}}
     return {"final_response": {"type": "error", "message": result["error"]}}
@@ -809,7 +825,8 @@ def schema_info_node(state: GraphState) -> GraphState:
 def general_answer_node(state: GraphState) -> GraphState:
     """Node: Answer general questions (LLM)."""
     result = general_answer(
-        state["question"], router_reasoning=state.get("route_reasoning", "")
+        state["question"], router_reasoning=state.get("route_reasoning", ""),
+        provider=state.get("llm_provider"), model=state.get("llm_model"),
     )
 
     # Track LLM call for fallback/general answers
@@ -1025,6 +1042,8 @@ class GraphOrchestrator:
         connection_id: str | None = None,
         conversation_history: str = "",
         user_message_id: str | None = None,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
     ):
         self.user_question = user_question
         # ### HITL — thread_id enables state persistence for interrupt/resume
@@ -1035,6 +1054,9 @@ class GraphOrchestrator:
         self.conversation_history = conversation_history
         # LLM cost tracking
         self.user_message_id = user_message_id
+        # Per-request LLM provider/model override from agent/workspace settings
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
 
     def executor(self) -> dict[str, Any]:
         """Run the graph and return the result.
@@ -1048,6 +1070,8 @@ class GraphOrchestrator:
             "connection_id": self.connection_id or "",
             "conversation_history": self.conversation_history,
             "user_message_id": self.user_message_id,
+            "llm_provider": self.llm_provider,
+            "llm_model": self.llm_model,
             "route": "",
             "route_reasoning": "",
             "tables": [],

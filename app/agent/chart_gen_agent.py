@@ -38,7 +38,7 @@ class ChartDecision(BaseModel):
     reasoning: str
 
 
-def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
+def decide_chart(question: str, context: dict | str, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
     """Decide the best chart type for a dataset.
 
     Parameters
@@ -51,7 +51,7 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
     {"success": True, "chart": ChartDecision, "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="chart_generation", temperature=0)
+        llm = create_chat_llm(purpose="chart_generation", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=ChartDecision)
         prompt = ChatPromptTemplate.from_template(sample_chart_prompt)
         messages = prompt.format_messages(question=question, context=context)

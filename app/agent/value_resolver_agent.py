@@ -71,6 +71,8 @@ def resolve_filter_value(
     user_value: str,
     actual_values: list[str],
     cardinality: int,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """### HITL — Ask LLM if it can confidently resolve a filter value.
 
@@ -87,7 +89,7 @@ def resolve_filter_value(
     {"confidence": "high"|"low", "match": "...", "alternatives": [...], "reasoning": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="value_resolver", temperature=0)
+        llm = create_chat_llm(purpose="value_resolver", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=ValueResolution)
 
         prompt = ChatPromptTemplate.from_template(VALUE_RESOLVER_PROMPT)

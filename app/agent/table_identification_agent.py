@@ -27,7 +27,8 @@ class TableIdentification(BaseModel):
 
 
 def identify_tables(
-    user_question: str, schema_summary: str | None = None
+    user_question: str, schema_summary: str | None = None,
+    provider: str | None = None, model: str | None = None,
 ) -> dict[str, Any]:
     """Identify relevant tables for a user question.
 
@@ -44,7 +45,7 @@ def identify_tables(
     try:
         if schema_summary is None:
             schema_summary = Summarizer.summarize_schema()
-        llm = create_chat_llm(purpose="table_identification", temperature=0)
+        llm = create_chat_llm(purpose="table_identification", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=TableIdentification)
         prompt = ChatPromptTemplate.from_template(table_identify_prompts)
         formatted = prompt.format_messages(

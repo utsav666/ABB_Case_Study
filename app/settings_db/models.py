@@ -103,6 +103,14 @@ class AgentConfig(BaseModel):
         default="public",
         description="Database schema the agent operates on.",
     )
+    llm_provider: str | None = Field(
+        default=None,
+        description=(
+            "LLM provider override for this agent. "
+            "Supported: openai, azure_openai, claude_merck. "
+            "When None, falls back to the LLM_PROVIDER env var."
+        ),
+    )
     max_tokens: int = Field(default=1000)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 

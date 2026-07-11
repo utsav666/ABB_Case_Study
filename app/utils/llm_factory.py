@@ -26,6 +26,7 @@ def create_chat_llm(
     purpose: str,
     temperature: float = 0.0,
     model: str | None = None,
+    provider: str | None = None,
     **kwargs: Any,
 ):
     """Create a LangChain chat model for the configured provider.
@@ -34,12 +35,15 @@ def create_chat_llm(
         purpose: Logical use-case, used to resolve <PURPOSE>_MODEL overrides.
         temperature: Sampling temperature.
         model: Optional explicit model name override.
+        provider: Optional provider override (e.g. "openai", "azure_openai",
+            "claude_merck"). When ``None``, falls back to the ``LLM_PROVIDER``
+            environment variable.
         **kwargs: Extra provider-specific kwargs passed to the model constructor.
 
     Returns:
         A LangChain chat model instance.
     """
-    provider = get_llm_provider()
+    provider = provider or get_llm_provider()
     selected_model = model or get_llm_model(purpose)
 
     if provider == "openai":

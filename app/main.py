@@ -896,6 +896,29 @@ def create_db_connection(
 # ── Agent CRUD ───────────────────────────────────────────────────────────────
 
 
+@app.get("/settings/llm-providers")
+def get_available_llm_providers() -> dict[str, Any]:
+    """Return the LLM providers available for selection in the UI."""
+    providers = [
+        {
+            "id": "openai",
+            "label": "OpenAI",
+            "models": ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"],
+        },
+        {
+            "id": "azure_openai",
+            "label": "Azure OpenAI",
+            "models": ["gpt-4o", "gpt-4.1", "gpt-4.1-mini"],
+        },
+        {
+            "id": "claude_merck",
+            "label": "Claude (Merck)",
+            "models": ["claude-opus-4-6-v1", "claude-sonnet-4-20250514"],
+        },
+    ]
+    return {"providers": providers}
+
+
 @app.post("/settings/agents", status_code=201)
 def create_agent(payload: AgentCreate) -> dict[str, Any]:
     """Create a new agent.
@@ -1057,6 +1080,19 @@ async def chat(
         )
         user_message_id = user_msg.get("id")
 
+    # Resolve per-workspace LLM provider/model from agent settings
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    if workspace_id:
+        try:
+            agents = AgentRepository().list_agents_by_workspace(workspace_id)
+            if agents:
+                agent_config = agents[0].get("config") or {}
+                llm_provider = agent_config.get("llm_provider") or None
+                llm_model = agents[0].get("model_version") or None
+        except Exception:
+            logger.debug("Could not load agent config for workspace %s", workspace_id)
+
     buffer = io.StringIO()
     try:
 
@@ -1068,6 +1104,8 @@ async def chat(
                     connection_id=connection_id,
                     conversation_history=prior_history_text,
                     user_message_id=user_message_id,
+                    llm_provider=llm_provider,
+                    llm_model=llm_model,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)

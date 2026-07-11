@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 load_env()
 
 
-def explain_schema(user_question: str, context: str = "") -> dict[str, Any]:
+def explain_schema(user_question: str, context: str = "", provider: str | None = None, model: str | None = None) -> dict[str, Any]:
     """Answer a schema-related question.
 
     Returns
@@ -23,7 +23,7 @@ def explain_schema(user_question: str, context: str = "") -> dict[str, Any]:
     {"success": True, "answer": "..."} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="schema_info", temperature=0)
+        llm = create_chat_llm(purpose="schema_info", temperature=0, provider=provider, model=model)
         schema_summary = Summarizer.summarize_schema()
 
         prompt = schema_info_gen_prompt.format(

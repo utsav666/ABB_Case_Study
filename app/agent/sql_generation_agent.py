@@ -95,6 +95,8 @@ def generate_sql(
     error_context: str = "",
     table_structure: str | None = None,
     conversation_history: str = "",
+    provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Generate SQL for a user question.
 
@@ -114,10 +116,11 @@ def generate_sql(
     {"success": True, "sql": "..."} or {"success": False, "error": "..."}
     """
     try:
-        selected_sql_model = DEFAULT_SQL_MODEL or get_llm_model("sql_generation")
+        selected_sql_model = model or DEFAULT_SQL_MODEL or get_llm_model("sql_generation")
         llm = create_chat_llm(
             purpose="sql_generation",
             model=selected_sql_model,
+            provider=provider,
             temperature=0,
         )
         if table_structure is None:

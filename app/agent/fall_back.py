@@ -18,6 +18,8 @@ def general_answer(
     user_question: str,
     conversation_history: list[dict[str, str]] | None = None,
     router_reasoning: str = "",
+    provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Answer a general-purpose question not related to the database.
 
@@ -26,7 +28,7 @@ def general_answer(
     {"success": True, "answer": "...", "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="general_answer", temperature=0.2)
+        llm = create_chat_llm(purpose="general_answer", temperature=0.2, provider=provider, model=model)
 
         messages = [{"role": "system", "content": fall_back_prompt}]
 
