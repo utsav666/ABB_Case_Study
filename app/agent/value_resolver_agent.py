@@ -139,6 +139,68 @@ def resolve_filter_value(
 # ─── Helper: Get column values from DB ───────────────────────────────────────
 
 
+def _qualify_table(table_name: str) -> str:
+    """### HITL — Build a schema-qualified, quoted table name.
+
+    Accepts "schema.table" or a bare "table" (schema looked up from
+    schema_preserve.json, defaulting to public).
+    """
+    if "." in table_name:
+        table_schema, actual_table_name = table_name.split(".", 1)
+    else:
+        raw_schema = SchemaConfigManager.load_raw_schema()
+        tables = raw_schema.get("tables", {})
+        table_schema = tables.get(table_name, {}).get("schema", "public")
+        actual_table_name = table_name
+    return f'"{table_schema}"."{actual_table_name}"'
+
+
+def value_exists_exactly(table_name: str, column_name: str, user_value: str) -> bool:
+    """### HITL — Does the user's value already match a value in this column?
+
+    This is the ONLY signal that decides whether disambiguation is worthwhile,
+    and it is deliberately TYPE-AGNOSTIC: the column is cast to text so a year
+    (INTEGER), a pincode (INTEGER *or* TEXT), and a country (TEXT) are all
+    checked the same way. If an exact match exists there is nothing to
+    disambiguate → the caller skips fuzzy/LLM/HITL. A miss is precisely what
+    makes resolution meaningful (typo, alias, wrong casing).
+
+    Fails open to False (i.e. keep resolution) on any query error, so we never
+    silently skip a genuinely ambiguous filter.
+    """
+    from app.utils.sql_executor import SqlExec
+
+    value_str = str(user_value).strip()
+    if not value_str:
+        return False
+
+    qualified_table = _qualify_table(table_name)
+    # Escape single quotes to keep the literal safe.
+    safe_value = value_str.replace("'", "''")
+    exists_sql = (
+        f'SELECT 1 FROM {qualified_table} '
+        f'WHERE CAST("{column_name}" AS TEXT) = \'{safe_value}\' LIMIT 1'
+    )
+
+    executor = SqlExec()
+    result = executor.sql_executor(exists_sql)
+
+    if isinstance(result, str):
+        # Query failed (bad column, DB error, ...) → don't skip resolution.
+        logger.warning("### HITL — Existence check failed: %s", result)
+        return False
+
+    found = not result.empty
+    logger.info(
+        "### HITL — Exact-match check '%s.%s' = '%s' → %s",
+        table_name,
+        column_name,
+        value_str,
+        "exists" if found else "no match",
+    )
+    return found
+
+
 def get_column_distinct_values(
     table_name: str, column_name: str, limit: int = 100
 ) -> tuple[list[str], int]:

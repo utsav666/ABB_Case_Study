@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any
@@ -25,12 +26,19 @@ _ENGINE_CACHE_LOCK = threading.Lock()
 
 
 def _build_pooled_engine(database_url: str) -> Engine:
-    """Create an engine with a connection pool suitable for a web server."""
+    """Create an engine with a connection pool suitable for a web server.
+
+    NOTE: pool_pre_ping is intentionally OFF. Against a remote settings DB
+    (~300ms RTT) it fired a full "SELECT 1" round-trip before *every* checkout,
+    costing ~300ms per session and several seconds per request. pool_recycle
+    below refreshes connections older than the server idle timeout, which covers
+    the common stale-connection case; a genuinely dropped connection surfaces as
+    a one-off error that the caller retries, which is far cheaper on average.
+    """
     return create_engine(
         database_url,
         pool_size=5,
         max_overflow=10,
-        pool_pre_ping=True,
         pool_recycle=1800,
     )
 
@@ -88,11 +96,26 @@ class SettingsDatabaseGateway:
     @contextmanager
     def get_session(self) -> Any:
         """Yield a SQLAlchemy session for settings DB ORM operations."""
+        _t0 = time.perf_counter()
         settings_engine = self._get_engine()
         session_factory = sessionmaker(bind=settings_engine, autoflush=False)
         session = session_factory()
+        # Force a connection checkout NOW so we can time it in isolation. This is
+        # exactly where pool_pre_ping fires its "SELECT 1" round-trip to the DB;
+        # if the pool has a live connection this is ~0ms, if it must dial/ping a
+        # remote host it is a full network round-trip.
+        session.connection()
+        _t_acquire = time.perf_counter()
+        logger.info(
+            "GATEWAY get_session — connection acquired (pool checkout + pre-ping) in %.0f ms",
+            (_t_acquire - _t0) * 1000,
+        )
         try:
             yield session
+            logger.info(
+                "GATEWAY get_session — query work inside session took %.0f ms",
+                (time.perf_counter() - _t_acquire) * 1000,
+            )
         except (ModuleNotFoundError, SQLAlchemyError) as error:
             session.rollback()
             import traceback

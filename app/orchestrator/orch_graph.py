@@ -38,6 +38,7 @@ from app.agent.value_resolver_agent import (  ### HITL
     get_column_distinct_values,
     get_fuzzy_matches,
     resolve_filter_value,
+    value_exists_exactly,
 )
 from app.envsetup.env_loader import get_llm_model, load_env
 from app.router.route_improvisation import Router
@@ -63,6 +64,7 @@ class GraphState(TypedDict, total=False):
 
     question: str
     connection_id: str  # Selected DB connection scoping this run (optional)
+    schema_graph: dict[str, Any] | None  # Loaded ONCE per run; reused by every node
     conversation_history: str  # Prior conversation context from LangChain memory
     thread_id: str  # Conversation thread ID for LLM tracking
     route: str
@@ -91,8 +93,24 @@ class GraphState(TypedDict, total=False):
 
 
 def _connection_graph(state: GraphState):
-    """Return the stored schema graph for the state's connection, or None."""
-    connection_id = state.get("connection_id")
+    """Return the schema graph for the state's connection, or None.
+
+    The graph is loaded ONCE per run (in executor()/resume()) and stashed in
+    state["schema_graph"], because it is immutable for the life of a request.
+    Every node calls this, so re-querying the DB here would fetch the same
+    bytes 3-5x — a multi-second waste against a remote settings DB.
+
+    We use a sentinel: the key is absent until loaded. `None` is a valid loaded
+    value (no connection / no graph), so we only fall back to a DB read when the
+    key is missing entirely — e.g. a resume path that didn't seed it.
+    """
+    if "schema_graph" in state:
+        return state["schema_graph"]
+    return _load_schema_graph(state.get("connection_id"))
+
+
+def _load_schema_graph(connection_id: str | None):
+    """Read the stored schema graph for a connection from the DB, or None."""
     if not connection_id:
         return None
     try:
@@ -106,6 +124,7 @@ def _connection_graph(state: GraphState):
 
 def router_node(state: GraphState) -> GraphState:
     """Node 1: Classify user intent."""
+    logger.info("NODE router — entering (classifying intent via LLM)")
     question = state["question"]
     graph = _connection_graph(state)
     _provider = state.get("llm_provider")
@@ -152,6 +171,7 @@ def router_node(state: GraphState) -> GraphState:
 
 def table_resolver_node(state: GraphState) -> GraphState:
     """Node 2: Identify relevant tables. Skip LLM if only 1 table exists."""
+    logger.info("NODE table_resolver — entering")
     question = state["question"]
     _provider = state.get("llm_provider")
     _model = state.get("llm_model")
@@ -249,6 +269,7 @@ def table_resolver_node(state: GraphState) -> GraphState:
 
 def generate_sql_node(state: GraphState) -> GraphState:
     """Node 3: Generate SQL using LLM."""
+    logger.info("NODE generate_sql — entering (building table structure + LLM call)")
     question = state["question"]
     tables = state.get("tables", [])
     error_context = state.get("sql_error", "")
@@ -420,19 +441,34 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         if not table_name:
             continue
 
-        # Get actual distinct values and cardinality from DB
+        # Get user's filter value as string
+        user_value = col_filter.filter_value
+        if isinstance(user_value, list):
+            user_value = user_value[0]  # Take first for IN clause
+        user_value = str(user_value)
+
+        # THE gate: does the typed value already match a value in the column?
+        # This is the only signal that decides whether disambiguation is worth
+        # doing, and it is TYPE-AGNOSTIC — year (INTEGER), pincode (INTEGER or
+        # TEXT) and country (TEXT) are all checked identically. An exact match
+        # means there is nothing to disambiguate → skip fuzzy/LLM/HITL. Only a
+        # miss (typo, alias, wrong casing) falls through to resolution.
+        if value_exists_exactly(table_name, col_filter.column, user_value):
+            logger.info(
+                "### HITL — '%s' exact-matches '%s.%s'; no disambiguation needed",
+                user_value,
+                table_name,
+                col_filter.column,
+            )
+            continue
+
+        # No exact match → fetch distinct values to resolve against
         actual_values, cardinality = get_column_distinct_values(
             table_name, col_filter.column
         )
 
         if cardinality == 0 or not actual_values:
             continue
-
-        # Get user's filter value as string
-        user_value = col_filter.filter_value
-        if isinstance(user_value, list):
-            user_value = user_value[0]  # Take first for IN clause
-        user_value = str(user_value)
 
         # Sort by fuzzy similarity
         fuzzy_sorted = get_fuzzy_matches(user_value, actual_values)
@@ -466,13 +502,33 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
                 user_value,
                 col_filter.column,
             )
+            # Always give the user something to pick: prefer the LLM's
+            # alternatives, but fall back to the DB's fuzzy-closest actual
+            # values when the LLM returns none. De-dupe while preserving order.
+            suggestions = [s for s in (resolution.get("alternatives") or []) if s]
+            if not suggestions:
+                suggestions = fuzzy_sorted[:10]
+            seen: set[str] = set()
+            deduped_suggestions: list[str] = []
+            for value in suggestions:
+                value_str = str(value)
+                if value_str not in seen:
+                    seen.add(value_str)
+                    deduped_suggestions.append(value_str)
+            suggestions = deduped_suggestions[:10]
+
+            logger.info(
+                "### HITL — Offering %d suggestion(s) for column '%s'",
+                len(suggestions),
+                col_filter.column,
+            )
             human_choice = interrupt(
                 {
                     "hitl_type": "cardinality_filter",
                     "column": col_filter.column,
                     "table": table_name,
                     "user_typed": user_value,
-                    "suggestions": resolution["alternatives"][:10],
+                    "suggestions": suggestions,
                     "reasoning": resolution["reasoning"],
                     "message": (
                         f"I'm not sure which '{col_filter.column}' value you mean. "
@@ -510,6 +566,112 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     if data is None:
         return {"final_response": {"type": "error", "message": "No data to chart."}}
+
+    # Detect and pivot year-over-year comparison data
+    def detect_and_pivot_yoy_comparison(df, question_text):
+        """Detect YoY comparison and pivot data for multi-series chart."""
+        import pandas as pd
+        import re
+
+        # Check if question indicates comparison
+        comparison_keywords = ['compare', 'vs', 'versus', 'compared to', 'last year', 'previous year', 'year over year', 'yoy']
+        is_comparison = any(keyword in question_text.lower() for keyword in comparison_keywords)
+
+        if not is_comparison:
+            return df, False
+
+        # Check if data is already pivoted (has multiple numeric columns)
+        # SQL agent might have already done the pivot with CASE WHEN
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        if len(numeric_cols) >= 2:
+            # Data is already pivoted, just format it for multi-series chart
+            logger.info(f"Data already pivoted by SQL: {len(numeric_cols)} metric columns detected")
+            # Find the categorical column (likely date-based)
+            cat_cols = [col for col in df.columns if col not in numeric_cols]
+            if cat_cols:
+                return df, True  # Return as-is, already in the right format
+
+        return df, False
+
+        # Check if data has a date column with multiple time periods
+        date_col = None
+        comparison_type = None  # 'year' or 'month'
+
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]) or 'date' in col.lower() or 'day' in col.lower() or 'month' in col.lower():
+                try:
+                    dates = pd.to_datetime(df[col], errors='coerce')
+                    if dates.notna().any():
+                        years = dates.dt.year.dropna().unique()
+                        months = dates.dt.to_period('M').dropna().unique()
+
+                        # Check for year-over-year comparison
+                        if len(years) >= 2:
+                            date_col = col
+                            comparison_type = 'year'
+                            break
+                        # Check for month-over-month comparison (same year, different months)
+                        elif len(months) >= 2 and len(years) == 1:
+                            date_col = col
+                            comparison_type = 'month'
+                            break
+                except Exception:
+                    continue
+
+        if not date_col or not comparison_type:
+            return df, False
+
+        # Find the metric column (numeric, not the date)
+        metric_col = None
+        for col in df.columns:
+            if col != date_col and pd.api.types.is_numeric_dtype(df[col]):
+                metric_col = col
+                break
+
+        if not metric_col:
+            return df, False
+
+        # Pivot the data based on comparison type
+        df_copy = df.copy()
+        df_copy['date_parsed'] = pd.to_datetime(df_copy[date_col])
+
+        if comparison_type == 'year':
+            # Year-over-year: compare same days across different years
+            df_copy['year'] = df_copy['date_parsed'].dt.year
+            df_copy['month_day'] = df_copy['date_parsed'].dt.strftime('%m-%d')
+
+            # Pivot: rows = month_day, columns = year, values = metric
+            pivoted = df_copy.pivot_table(
+                index='month_day',
+                columns='year',
+                values=metric_col,
+                aggfunc='mean'
+            ).reset_index()
+
+            # Rename columns to indicate years
+            pivoted.columns = [str(col) if col == 'month_day' else f"{metric_col}_{col}" for col in pivoted.columns]
+            logger.info(f"Pivoted YoY comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns")
+
+        elif comparison_type == 'month':
+            # Month-over-month: compare same days across different months
+            df_copy['month_name'] = df_copy['date_parsed'].dt.strftime('%B')  # Full month name
+            df_copy['day_of_month'] = df_copy['date_parsed'].dt.day
+
+            # Pivot: rows = day_of_month, columns = month_name, values = metric
+            pivoted = df_copy.pivot_table(
+                index='day_of_month',
+                columns='month_name',
+                values=metric_col,
+                aggfunc='mean'
+            ).reset_index()
+
+            # Rename columns to indicate months
+            pivoted.columns = [str(col) if col == 'day_of_month' else f"{metric_col}_{col.lower()}_2018" for col in pivoted.columns]
+            logger.info(f"Pivoted MoM comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns")
+
+        return pivoted, True
+
+    data, is_pivoted = detect_and_pivot_yoy_comparison(data, question)
 
     # Get column logical names from schema for better labels
     connection_id = state.get("connection_id")
@@ -573,12 +735,37 @@ def chart_approval_node(state: GraphState) -> GraphState:
     decision = result["chart"]
     available_columns = list(data.columns)
 
-    # Auto-approve the chart (HITL disabled for smoother UX)
-    # User can still modify chart via follow-up questions if needed
-    chart_type = decision.chart_type
-    x_axis = decision.x_axis
-    y_axis = decision.y_axis
-    y_axis_secondary = getattr(decision, 'y_axis_secondary', None)
+    # Override chart config for pivoted comparison data
+    if is_pivoted:
+        # Find categorical (X-axis) and numeric (Y-axis) columns
+        numeric_cols = data.select_dtypes(include=['number']).columns.tolist()
+        cat_cols = [col for col in data.columns if col not in numeric_cols]
+
+        # Check if it's YoY (month_day) or MoM (day_of_month) comparison
+        if 'month_day' in data.columns:
+            # Year-over-year: convert month_day (05-01) to day number (1)
+            data['day_label'] = data['month_day'].apply(lambda x: str(int(x.split('-')[1])))
+            x_axis = 'day_label'
+            y_axis = [col for col in numeric_cols]  # All numeric columns are series
+        elif 'day_of_month' in data.columns:
+            # Month-over-month: use day_of_month directly
+            x_axis = 'day_of_month'
+            y_axis = [col for col in numeric_cols]  # All numeric columns are series
+        else:
+            # Already pivoted by SQL: use first categorical column as X
+            x_axis = cat_cols[0] if cat_cols else data.columns[0]
+            y_axis = numeric_cols  # All numeric columns are series
+
+        chart_type = 'line'  # Always use line for time comparisons
+        y_axis_secondary = None
+        logger.info(f"Comparison detected: x={x_axis}, y={y_axis}")
+    else:
+        # Auto-approve the chart (HITL disabled for smoother UX)
+        # User can still modify chart via follow-up questions if needed
+        chart_type = decision.chart_type
+        x_axis = decision.x_axis
+        y_axis = decision.y_axis
+        y_axis_secondary = getattr(decision, 'y_axis_secondary', None)
 
     # Validate axes exist in data
     # Handle both single y_axis and list (for multi-series charts)
@@ -783,9 +970,13 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
         labels = {}
         # Map each axis to its display name
-        display = get_display_name(x_axis)
-        if display:
-            labels["x_axis_label"] = display
+        # For comparisons with day labels, use "Day" as X-axis label
+        if is_pivoted and x_axis in ['day_label', 'day_of_month']:
+            labels["x_axis_label"] = "Day"
+        else:
+            display = get_display_name(x_axis)
+            if display:
+                labels["x_axis_label"] = display
 
         # Handle y_axis (could be string or list)
         y_axes = y_axis if isinstance(y_axis, list) else [y_axis]
@@ -803,12 +994,16 @@ def chart_approval_node(state: GraphState) -> GraphState:
         if labels:
             chart_config["labels"] = labels
 
+    # Convert DataFrame back to records for response
+    # If data was pivoted, use the pivoted DataFrame; otherwise use original
+    response_data = data.to_dict('records') if is_pivoted else state.get("data")
+
     return {
         "hitl_triggered": False,  # No longer requiring approval
         "final_response": {
             "type": "chart",
             "chart_config": chart_config,
-            "data": state.get("data"),  # already records (list of dicts)
+            "data": response_data,  # records (list of dicts)
             "sql": state.get("sql", ""),
         },
     }
@@ -1068,6 +1263,9 @@ class GraphOrchestrator:
             "question": self.user_question,
             "thread_id": self.thread_id,
             "connection_id": self.connection_id or "",
+            # Load the schema graph ONCE here; every node reads it from state
+            # instead of re-querying the (remote) settings DB per node.
+            "schema_graph": _load_schema_graph(self.connection_id),
             "conversation_history": self.conversation_history,
             "user_message_id": self.user_message_id,
             "llm_provider": self.llm_provider,

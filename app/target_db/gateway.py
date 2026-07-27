@@ -33,16 +33,16 @@ _ENGINE_CACHE_LOCK = threading.Lock()
 def _build_pooled_engine(target_url: str) -> Engine:
     """Create a pooled engine for a target database URL.
 
-    pool_pre_ping validates a pooled connection before use so a connection the
-    server has already dropped (common with RDS idle timeouts) is transparently
-    replaced instead of surfacing as an error. pool_recycle refreshes
-    connections periodically as a second line of defense.
+    pool_pre_ping is intentionally OFF: it fires a "SELECT 1" round-trip before
+    every checkout, which against a remote target DB adds ~300ms per query.
+    pool_recycle refreshes connections older than the server idle timeout, which
+    covers the common stale-connection case (e.g. RDS idle drops); a genuinely
+    dropped connection surfaces as a one-off error the caller retries.
     """
     return create_engine(
         target_url,
         pool_size=2,
         max_overflow=5,
-        pool_pre_ping=True,
         pool_recycle=1800,
     )
 

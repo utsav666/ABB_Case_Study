@@ -6,6 +6,7 @@ configuration in app.envsetup.env_loader.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 from app.envsetup.env_loader import (
@@ -29,7 +30,16 @@ def create_chat_llm(
     provider: str | None = None,
     **kwargs: Any,
 ):
-    """Create a LangChain chat model for the configured provider.
+    """Create (or reuse) a LangChain chat model for the configured provider.
+
+    Clients are cached and reused across calls keyed on the resolved
+    (provider, model, temperature) so we don't rebuild the client — and its
+    underlying httpx connection pool — on every graph node. This removes the
+    per-call construction + TLS setup cost that made multi-step requests slow.
+
+    Only the common no-extra-kwargs path is cached (that is every call site in
+    this codebase); when caller-supplied ``kwargs`` are present we build a
+    fresh, uncached client since kwargs aren't hashable and may vary.
 
     Args:
         purpose: Logical use-case, used to resolve <PURPOSE>_MODEL overrides.
@@ -46,6 +56,26 @@ def create_chat_llm(
     provider = provider or get_llm_provider()
     selected_model = model or get_llm_model(purpose)
 
+    if not kwargs:
+        # Fast path: reuse a cached client for this (provider, model, temp).
+        return _get_cached_chat_llm(provider, selected_model, temperature)
+
+    return _build_chat_llm(provider, selected_model, temperature, **kwargs)
+
+
+@lru_cache(maxsize=None)
+def _get_cached_chat_llm(provider: str, selected_model: str, temperature: float):
+    """Memoized client builder for the no-extra-kwargs path."""
+    return _build_chat_llm(provider, selected_model, temperature)
+
+
+def _build_chat_llm(
+    provider: str,
+    selected_model: str,
+    temperature: float,
+    **kwargs: Any,
+):
+    """Construct a fresh LangChain chat model for the given provider/model."""
     if provider == "openai":
         try:
             from langchain_openai import ChatOpenAI

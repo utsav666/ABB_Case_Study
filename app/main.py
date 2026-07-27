@@ -1048,20 +1048,35 @@ async def chat(
         )
 
     import asyncio
+    import time
     import uuid
     from app.orchestrator.orch_graph import GraphOrchestrator
     from app.orchestrator.conversation_manager import ConversationHistoryManager
 
     # Use the client-provided thread_id or generate a new one for HITL
     thread_id = thread_id_from_client or str(uuid.uuid4())
+    logger.info(
+        "CHAT — received question=%r thread_id=%s workspace_id=%s connection_id=%s",
+        normalized_question[:120],
+        thread_id,
+        workspace_id,
+        connection_id,
+    )
 
     # Retrieve conversation history for an existing thread
+    _t0 = time.perf_counter()
     conversation_manager = ConversationHistoryManager()
     prior_history_text: str = ""
     if thread_id_from_client:
         prior_history_text = conversation_manager.format_history_for_context(thread_id)
+    logger.info(
+        "CHAT — loaded conversation history (%d chars) in %.0f ms",
+        len(prior_history_text),
+        (time.perf_counter() - _t0) * 1000,
+    )
 
     # Ensure thread row exists before inserting messages.
+    _t0 = time.perf_counter()
     if workspace_id:
         conversation_manager.ensure_conversation(
             workspace_id=workspace_id,
@@ -1079,8 +1094,13 @@ async def chat(
             content=normalized_question,
         )
         user_message_id = user_msg.get("id")
+    logger.info(
+        "CHAT — persisted user message in %.0f ms",
+        (time.perf_counter() - _t0) * 1000,
+    )
 
     # Resolve per-workspace LLM provider/model from agent settings
+    _t0 = time.perf_counter()
     llm_provider: str | None = None
     llm_model: str | None = None
     if workspace_id:
@@ -1092,6 +1112,12 @@ async def chat(
                 llm_model = agents[0].get("model_version") or None
         except Exception:
             logger.debug("Could not load agent config for workspace %s", workspace_id)
+    logger.info(
+        "CHAT — resolved agent config (provider=%s model=%s) in %.0f ms; starting orchestrator",
+        llm_provider,
+        llm_model,
+        (time.perf_counter() - _t0) * 1000,
+    )
 
     buffer = io.StringIO()
     try:
