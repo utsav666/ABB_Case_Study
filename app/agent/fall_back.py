@@ -5,11 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
-
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import fall_back_prompt
+from app.utils.llm_factory import create_chat_llm
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +18,17 @@ def general_answer(
     user_question: str,
     conversation_history: list[dict[str, str]] | None = None,
     router_reasoning: str = "",
+    provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Answer a general-purpose question not related to the database.
 
     Returns
     -------
-    {"success": True, "answer": "..."} or {"success": False, "error": "..."}
+    {"success": True, "answer": "...", "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0.2,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        llm = create_chat_llm(purpose="general_answer", temperature=0.2, provider=provider, model=model)
 
         messages = [{"role": "system", "content": fall_back_prompt}]
 
@@ -48,7 +44,7 @@ def general_answer(
 
         response = llm.invoke(messages)
         logger.debug("General answer generated")
-        return {"success": True, "answer": response.content}
+        return {"success": True, "answer": response.content, "response": response}
     except Exception as e:
         logger.exception("General answer failed")
         return {"success": False, "error": str(e)}
@@ -58,7 +54,7 @@ def general_answer(
 class GeneralAnswerAgent:
     """Deprecated: use general_answer() directly."""
 
-    def __init__(self, model="gpt-4o", temperature=0.2):
+    def __init__(self, model: str | None = None, temperature: float = 0.2):
         pass
 
     def run(self, conversation_history, user_question, router_reasoning) -> str:

@@ -7,11 +7,11 @@ from typing import Any, List
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import table_identify_prompts
+from app.utils.llm_factory import create_chat_llm
 from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
@@ -26,20 +26,26 @@ class TableIdentification(BaseModel):
     )
 
 
-def identify_tables(user_question: str) -> dict[str, Any]:
+def identify_tables(
+    user_question: str, schema_summary: str | None = None,
+    provider: str | None = None, model: str | None = None,
+) -> dict[str, Any]:
     """Identify relevant tables for a user question.
+
+    Parameters
+    ----------
+    user_question: The natural-language question.
+    schema_summary: Optional connection-scoped schema summary; falls back to the
+        default (sample/config) summary when not provided.
 
     Returns
     -------
-    {"success": True, "tables": [...]} or {"success": False, "error": "..."}
+    {"success": True, "tables": [...], "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        schema_summary = Summarizer.summarize_schema()
-        llm = ChatOpenAI(
-            model="gpt-4",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        if schema_summary is None:
+            schema_summary = Summarizer.summarize_schema()
+        llm = create_chat_llm(purpose="table_identification", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=TableIdentification)
         prompt = ChatPromptTemplate.from_template(table_identify_prompts)
         formatted = prompt.format_messages(
@@ -50,7 +56,11 @@ def identify_tables(user_question: str) -> dict[str, Any]:
         response = llm.invoke(formatted)
         parsed = parser.parse(str(response.content))
         logger.debug("Identified tables: %s", parsed.get("relevant_tables"))
-        return {"success": True, "tables": parsed.get("relevant_tables", [])}
+        return {
+            "success": True,
+            "tables": parsed.get("relevant_tables", []),
+            "response": response,  # Include response for token tracking
+        }
     except Exception as e:
         logger.exception("Table identification failed")
         return {"success": False, "error": str(e)}

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app.auth.oauth_router import auth_router
-from app.envsetup.env_loader import load_env
+from app.envsetup.env_loader import get_llm_model, load_env
 from app.settings_db.controllers import (
     create_db_connection as create_settings_db_connection,
 )
@@ -29,9 +29,11 @@ from app.settings_db.models import AgentCreate, AgentUpdate
 from app.settings_db.repositories import (
     AgentRepository,
     ColumnDefinitionRepository,
+    ConversationRepository,
     SelectedTableRepository,
 )
 from app.settings_db.router import settings_db_router
+from app.settings_db.workspace_router import workspace_router
 from app.utils.db_column_config_view import (
     build_db_column_configuration_payload,
     get_table_configuration_payload,
@@ -104,6 +106,17 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(settings_db_router)
+app.include_router(workspace_router)
+
+
+@app.on_event("shutdown")
+def _dispose_pooled_db_engines() -> None:
+    """Release pooled DB connections so restarts/reloads are clean."""
+    from app.settings_db.gateway import dispose_all_engines
+    from app.target_db.gateway import dispose_all_target_engines
+
+    dispose_all_engines()
+    dispose_all_target_engines()
 
 
 @app.exception_handler(Exception)
@@ -126,6 +139,18 @@ class ChatRequest(BaseModel):
     question: str = Field(default="", description="User question to answer.")
     message: str = Field(
         default="", description="Alternate frontend field for the user question."
+    )
+    thread_id: str | None = Field(
+        default=None,
+        description="Conversation thread ID for continuing an existing conversation.",
+    )
+    connection_id: str | None = Field(
+        default=None,
+        description="DB connection ID scoping the query.",
+    )
+    workspace_id: str | None = Field(
+        default=None,
+        description="Workspace ID for conversation persistence.",
     )
 
     @model_validator(mode="after")
@@ -394,14 +419,28 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
 
         if result_type == "chart":
             chart_figure = result.get("figure")
+            chart_config = result.get("chart_config")
             chart_data = result.get("data")
             payload["answer_type"] = "chart"
             payload["message"] = "Here is your chart."
-            payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
-            if isinstance(chart_data, pd.DataFrame):
-                payload["data"] = serialize_dataframe(chart_data)
-            else:
-                payload["data"] = chart_data
+
+            # New format: chart_config + data (for frontend rendering)
+            if chart_config:
+                payload["chart_config"] = chart_config
+                if isinstance(chart_data, pd.DataFrame):
+                    payload["data"] = chart_data.to_dict(orient="records")
+                elif isinstance(chart_data, list):
+                    payload["data"] = chart_data
+                else:
+                    payload["data"] = []
+            # Legacy format: matplotlib figure as base64 image
+            elif chart_figure:
+                payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
+                if isinstance(chart_data, pd.DataFrame):
+                    payload["data"] = serialize_dataframe(chart_data)
+                else:
+                    payload["data"] = chart_data
+
             return payload
 
         if result_type == "data":
@@ -418,6 +457,11 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
             payload["answer_type"] = "schema_info"
             payload["message"] = result.get("message", "Schema information retrieved.")
             payload["data"] = result.get("data")
+            return payload
+
+        if result_type == "text":
+            payload["answer_type"] = "text"
+            payload["message"] = result.get("message", "Here is the response.")
             return payload
 
         if result_type == "error":
@@ -441,6 +485,33 @@ def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
     payload["answer_type"] = "text"
     payload["message"] = str(result)
     return payload
+
+
+def build_persisted_assistant_content(response_payload: dict[str, Any]) -> str:
+    """Serialize a stable assistant payload for conversation history storage."""
+    persisted_payload = {
+        "answer_type": response_payload.get("answer_type"),
+        "message": response_payload.get("message"),
+        "data": response_payload.get("data"),
+        "chart_config": response_payload.get("chart_config"),  # New chart format
+        "chart_image_base64": response_payload.get("chart_image_base64"),  # Legacy
+        "sql": response_payload.get("sql"),
+    }
+
+    try:
+        return json.dumps(
+            {
+                "kind": "assistant_payload_v1",
+                "payload": persisted_payload,
+            },
+            ensure_ascii=True,
+            default=str,
+        )
+    except (TypeError, ValueError):
+        fallback_message = response_payload.get("message")
+        if isinstance(fallback_message, str) and fallback_message.strip():
+            return fallback_message
+        return "Request completed."
 
 
 @app.get("/")
@@ -606,7 +677,7 @@ def post_schema_configuration(payload: SchemaConfigRequest) -> dict[str, Any]:
                 {
                     "workspace_id": _UUID(payload.workspace_id),
                     "name": "Data Assistant",
-                    "model_version": "gpt-4o",
+                    "model_version": get_llm_model(),
                     "config": schema_config,
                     "is_public_to_team": True,
                 }
@@ -825,6 +896,29 @@ def create_db_connection(
 # ── Agent CRUD ───────────────────────────────────────────────────────────────
 
 
+@app.get("/settings/llm-providers")
+def get_available_llm_providers() -> dict[str, Any]:
+    """Return the LLM providers available for selection in the UI."""
+    providers = [
+        {
+            "id": "openai",
+            "label": "OpenAI",
+            "models": ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"],
+        },
+        {
+            "id": "azure_openai",
+            "label": "Azure OpenAI",
+            "models": ["gpt-4o", "gpt-4.1", "gpt-4.1-mini"],
+        },
+        {
+            "id": "claude_merck",
+            "label": "Claude (Merck)",
+            "models": ["claude-opus-4-6-v1", "claude-sonnet-4-20250514"],
+        },
+    ]
+    return {"providers": providers}
+
+
 @app.post("/settings/agents", status_code=201)
 def create_agent(payload: AgentCreate) -> dict[str, Any]:
     """Create a new agent.
@@ -918,9 +1012,25 @@ async def chat(
 ) -> dict[str, Any]:
     """Run the orchestrator and return a JSON response."""
     normalized_question = (question or message or query or prompt or text or "").strip()
+    # Read the body once so we can pull both the question (fallback) and the
+    # optional connection_id that scopes the run to a real schema graph.
+    body_payload = await read_request_payload(request)
     if not normalized_question:
-        payload = await read_request_payload(request)
-        normalized_question = extract_question_from_payload(payload)
+        normalized_question = extract_question_from_payload(body_payload)
+
+    connection_id: str | None = None
+    thread_id_from_client: str | None = None
+    workspace_id: str | None = None
+    if isinstance(body_payload, dict):
+        raw_connection_id = body_payload.get("connection_id")
+        if isinstance(raw_connection_id, str) and raw_connection_id.strip():
+            connection_id = raw_connection_id.strip()
+        raw_thread_id = body_payload.get("thread_id")
+        if isinstance(raw_thread_id, str) and raw_thread_id.strip():
+            thread_id_from_client = raw_thread_id.strip()
+        raw_workspace_id = body_payload.get("workspace_id")
+        if isinstance(raw_workspace_id, str) and raw_workspace_id.strip():
+            workspace_id = raw_workspace_id.strip()
 
     if not normalized_question:
         return jsonable_encoder(
@@ -938,11 +1048,76 @@ async def chat(
         )
 
     import asyncio
+    import time
     import uuid
     from app.orchestrator.orch_graph import GraphOrchestrator
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
 
-    ### HITL — Generate a thread_id for this conversation
-    thread_id = str(uuid.uuid4())
+    # Use the client-provided thread_id or generate a new one for HITL
+    thread_id = thread_id_from_client or str(uuid.uuid4())
+    logger.info(
+        "CHAT — received question=%r thread_id=%s workspace_id=%s connection_id=%s",
+        normalized_question[:120],
+        thread_id,
+        workspace_id,
+        connection_id,
+    )
+
+    # Retrieve conversation history for an existing thread
+    _t0 = time.perf_counter()
+    conversation_manager = ConversationHistoryManager()
+    prior_history_text: str = ""
+    if thread_id_from_client:
+        prior_history_text = conversation_manager.format_history_for_context(thread_id)
+    logger.info(
+        "CHAT — loaded conversation history (%d chars) in %.0f ms",
+        len(prior_history_text),
+        (time.perf_counter() - _t0) * 1000,
+    )
+
+    # Ensure thread row exists before inserting messages.
+    _t0 = time.perf_counter()
+    if workspace_id:
+        conversation_manager.ensure_conversation(
+            workspace_id=workspace_id,
+            connection_id=connection_id,
+            title=normalized_question[:80],
+            thread_id=thread_id,
+        )
+
+    # Persist the user's message and capture message_id for LLM tracking
+    user_message_id = None
+    if workspace_id:
+        user_msg = conversation_manager.add_message(
+            thread_id=thread_id,
+            role="user",
+            content=normalized_question,
+        )
+        user_message_id = user_msg.get("id")
+    logger.info(
+        "CHAT — persisted user message in %.0f ms",
+        (time.perf_counter() - _t0) * 1000,
+    )
+
+    # Resolve per-workspace LLM provider/model from agent settings
+    _t0 = time.perf_counter()
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    if workspace_id:
+        try:
+            agents = AgentRepository().list_agents_by_workspace(workspace_id)
+            if agents:
+                agent_config = agents[0].get("config") or {}
+                llm_provider = agent_config.get("llm_provider") or None
+                llm_model = agents[0].get("model_version") or None
+        except Exception:
+            logger.debug("Could not load agent config for workspace %s", workspace_id)
+    logger.info(
+        "CHAT — resolved agent config (provider=%s model=%s) in %.0f ms; starting orchestrator",
+        llm_provider,
+        llm_model,
+        (time.perf_counter() - _t0) * 1000,
+    )
 
     buffer = io.StringIO()
     try:
@@ -950,7 +1125,13 @@ async def chat(
         def _run_orchestrator() -> Any:
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
                 return GraphOrchestrator(
-                    normalized_question, thread_id=thread_id
+                    normalized_question,
+                    thread_id=thread_id,
+                    connection_id=connection_id,
+                    conversation_history=prior_history_text,
+                    user_message_id=user_message_id,
+                    llm_provider=llm_provider,
+                    llm_model=llm_model,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
@@ -981,9 +1162,54 @@ async def chat(
 
     response_payload = {
         "question": normalized_question,
+        "thread_id": thread_id,
         **build_chat_response(result, buffer.getvalue()),
     }
+
+    # Persist the assistant's reply in a structured format for reload hydration.
+    assistant_content = build_persisted_assistant_content(response_payload)
+    if workspace_id and assistant_content:
+        conversation_manager.add_message(
+            thread_id=thread_id,
+            role="assistant",
+            content=assistant_content,
+        )
+
     return jsonable_encoder(response_payload)
+
+
+# ============================================================
+# Conversation history endpoints
+# ============================================================
+
+@app.get("/conversations")
+async def list_conversations(workspace_id: str = Query(..., description="Workspace UUID")) -> list[dict[str, Any]]:
+    """List all conversation threads for a workspace, newest first."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    return manager.get_workspace_conversations(workspace_id)
+
+
+@app.get("/conversations/{thread_id}/messages")
+async def get_conversation_messages(thread_id: str) -> list[dict[str, Any]]:
+    """Retrieve all messages in a conversation thread."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    return manager.get_conversation_history(thread_id)
+
+
+@app.delete("/conversations/{thread_id}")
+async def delete_conversation(thread_id: str) -> dict[str, Any]:
+    """Delete a conversation thread and all its messages."""
+    from app.orchestrator.conversation_manager import ConversationHistoryManager
+
+    manager = ConversationHistoryManager()
+    deleted = manager.delete_conversation(thread_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"status": "deleted", "thread_id": thread_id}
 
 
 # ============================================================

@@ -7,11 +7,11 @@ from typing import Any, Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_chart_prompt
+from app.utils.llm_factory import create_chat_llm
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,26 @@ load_env()
 
 
 class ChartDecision(BaseModel):
-    chart_type: Literal["bar", "line", "scatter", "histogram", "pie", "box", "area"]
+    chart_type: Literal[
+        "bar",
+        "line",
+        "scatter",
+        "histogram",
+        "pie",
+        "box",
+        "area",
+        "dual_axis_column",  # Two metrics, different scales, both as columns
+        "column_line",  # One metric as column, another as line overlay
+        "grouped_column",  # Multiple series side-by-side
+        "stacked_column",  # Multiple series stacked
+    ]
     x_axis: str
-    y_axis: str
+    y_axis: str | list[str]  # Single axis or list for multi-metric charts
+    y_axis_secondary: str | None = None  # For dual-axis charts
     reasoning: str
 
 
-def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
+def decide_chart(question: str, context: dict | str, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
     """Decide the best chart type for a dataset.
 
     Parameters
@@ -35,14 +48,10 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
 
     Returns
     -------
-    {"success": True, "chart": ChartDecision} or {"success": False, "error": "..."}
+    {"success": True, "chart": ChartDecision, "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
-        )
+        llm = create_chat_llm(purpose="chart_generation", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=ChartDecision)
         prompt = ChatPromptTemplate.from_template(sample_chart_prompt)
         messages = prompt.format_messages(question=question, context=context)
@@ -50,7 +59,7 @@ def decide_chart(question: str, context: dict | str) -> dict[str, Any]:
         parsed = parser.parse(str(response.content))
         decision = ChartDecision(**parsed)
         logger.debug("Chart decision: %s", decision)
-        return {"success": True, "chart": decision}
+        return {"success": True, "chart": decision, "response": response}
     except Exception as e:
         logger.exception("Chart decision failed")
         return {"success": False, "error": str(e)}

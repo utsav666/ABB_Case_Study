@@ -3,14 +3,24 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "Fullstack: FastAPI + Frontend",
+            "configurations": [
+                "FastAPI",
+                "Frontend: Next.js"
+            ]
+        }
+    ],
     "configurations": [
 
         {
             "name": "FastAPI",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
-            "python": "/usr/local/python/current/bin/python",
+            "python": "/workspace/ABB_Case_Study/.venv/bin/python",
+            "cwd": "/workspace/ABB_Case_Study",
             "args": [
                 "app.main:app",
                 "--host",
@@ -24,15 +34,23 @@
         },
         {
             "name": "Streamlit: brick_chat",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "streamlit",
-            "python": "/usr/local/python/current/bin/python",
+            "python": "/workspace/ABB_Case_Study/.venv/bin/python",
+            "cwd": "/workspace/ABB_Case_Study",
             "args": [
                 "run",
                 "app/brick_chat.py"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Frontend: Next.js",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm run dev",
+            "cwd": "/workspace/dmia-frontend"
         }
     ]
 }

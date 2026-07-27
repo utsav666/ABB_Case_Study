@@ -5,10 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import openai
-
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import schema_info_gen_prompt
+from app.utils.llm_factory import create_chat_llm
 from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 load_env()
 
 
-def explain_schema(user_question: str, context: str = "") -> dict[str, Any]:
+def explain_schema(user_question: str, context: str = "", provider: str | None = None, model: str | None = None) -> dict[str, Any]:
     """Answer a schema-related question.
 
     Returns
@@ -24,7 +23,7 @@ def explain_schema(user_question: str, context: str = "") -> dict[str, Any]:
     {"success": True, "answer": "..."} or {"success": False, "error": "..."}
     """
     try:
-        openai.api_key = get_openai_api_key()
+        llm = create_chat_llm(purpose="schema_info", temperature=0, provider=provider, model=model)
         schema_summary = Summarizer.summarize_schema()
 
         prompt = schema_info_gen_prompt.format(
@@ -32,15 +31,13 @@ def explain_schema(user_question: str, context: str = "") -> dict[str, Any]:
             user_question=user_question,
             context=context,
         )
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[
+        response = llm.invoke(
+            [
                 {"role": "system", "content": "You are a Schema expert."},
                 {"role": "user", "content": prompt},
-            ],
-            temperature=0,
+            ]
         )
-        answer = response.choices[0].message.content.strip()
+        answer = str(response.content).strip()
         logger.debug("Schema info response generated")
         return {"success": True, "answer": answer}
     except Exception as e:

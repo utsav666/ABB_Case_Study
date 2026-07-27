@@ -1,0 +1,701 @@
+{
+    "tables": {
+      "sample": {
+        "schema": "sales",
+        "type": "table",
+        "columns": {
+          "date": {
+            "type": "TIMESTAMP WITHOUT TIME ZONE",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_date": "2015-01-01 00:50:00",
+              "max_date": "2018-12-12 23:58:00",
+              "granularity": "irregular",
+              "null_ratio": 0,
+              "description": "The date and time when the transaction or event occurred.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use DATE_TRUNC for period queries."
+            }
+          },
+          "customer_id": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 10037,
+              "cardinality_class": "high",
+              "null_ratio": 0,
+              "top_values": [
+                {
+                  "value": "100747342",
+                  "frequency": 248
+                },
+                {
+                  "value": "100746029",
+                  "frequency": 176
+                },
+                {
+                  "value": "100748319",
+                  "frequency": 168
+                },
+                {
+                  "value": "100746089",
+                  "frequency": 160
+                },
+                {
+                  "value": "100753734",
+                  "frequency": 144
+                },
+                {
+                  "value": "100753799",
+                  "frequency": 144
+                },
+                {
+                  "value": "100746979",
+                  "frequency": 144
+                },
+                {
+                  "value": "100753613",
+                  "frequency": 144
+                },
+                {
+                  "value": "100746999",
+                  "frequency": 140
+                },
+                {
+                  "value": "100753469",
+                  "frequency": 136
+                },
+                {
+                  "value": "100745974",
+                  "frequency": 126
+                },
+                {
+                  "value": "100760779",
+                  "frequency": 120
+                },
+                {
+                  "value": "100760520",
+                  "frequency": 112
+                },
+                {
+                  "value": "100760684",
+                  "frequency": 96
+                },
+                {
+                  "value": "100765440",
+                  "frequency": 96
+                }
+              ],
+              "sample_values": [
+                "100746356",
+                "100754635",
+                "100768449",
+                "100752121",
+                "100753267",
+                "100745137",
+                "100770615",
+                "100747362",
+                "100765105",
+                "100765513"
+              ],
+              "description": "A unique identifier for each customer.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "pincode": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 835,
+              "cardinality_class": "high",
+              "null_ratio": 0,
+              "top_values": [
+                {
+                  "value": "452016",
+                  "frequency": 4482
+                },
+                {
+                  "value": "201301",
+                  "frequency": 4056
+                },
+                {
+                  "value": "380006",
+                  "frequency": 3291
+                },
+                {
+                  "value": "122001",
+                  "frequency": 3162
+                },
+                {
+                  "value": "122101",
+                  "frequency": 2852
+                },
+                {
+                  "value": "143001",
+                  "frequency": 1956
+                },
+                {
+                  "value": "411057",
+                  "frequency": 1631
+                },
+                {
+                  "value": "560037",
+                  "frequency": 1592
+                },
+                {
+                  "value": "141001",
+                  "frequency": 1558
+                },
+                {
+                  "value": "302001",
+                  "frequency": 1454
+                },
+                {
+                  "value": "122002",
+                  "frequency": 1405
+                },
+                {
+                  "value": "248001",
+                  "frequency": 1391
+                },
+                {
+                  "value": "203203",
+                  "frequency": 1256
+                },
+                {
+                  "value": "500032",
+                  "frequency": 1207
+                },
+                {
+                  "value": "500081",
+                  "frequency": 1000
+                }
+              ],
+              "sample_values": [
+                "737101",
+                "411051",
+                "400009",
+                "400008",
+                "560040",
+                "144009",
+                "221010",
+                "600026",
+                "201009",
+                "500045"
+              ],
+              "description": "The postal code associated with the customer's address.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "city": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 73,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Agartala",
+                "Ahmedabad",
+                "Ajmer",
+                "Alwar",
+                "Amritsar",
+                "Ananthapur",
+                "Belgaum",
+                "Bengaluru",
+                "Bhojpur",
+                "Bhubaneshwar",
+                "Chandigarh",
+                "Chennai",
+                "Chittoor",
+                "Coimbatore",
+                "Cuddapah",
+                "Cuttack",
+                "Daman",
+                "Dehradun",
+                "Delhi",
+                "Dibrugarh",
+                "Durg",
+                "Faridabad",
+                "Gandhinagar",
+                "Gangtok",
+                "Gautam Buddh Nagar",
+                "Gaya",
+                "Ghaziabad",
+                "Guntur",
+                "Gurugram",
+                "Gwalior",
+                "Haridwar",
+                "Hyderabad",
+                "Indore",
+                "Jabalpur",
+                "Jaipur",
+                "Jalandhar",
+                "Jammu",
+                "Jamnagar",
+                "Jamshedpur",
+                "Kamrup",
+                "Kanpur",
+                "Kolar",
+                "Kolkota",
+                "Kota",
+                "Krishna",
+                "Kurnool",
+                "Lucknow",
+                "Ludhiana",
+                "Madurai",
+                "Mathura",
+                "Medak",
+                "Mumbai",
+                "Muzzafarpur",
+                "Mysore",
+                "Nainital",
+                "Nashik",
+                "Nellore",
+                "Nizamabad",
+                "Panaji",
+                "Patna",
+                "Pune",
+                "Raipur",
+                "Rajkot",
+                "Ranchi",
+                "Shillong",
+                "Shimla",
+                "Srinagar",
+                "Tezpur",
+                "Udaipur",
+                "Varanasi",
+                "Visakhapatnam",
+                "Vizianagaram",
+                "Warangal"
+              ],
+              "description": "The city where the customer is located.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "state": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 26,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Andhra Pradesh",
+                "Assam",
+                "Bihar",
+                "Chandigarh",
+                "Chhattisgarh",
+                "Dadra and Nagar Haveli",
+                "Delhi",
+                "Goa",
+                "Gujarat",
+                "Haryana",
+                "Himachal Pradesh",
+                "Jammu and Kashmir",
+                "Jharkhand",
+                "Karnataka",
+                "Madhya Pradesh",
+                "Maharashtra",
+                "Meghalaya",
+                "Orissa",
+                "Punjab",
+                "Rajasthan",
+                "Sikkim",
+                "Tamil Nadu",
+                "Tripura",
+                "Uttar Pradesh",
+                "Uttaranchal",
+                "West Bengal"
+              ],
+              "description": "The state where the customer is located.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "region": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 5,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Central",
+                "East",
+                "North",
+                "South",
+                "West"
+              ],
+              "description": "The geographical region where the customer is located.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "zonal_manager": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 18,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Amar Hooda",
+                "Joy Das",
+                "Kiran Goel",
+                "Kunal Patel",
+                "Naveen Panda",
+                "Navneet Singh",
+                "Nitish Jha",
+                "Prem Yadav",
+                "Raghubir Jha",
+                "Ram Reddy",
+                "Ramesh Singh",
+                "Rohini Prakash",
+                "Sachin Patil",
+                "Shivani Venkatesh",
+                "Subhash Dhar",
+                "Swati Goel",
+                "Vikas Dhar",
+                "Vikas Gupta"
+              ],
+              "description": "The name of the zonal manager responsible for the region.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "regional_manager": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 5,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Gautam Raina",
+                "Hitesh Wadhwa",
+                "Krishna Rao",
+                "Mamta Ganguly",
+                "Rani Kamble"
+              ],
+              "description": "The name of the regional manager overseeing the area.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "business_head": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 2,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Mahesh Shah",
+                "Vikas Patnaik"
+              ],
+              "description": "The name of the business head in charge of operations.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "brand_name": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 11,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Brand A",
+                "Brand B",
+                "Brand F",
+                "Brand L",
+                "Brand LA",
+                "Brand P",
+                "Brand SSK",
+                "Brand T",
+                "Brand TS",
+                "Brand V",
+                "Brand X"
+              ],
+              "description": "The name of the brand associated with the product.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "category": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 6,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Category A",
+                "Category B",
+                "Category C",
+                "Category D",
+                "Category E",
+                "Category F"
+              ],
+              "description": "The category to which the product belongs.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "vertical": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 2,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Vertical A",
+                "Vertical B"
+              ],
+              "description": "The business vertical associated with the product.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "gender": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 2,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Men",
+                "Women"
+              ],
+              "description": "The gender targeted by the product or campaign.",
+              "value_descriptions": {},
+              "natural_language_aliases": {
+                "male": "Men",
+                "female": "Women"
+              },
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "redemption_type": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 3,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Cashback",
+                "Discount Coupons",
+                "Others"
+              ],
+              "description": "The type of redemption offered in the campaign.",
+              "value_descriptions": {},
+              "natural_language_aliases": {
+                "cash back": "Cashback",
+                "discount": "Discount Coupons"
+              },
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "campaign_type": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 5,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Campaign A",
+                "Campaign B",
+                "Campaign C",
+                "Category D",
+                "No Coupon"
+              ],
+              "description": "The type of marketing campaign being run.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Case-insensitive ILIKE recommended."
+            }
+          },
+          "channel": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 3,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Direct",
+                "Ecommerce",
+                "Partners"
+              ],
+              "description": "The sales channel through which the product is sold.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "device_type": {
+            "type": "TEXT",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "cardinality": 5,
+              "cardinality_class": "low",
+              "null_ratio": 0,
+              "distinct_values": [
+                "Android",
+                "IOS",
+                "Offline",
+                "Others",
+                "Web"
+              ],
+              "description": "The type of device used for the transaction.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use exact match with coded value."
+            }
+          },
+          "list_price": {
+            "type": "NUMERIC",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_value": 129.75,
+              "max_value": 6490.96,
+              "mean_value": 2449.1818,
+              "median_value": 2325.12,
+              "null_ratio": 0,
+              "description": "The original price of the product before any discounts.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use numeric comparison operators."
+            }
+          },
+          "selling_price": {
+            "type": "NUMERIC",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_value": 103.75,
+              "max_value": 4929.3067,
+              "mean_value": 2041.5346,
+              "median_value": 1937.25,
+              "null_ratio": 0,
+              "description": "The final price at which the product is sold.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use numeric comparison operators."
+            }
+          },
+          "quantity": {
+            "type": "NUMERIC",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_value": 23.79,
+              "max_value": 1086.876,
+              "mean_value": 524.2321,
+              "median_value": 574.56,
+              "null_ratio": 0,
+              "description": "The number of units of the product sold.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use numeric comparison operators."
+            }
+          },
+          "actual_sales": {
+            "type": "NUMERIC",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_value": 3272.275,
+              "max_value": 3885853.419,
+              "mean_value": 1084016.3119,
+              "median_value": 1104092.451,
+              "null_ratio": 0,
+              "description": "The actual sales revenue generated.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use numeric comparison operators."
+            }
+          },
+          "target_sales": {
+            "type": "NUMERIC",
+            "notnull": false,
+            "default": null,
+            "is_pk": false,
+            "semantic_profile": {
+              "min_value": 4310.5718,
+              "max_value": 4383564.662,
+              "mean_value": 1298697.1114,
+              "median_value": 1324788.273,
+              "null_ratio": 0,
+              "description": "The target sales revenue set for the campaign.",
+              "value_descriptions": {},
+              "natural_language_aliases": {},
+              "query_hints": "Use numeric comparison operators."
+            }
+          }
+        },
+        "primary_key": [],
+        "foreign_keys": []
+      }
+    }
+  }

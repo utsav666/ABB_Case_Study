@@ -80,7 +80,8 @@ def build_db_connection_response(persisted_row: Mapping[str, Any]) -> dict[str, 
             "db_schema": persisted_row.get("db_schema"),
             "use_ssl": persisted_row.get("use_ssl"),
             "extra_options": persisted_row.get("extra_options"),
-            "is_healthy": persisted_row["is_healthy"],
+            "is_healthy": persisted_row.get("is_healthy"),
+            "is_active": persisted_row.get("is_active"),
             "last_synced_at": format_datetime_value(
                 persisted_row.get("last_synced_at")
             ),

@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: sql-agent-dev
+    network_mode: "host"
     volumes:
       - ..:/workspace:cached
       - /workspace/.venv
@@ -13,15 +14,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    ports:
-      - "8501:8501"
-      - "8502:8502"
-      - "8503:8503"
-      - "5000:5000"
-      - "8000:8000"
     command: /bin/sh -c "while sleep 1000; do :; done"
-    networks:
-      - dev-network
 
   postgres:
     image: postgres:15-alpine

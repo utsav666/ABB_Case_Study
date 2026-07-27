@@ -2,11 +2,11 @@ from typing import Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 
-from app.envsetup.env_loader import get_openai_api_key, load_env
+from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_router_prompt_improvise
+from app.utils.llm_factory import create_chat_llm
 from app.utils.schema_summarizer import Summarizer
 
 # ------------------------
@@ -35,14 +35,16 @@ class RoutingDecision(BaseModel):
 # Router Agent (Decision Only)
 # ----------------------------
 class Router:
-    def __init__(self):
-        self.schema_summary = Summarizer.summarize_schema()
-
-        self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
-            api_key=SecretStr(get_openai_api_key()),
+    def __init__(self, schema_summary: str | None = None, provider: str | None = None, model: str | None = None):
+        # Allow callers to inject a connection-scoped schema summary; fall back
+        # to the default (sample/config) summary when none is provided.
+        self.schema_summary = (
+            schema_summary
+            if schema_summary is not None
+            else Summarizer.summarize_schema()
         )
+
+        self.llm = create_chat_llm(purpose="router", temperature=0, provider=provider, model=model)
 
         # Output parser
         self.parser = JsonOutputParser(pydantic_object=RoutingDecision)
@@ -53,7 +55,12 @@ class Router:
     # ----------------------------
     # PUBLIC METHOD
     # ----------------------------
-    def route_question(self, question: str) -> RoutingDecision:
+    def route_question(self, question: str) -> tuple[RoutingDecision, any]:
+        """Route a question and return both decision and response for tracking.
+
+        Returns:
+            Tuple of (RoutingDecision, response) where response contains usage metadata
+        """
         # Prepare full prompt
         messages = self.prompt.format_messages(
             schema_summary=self.schema_summary, chat_history="", question=question
@@ -64,7 +71,7 @@ class Router:
 
         # Parse into RoutingDecision
         parsed = self.parser.parse(str(response.content))
-        return RoutingDecision(**parsed)
+        return RoutingDecision(**parsed), response
 
 
 # if __name__ == "__main__":

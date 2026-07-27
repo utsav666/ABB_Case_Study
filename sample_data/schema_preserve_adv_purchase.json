@@ -1,0 +1,1081 @@
+{
+  "tables": {
+    "productvendor": {
+      "schema": "purchasing",
+      "type": "table",
+      "columns": {
+        "productid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 952,
+            "mean_value": 517.2478,
+            "median_value": 434.5,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each product.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for product identification."
+          }
+        },
+        "businessentityid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1492,
+            "max_value": 1698,
+            "mean_value": 1593.2565,
+            "median_value": 1584,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each business entity associated with the vendor.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for business entity identification."
+          }
+        },
+        "averageleadtime": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 10,
+            "max_value": 120,
+            "mean_value": 19.45,
+            "median_value": 17,
+            "null_ratio": 0.0,
+            "description": "Average number of days required to deliver the product.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for lead time analysis."
+          }
+        },
+        "standardprice": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0.2,
+            "max_value": 78.89,
+            "mean_value": 34.6765,
+            "median_value": 39.26,
+            "null_ratio": 0.0,
+            "description": "Standard selling price of the product.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for price analysis."
+          }
+        },
+        "lastreceiptcost": {
+          "type": "NUMERIC",
+          "notnull": false,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0.21,
+            "max_value": 82.8345,
+            "mean_value": 36.2759,
+            "median_value": 41.1967,
+            "null_ratio": 0.0,
+            "description": "Cost of the product at the last receipt.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for cost analysis."
+          }
+        },
+        "lastreceiptdate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": false,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-07-21 00:00:00",
+            "max_date": "2025-10-21 00:00:00",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "Date when the product was last received.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        },
+        "minorderqty": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 5000,
+            "mean_value": 145.9087,
+            "median_value": 1,
+            "null_ratio": 0.0,
+            "description": "Minimum quantity that can be ordered for the product.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for order quantity analysis."
+          }
+        },
+        "maxorderqty": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 5,
+            "max_value": 15000,
+            "mean_value": 776.4674,
+            "median_value": 5,
+            "null_ratio": 0.0,
+            "description": "Maximum quantity that can be ordered for the product.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for order quantity analysis."
+          }
+        },
+        "onorderqty": {
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 3,
+            "max_value": 8000,
+            "mean_value": 660.7355,
+            "median_value": 150,
+            "null_ratio": 0.663,
+            "description": "Quantity of the product currently on order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for order quantity analysis."
+          }
+        },
+        "unitmeasurecode": {
+          "type": "CHARACTER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 7,
+            "cardinality_class": "low",
+            "null_ratio": 0.0,
+            "distinct_values": [
+              "CAN",
+              "CS ",
+              "CTN",
+              "DZ ",
+              "EA ",
+              "GAL",
+              "PAK"
+            ],
+            "description": "Code representing the unit of measure for the product.",
+            "value_descriptions": {
+              "CAN": "Can",
+              "CS ": "Case",
+              "CTN": "Carton",
+              "DZ ": "Dozen",
+              "EA ": "Each",
+              "GAL": "Gallon",
+              "PAK": "Pack"
+            },
+            "natural_language_aliases": {
+              "can": "CAN",
+              "case": "CS ",
+              "carton": "CTN",
+              "dozen": "DZ ",
+              "each": "EA ",
+              "gallon": "GAL",
+              "pack": "PAK"
+            },
+            "query_hints": "Use exact match with coded value."
+          }
+        },
+        "modifieddate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-07-21 00:00:00",
+            "max_date": "2026-08-11 12:20:28.343",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "Date when the record was last modified.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        }
+      },
+      "primary_key": [
+        "productid",
+        "businessentityid"
+      ],
+      "foreign_keys": [
+        {
+          "from": [
+            "businessentityid"
+          ],
+          "to_table": "purchasing.vendor",
+          "to_columns": [
+            "businessentityid"
+          ]
+        }
+      ]
+    },
+    "purchaseorderdetail": {
+      "schema": "purchasing",
+      "type": "table",
+      "columns": {
+        "purchaseorderid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 4012,
+            "mean_value": 1992.3214,
+            "median_value": 1978,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "purchaseorderdetailid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": "nextval('purchasing.purchaseorderdetail_purchaseorderdetailid_seq'::regclass)",
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 8845,
+            "mean_value": 4423,
+            "median_value": 4423,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each detail line within a purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "duedate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-29 00:00:00",
+            "max_date": "2025-10-21 00:00:00",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "The date by which the order is expected to be fulfilled.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        },
+        "orderqty": {
+          "type": "SMALLINT",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 3,
+            "max_value": 8000,
+            "mean_value": 265.5327,
+            "median_value": 60,
+            "null_ratio": 0.0,
+            "description": "The quantity of the product ordered.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "productid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 952,
+            "mean_value": 527.5075,
+            "median_value": 456,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for the product being ordered.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "unitprice": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0.21,
+            "max_value": 82.8345,
+            "mean_value": 34.743,
+            "median_value": 39.2805,
+            "null_ratio": 0.0,
+            "description": "The price per unit of the product ordered.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "High cardinality \u2014 consider ILIKE or fuzzy match."
+          }
+        },
+        "receivedqty": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 2,
+            "max_value": 8000,
+            "mean_value": 263.1203,
+            "median_value": 60,
+            "null_ratio": 0.0,
+            "description": "The quantity of the product that has been received.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "rejectedqty": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0,
+            "max_value": 1250,
+            "mean_value": 8.2193,
+            "median_value": 0,
+            "null_ratio": 0.0,
+            "description": "The quantity of the product that was rejected upon receipt.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "modifieddate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-22 00:00:00",
+            "max_date": "2026-08-11 12:25:46.483",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "The date and time when the purchase order detail was last modified.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        }
+      },
+      "primary_key": [
+        "purchaseorderid",
+        "purchaseorderdetailid"
+      ],
+      "foreign_keys": [
+        {
+          "from": [
+            "purchaseorderid"
+          ],
+          "to_table": "purchasing.purchaseorderheader",
+          "to_columns": [
+            "purchaseorderid"
+          ]
+        }
+      ]
+    },
+    "purchaseorderheader": {
+      "schema": "purchasing",
+      "type": "table",
+      "columns": {
+        "purchaseorderid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": "nextval('purchasing.purchaseorderheader_purchaseorderid_seq'::regclass)",
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 4012,
+            "mean_value": 2006.5,
+            "median_value": 2006.5,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match."
+          }
+        },
+        "revisionnumber": {
+          "type": "SMALLINT",
+          "notnull": true,
+          "default": "0",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 5,
+            "max_value": 21,
+            "mean_value": 5.083,
+            "median_value": 5,
+            "null_ratio": 0.0,
+            "description": "Number indicating the revision of the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match."
+          }
+        },
+        "status": {
+          "type": "SMALLINT",
+          "notnull": true,
+          "default": "1",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 4,
+            "mean_value": 3.8043,
+            "median_value": 4,
+            "null_ratio": 0.0,
+            "description": "Current status of the purchase order.",
+            "value_descriptions": {
+              "1": "Pending",
+              "2": "Approved",
+              "3": "Rejected",
+              "4": "Completed"
+            },
+            "natural_language_aliases": {
+              "pending": "1",
+              "approved": "2",
+              "rejected": "3",
+              "completed": "4"
+            },
+            "query_hints": "Use exact match with coded value."
+          }
+        },
+        "employeeid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 250,
+            "max_value": 261,
+            "mean_value": 255.9776,
+            "median_value": 256,
+            "null_ratio": 0.0,
+            "description": "Identifier for the employee who created the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match."
+          }
+        },
+        "vendorid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1492,
+            "max_value": 1698,
+            "mean_value": 1598.0339,
+            "median_value": 1600,
+            "null_ratio": 0.0,
+            "description": "Identifier for the vendor associated with the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match."
+          }
+        },
+        "shipmethodid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 5,
+            "mean_value": 3.5728,
+            "median_value": 4,
+            "null_ratio": 0.0,
+            "description": "Identifier for the shipping method used for the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match."
+          }
+        },
+        "orderdate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-15 00:00:00",
+            "max_date": "2025-09-21 00:00:00",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "Date when the purchase order was created.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        },
+        "shipdate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": false,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-24 00:00:00",
+            "max_date": "2025-10-16 00:00:00",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "Date when the purchase order was shipped.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        },
+        "subtotal": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": "0.00",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 37.0755,
+            "max_value": 997680,
+            "mean_value": 15900.2978,
+            "median_value": 2934.54,
+            "null_ratio": 0.0,
+            "description": "Total amount before taxes and freight for the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for filtering."
+          }
+        },
+        "taxamt": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": "0.00",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 2.966,
+            "max_value": 79814.4,
+            "mean_value": 1272.0238,
+            "median_value": 234.7632,
+            "null_ratio": 0.0,
+            "description": "Total tax amount for the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for filtering."
+          }
+        },
+        "freight": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": "0.00",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0.9269,
+            "max_value": 19953.6,
+            "mean_value": 394.8101,
+            "median_value": 73.3635,
+            "null_ratio": 0.0,
+            "description": "Freight charges for the purchase order.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use range queries for filtering."
+          }
+        },
+        "modifieddate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-24 00:00:00",
+            "max_date": "2026-08-11 12:25:46.483",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "Date when the purchase order was last modified.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        }
+      },
+      "primary_key": [
+        "purchaseorderid"
+      ],
+      "foreign_keys": [
+        {
+          "from": [
+            "shipmethodid"
+          ],
+          "to_table": "purchasing.shipmethod",
+          "to_columns": [
+            "shipmethodid"
+          ]
+        },
+        {
+          "from": [
+            "vendorid"
+          ],
+          "to_table": "purchasing.vendor",
+          "to_columns": [
+            "businessentityid"
+          ]
+        }
+      ]
+    },
+    "shipmethod": {
+      "schema": "purchasing",
+      "type": "table",
+      "columns": {
+        "shipmethodid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": "nextval('purchasing.shipmethod_shipmethodid_seq'::regclass)",
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 5,
+            "mean_value": 3,
+            "median_value": 3,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each shipping method.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "name": {
+          "type": "CHARACTER VARYING",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 5,
+            "cardinality_class": "low",
+            "null_ratio": 0.0,
+            "distinct_values": [
+              "CARGO TRANSPORT 5",
+              "OVERNIGHT J-FAST",
+              "OVERSEAS - DELUXE",
+              "XRQ - TRUCK GROUND",
+              "ZY - EXPRESS"
+            ],
+            "description": "Name of the shipping method.",
+            "value_descriptions": {},
+            "natural_language_aliases": {
+              "cargo transport": "CARGO TRANSPORT 5",
+              "overnight fast": "OVERNIGHT J-FAST",
+              "overseas deluxe": "OVERSEAS - DELUXE",
+              "truck ground": "XRQ - TRUCK GROUND",
+              "express": "ZY - EXPRESS"
+            },
+            "query_hints": "Case-insensitive ILIKE recommended."
+          }
+        },
+        "shipbase": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": "0.00",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 3.95,
+            "max_value": 29.95,
+            "mean_value": 14.958,
+            "median_value": 9.95,
+            "null_ratio": 0.0,
+            "description": "Base cost for using the shipping method.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match or range queries."
+          }
+        },
+        "shiprate": {
+          "type": "NUMERIC",
+          "notnull": true,
+          "default": "0.00",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 0.99,
+            "max_value": 2.99,
+            "mean_value": 1.75,
+            "median_value": 1.49,
+            "null_ratio": 0.0,
+            "description": "Rate multiplier applied to the base shipping cost.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match or range queries."
+          }
+        },
+        "rowguid": {
+          "type": "UUID",
+          "notnull": true,
+          "default": "uuid_generate_v1()",
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 5,
+            "cardinality_class": "low",
+            "null_ratio": 0.0,
+            "distinct_values": [
+              "107e8356-e7a8-463d-b60c-079fff467f3f",
+              "22f4e461-28cf-4ace-a980-f686cf112ec8",
+              "3455079b-f773-4dc6-8f1e-2a58649c4ab8",
+              "6be756d9-d7be-4463-8f2c-ae60c710d606",
+              "b166019a-b134-4e76-b957-2b0490c610ed"
+            ],
+            "description": "Globally unique identifier for the shipping method row.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "modifieddate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2019-04-30 00:00:00",
+            "max_date": "2019-04-30 00:00:00",
+            "granularity": "yearly",
+            "null_ratio": 0.0,
+            "description": "Date when the shipping method record was last modified.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        }
+      },
+      "primary_key": [
+        "shipmethodid"
+      ],
+      "foreign_keys": []
+    },
+    "vendor": {
+      "schema": "purchasing",
+      "type": "table",
+      "columns": {
+        "businessentityid": {
+          "type": "INTEGER",
+          "notnull": true,
+          "default": null,
+          "is_pk": true,
+          "semantic_profile": {
+            "min_value": 1492,
+            "max_value": 1698,
+            "mean_value": 1595,
+            "median_value": 1595,
+            "null_ratio": 0.0,
+            "description": "Unique identifier for each vendor entity.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match for filtering."
+          }
+        },
+        "accountnumber": {
+          "type": "CHARACTER VARYING",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 104,
+            "cardinality_class": "high",
+            "null_ratio": 0.0,
+            "top_values": [
+              {
+                "value": "AMERICAN0002",
+                "frequency": 1
+              },
+              {
+                "value": "READYRE0001",
+                "frequency": 1
+              },
+              {
+                "value": "PROFESSI0001",
+                "frequency": 1
+              },
+              {
+                "value": "CONTINEN0001",
+                "frequency": 1
+              },
+              {
+                "value": "LEGENDC0001",
+                "frequency": 1
+              },
+              {
+                "value": "ELECTRON0001",
+                "frequency": 1
+              },
+              {
+                "value": "INNERCI0001",
+                "frequency": 1
+              },
+              {
+                "value": "HOLIDAY0001",
+                "frequency": 1
+              },
+              {
+                "value": "WOODFIT0001",
+                "frequency": 1
+              },
+              {
+                "value": "MAGICCY0001",
+                "frequency": 1
+              },
+              {
+                "value": "ADATUM0001",
+                "frequency": 1
+              },
+              {
+                "value": "FIRSTRA0001",
+                "frequency": 1
+              },
+              {
+                "value": "BIKESAT0001",
+                "frequency": 1
+              },
+              {
+                "value": "GARDNER0001",
+                "frequency": 1
+              },
+              {
+                "value": "LEAFRIV0001",
+                "frequency": 1
+              }
+            ],
+            "sample_values": [
+              "GREENLA0001",
+              "MORGANB0001",
+              "WESTAMER0001",
+              "SUPERIOR0001",
+              "NATIONAL0001",
+              "TEAMATH0001",
+              "G&KBI0001",
+              "TRAINING0001",
+              "JEFFSSP0001",
+              "HILLBIC0001"
+            ],
+            "description": "Unique account number assigned to each vendor.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use exact match with coded value."
+          }
+        },
+        "name": {
+          "type": "CHARACTER VARYING",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 104,
+            "cardinality_class": "high",
+            "null_ratio": 0.0,
+            "top_values": [
+              {
+                "value": "Bloomington Multisport",
+                "frequency": 1
+              },
+              {
+                "value": "Indiana Bicycle Center",
+                "frequency": 1
+              },
+              {
+                "value": "A. Datum Corporation",
+                "frequency": 1
+              },
+              {
+                "value": "Knopfler Cycles",
+                "frequency": 1
+              },
+              {
+                "value": "Litware, Inc.",
+                "frequency": 1
+              },
+              {
+                "value": "Professional Athletic Consultants",
+                "frequency": 1
+              },
+              {
+                "value": "International Trek Center",
+                "frequency": 1
+              },
+              {
+                "value": "Vista Road Bikes",
+                "frequency": 1
+              },
+              {
+                "value": "Illinois Trek & Clothing",
+                "frequency": 1
+              },
+              {
+                "value": "Sport Fan Co.",
+                "frequency": 1
+              },
+              {
+                "value": "Australia Bike Retailer",
+                "frequency": 1
+              },
+              {
+                "value": "Anderson's Custom Bikes",
+                "frequency": 1
+              },
+              {
+                "value": "Mitchell Sports",
+                "frequency": 1
+              },
+              {
+                "value": "Image Makers Bike Center",
+                "frequency": 1
+              },
+              {
+                "value": "Holiday Skate & Cycle",
+                "frequency": 1
+              }
+            ],
+            "sample_values": [
+              "First Rate Bicycles",
+              "Chicago Rent-All",
+              "Bloomington Multisport",
+              "Signature Cycles",
+              "Victory Bikes",
+              "Jeff's Sporting Goods",
+              "Integrated Sport Products",
+              "Touring Equipment Center",
+              "Federal Sport",
+              "Proseware, Inc."
+            ],
+            "description": "The name of the vendor.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Case-insensitive ILIKE recommended."
+          }
+        },
+        "creditrating": {
+          "type": "SMALLINT",
+          "notnull": true,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "min_value": 1,
+            "max_value": 5,
+            "mean_value": 1.3558,
+            "median_value": 1,
+            "null_ratio": 0.0,
+            "description": "Numeric rating indicating the creditworthiness of the vendor.",
+            "value_descriptions": {
+              "1": "Excellent",
+              "2": "Good",
+              "3": "Average",
+              "4": "Below Average",
+              "5": "Poor"
+            },
+            "natural_language_aliases": {
+              "excellent": "1",
+              "good": "2",
+              "average": "3",
+              "below average": "4",
+              "poor": "5"
+            },
+            "query_hints": "Use exact match with coded value."
+          }
+        },
+        "preferredvendorstatus": {
+          "type": "BOOLEAN",
+          "notnull": true,
+          "default": "true",
+          "is_pk": false,
+          "semantic_profile": {
+            "description": "Indicates if the vendor is a preferred vendor.",
+            "value_descriptions": {
+              "true": "Preferred",
+              "false": "Not Preferred"
+            },
+            "natural_language_aliases": {
+              "preferred": "true",
+              "not preferred": "false"
+            },
+            "query_hints": "Use exact match with boolean value."
+          }
+        },
+        "activeflag": {
+          "type": "BOOLEAN",
+          "notnull": true,
+          "default": "true",
+          "is_pk": false,
+          "semantic_profile": {
+            "description": "Indicates if the vendor is currently active.",
+            "value_descriptions": {
+              "true": "Active",
+              "false": "Inactive"
+            },
+            "natural_language_aliases": {
+              "active": "true",
+              "inactive": "false"
+            },
+            "query_hints": "Use exact match with boolean value."
+          }
+        },
+        "purchasingwebserviceurl": {
+          "type": "CHARACTER VARYING",
+          "notnull": false,
+          "default": null,
+          "is_pk": false,
+          "semantic_profile": {
+            "cardinality": 6,
+            "cardinality_class": "low",
+            "null_ratio": 0.9423,
+            "distinct_values": [
+              "www.adatum.com/",
+              "www.litwareinc.com/",
+              "www.northwindtraders.com/",
+              "www.proseware.com/",
+              "www.treyresearch.net/",
+              "www.wideworldimporters.com/"
+            ],
+            "description": "URL for the vendor's purchasing web service.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "High cardinality \u2014 consider ILIKE or fuzzy match."
+          }
+        },
+        "modifieddate": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "notnull": true,
+          "default": "now()",
+          "is_pk": false,
+          "semantic_profile": {
+            "min_date": "2022-04-24 00:00:00",
+            "max_date": "2023-02-17 00:00:00",
+            "granularity": "irregular",
+            "null_ratio": 0.0,
+            "description": "The date and time when the vendor record was last modified.",
+            "value_descriptions": {},
+            "natural_language_aliases": {},
+            "query_hints": "Use DATE_TRUNC for period queries."
+          }
+        }
+      },
+      "primary_key": [
+        "businessentityid"
+      ],
+      "foreign_keys": []
+    }
+  }
+}

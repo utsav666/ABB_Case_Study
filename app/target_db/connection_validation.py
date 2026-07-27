@@ -37,15 +37,12 @@ def validate_target_connection_settings(payload: Mapping[str, Any]) -> dict[str,
                 )
 
     connect_args = build_connect_args(engine_name)
-    connect_timeout_seconds = get_db_connect_timeout_seconds()
-    if engine_name == "postgres":
-        connect_args["connect_timeout"] = connect_timeout_seconds
-    elif engine_name in {"mysql", "mariadb"}:
-        connect_args["connection_timeout"] = connect_timeout_seconds
+    # Removed aggressive timeout that was causing AWS rate limiting
+    # RDS connections now use default driver timeout (~60s)
 
     validation_engine = create_engine(
         connection_url,
-        pool_pre_ping=True,
+        # Removed pool_pre_ping to avoid extra SELECT 1 queries
         connect_args=connect_args,
     )
     try:

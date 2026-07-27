@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -9,12 +10,11 @@ from app.target_db.connection_profiles import (
     normalize_database_engine,
 )
 
-
 class DBConnectionInput(BaseModel):
-    """Shared database connection fields from the settings UI."""
+    """Shared connection fields from the settings UI."""
 
     name: str = Field(min_length=1, description="Display name for this connection.")
-    engine: str = Field(description="Supported database engine identifier.")
+    engine: str = Field(min_length=1, description="Supported database engine identifier.")
     db_host: str = Field(default="", description="Database host address.")
     db_port: int | None = Field(
         default=None, ge=0, le=65535, description="Database port."
@@ -31,7 +31,12 @@ class DBConnectionInput(BaseModel):
 
     @model_validator(mode="after")
     def normalize_fields(self) -> "DBConnectionInput":
-        """Normalize engine-specific defaults and validate required fields."""
+        """Normalize and validate required fields."""
+        if not self.engine:
+            raise ValueError("Database engine is required.")
+        if not self.db_name:
+            raise ValueError("Database name is required.")
+
         normalized_engine = normalize_database_engine(self.engine)
         self.engine = normalized_engine
         self.db_schema = self.db_schema.strip() or "public"
@@ -97,6 +102,14 @@ class AgentConfig(BaseModel):
     schema_name: str = Field(
         default="public",
         description="Database schema the agent operates on.",
+    )
+    llm_provider: str | None = Field(
+        default=None,
+        description=(
+            "LLM provider override for this agent. "
+            "Supported: openai, azure_openai, claude_merck. "
+            "When None, falls back to the LLM_PROVIDER env var."
+        ),
     )
     max_tokens: int = Field(default=1000)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)

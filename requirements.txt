@@ -76,8 +76,10 @@ jupyterlab_widgets==3.0.16
 kiwisolver==1.5.0
 langchain==1.2.15
 langchain-classic==1.0.3
+langchain-anthropic==1.4.8
 langchain-community==0.4.1
-langchain-core==1.2.26
+langchain-core==1.4.9
+langchain-google-genai==3.2.0
 langchain-openai==1.1.12
 langchain-text-splitters==1.1.1
 langgraph==1.1.6
@@ -145,6 +147,8 @@ python-dotenv==1.2.2
 python-json-logger==4.1.0
 python-multipart==0.0.20
 pytokens==0.4.1
+PyJWT==2.10.1
+cryptography==44.0.0
 PyYAML==6.0.3
 pyzmq==27.1.0
 referencing==0.37.0

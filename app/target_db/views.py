@@ -21,12 +21,18 @@ def build_tables_response(
     table_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build API payload for table-name metadata."""
-    table_names = [row["table_name"] for row in table_rows]
+    tables = [
+        {
+            "name": row["table_name"],
+            "column_count": row.get("column_count", 0),
+        }
+        for row in table_rows
+    ]
     return {
         "connection_id": connection_id,
         "schema": schema_name,
-        "table_names": table_names,
-        "table_count": len(table_names),
+        "tables": tables,
+        "table_count": len(tables),
     }
 
 

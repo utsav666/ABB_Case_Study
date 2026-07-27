@@ -1,0 +1,1076 @@
+{
+  "graph_results": [
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.movie",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 20.33
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes\nFROM public.movie\nWHERE year = 2018;",
+      "valid": true,
+      "executed": true,
+      "rows": 104,
+      "empty": false,
+      "time": 14.44
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, rating\nFROM public.movie\nWHERE rating IS NOT NULL\nORDER BY rating DESC\nLIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 14.64
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes\nFROM public.movie\nWHERE num_votes > 100000;",
+      "valid": true,
+      "executed": true,
+      "rows": 19,
+      "empty": false,
+      "time": 13.83
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(DISTINCT laid) FROM public.language;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.42
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT name FROM public.country ORDER BY name;",
+      "valid": true,
+      "executed": true,
+      "rows": 34,
+      "empty": false,
+      "time": 14.03
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT AVG(rating) AS average_rating FROM public.movie;",
+      "valid": true,
+      "executed": false,
+      "exec_error": "(psycopg2.OperationalError) connection to server at \"ba-agent.cb2aiu8mciap.us-east-2.rds.amazonaws.com\" (100.64.1.23), port 5432 failed: Connection reset by peer\n\tIs the server running on that host and accepting TCP/IP connections?\n\n(Background on this error at: https://sqlalche.me/e/20/e3q8)",
+      "time": 366.21
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes\nFROM public.movie\nWHERE year BETWEEN 2010 AND 2015;",
+      "valid": true,
+      "executed": true,
+      "rows": 732,
+      "empty": false,
+      "time": 14.1
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.person WHERE gender = 'Female';",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 12.92
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT title, year FROM public.movie WHERE year = (SELECT MIN(year) FROM public.movie) LIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.46
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_country mc ON m.mid = mc.mid\nJOIN public.country c ON mc.cid = c.cid\nWHERE c.name = 'India';",
+      "valid": true,
+      "executed": true,
+      "rows": 3295,
+      "empty": false,
+      "time": 17.11
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(DISTINCT ml.mid)\nFROM public.m_language ml\nJOIN public.language l ON ml.laid = l.laid\nWHERE l.name = 'Hindi';",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.78
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, COUNT(*) AS num_movies\nFROM public.m_director md\nJOIN public.person p ON md.pid = p.pid\nGROUP BY p.pid, p.name\nORDER BY num_movies DESC\nLIMIT 5;",
+      "valid": true,
+      "executed": true,
+      "rows": 5,
+      "empty": false,
+      "time": 14.75
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT g.name AS genre_name, COUNT(*) AS movie_count\nFROM public.m_genre mg\nJOIN public.genre g ON mg.gid = g.gid\nGROUP BY g.name\nORDER BY movie_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 327,
+      "empty": false,
+      "time": 14.23
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_location ml ON m.mid = ml.mid\nJOIN public.location l ON ml.lid = l.lid\nWHERE l.name ILIKE '%Mumbai%';",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 14.09
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT c.name AS country_name, COUNT(mc.mid) AS movie_count\nFROM public.country c\nJOIN public.m_country mc ON c.cid = mc.cid\nGROUP BY c.name\nORDER BY movie_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 33,
+      "empty": false,
+      "time": 13.81
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT AVG(rating) AS average_rating FROM public.movie WHERE year > 2010;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.69
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.pid, p.name, COUNT(DISTINCT mc.mid) AS movie_count\nFROM public.person p\nJOIN public.m_cast mc ON p.pid = mc.pid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT mc.mid) > 50;",
+      "valid": true,
+      "executed": true,
+      "rows": 170,
+      "empty": false,
+      "time": 14.65
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.rating\nFROM public.movie m\nJOIN public.m_country mc ON m.mid = mc.mid\nJOIN public.country c ON mc.cid = c.cid\nWHERE c.name = 'USA' AND m.rating > 8;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.75
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT l.name\nFROM public.language l\nJOIN public.m_language ml ON l.laid = ml.laid\nJOIN public.movie m ON ml.mid = m.mid\nGROUP BY l.name\nORDER BY AVG(m.rating) DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.15
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, AVG(m.rating) AS avg_rating, COUNT(DISTINCT m.mid) AS movie_count\nFROM public.person p\nJOIN public.m_cast mc ON mc.pid = p.pid\nJOIN public.movie m ON m.mid = mc.mid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT m.mid) >= 10\nORDER BY avg_rating DESC\nLIMIT 5;",
+      "valid": true,
+      "executed": true,
+      "rows": 5,
+      "empty": false,
+      "time": 15.6
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name\nFROM public.person p\nJOIN public.m_director md ON p.pid = md.pid\nJOIN public.m_genre mg ON md.mid = mg.mid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT mg.gid) > 3;",
+      "valid": true,
+      "executed": true,
+      "rows": 201,
+      "empty": false,
+      "time": 15.98
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.mid, m.title\nFROM public.movie m\nINNER JOIN public.m_director md ON m.mid = md.mid\nINNER JOIN public.m_cast mc ON m.mid = mc.mid AND md.pid = mc.pid;",
+      "valid": true,
+      "executed": true,
+      "rows": 299,
+      "empty": false,
+      "time": 13.75
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT year, AVG(rating) AS avg_rating\nFROM public.movie\nWHERE year BETWEEN 2000 AND 2018\nGROUP BY year\nORDER BY year;",
+      "valid": true,
+      "executed": true,
+      "rows": 19,
+      "empty": false,
+      "time": 14.16
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p_actor.name AS actor_name, p_director.name AS director_name, COUNT(DISTINCT mc.mid) AS collaboration_count\nFROM public.m_cast mc\nJOIN public.m_director md ON mc.mid = md.mid\nJOIN public.person p_actor ON mc.pid = p_actor.pid\nJOIN public.person p_director ON md.pid = p_director.pid\nGROUP BY p_actor.name, p_director.name\nORDER BY collaboration_count DESC\nLIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 15.47
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p_producer.name AS producer_name, p_director.name AS director_name, COUNT(DISTINCT mp.mid) AS collaboration_count\nFROM public.m_producer mp\nJOIN public.m_director md ON mp.mid = md.mid\nJOIN public.person p_producer ON mp.pid = p_producer.pid\nJOIN public.person p_director ON md.pid = p_director.pid\nGROUP BY mp.pid, md.pid, p_producer.name, p_director.name\nORDER BY collaboration_count DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.46
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, COUNT(DISTINCT l.laid) AS language_count\nFROM public.person p\nJOIN public.m_cast mc ON mc.pid = p.pid\nJOIN public.m_language ml ON ml.mid = mc.mid\nJOIN public.language l ON l.laid = ml.laid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT l.laid) >= 5\nORDER BY language_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 24,
+      "empty": false,
+      "time": 13.99
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.mid, m.title, m.rating, m.year\nFROM public.movie m\nJOIN public.m_location ml ON m.mid = ml.mid\nJOIN public.location l ON ml.lid = l.lid\nJOIN public.m_country mc ON m.mid = mc.mid\nJOIN public.country c ON mc.cid = c.cid\nWHERE m.rating > 8\n  AND c.name = 'India'\n  AND m.year > 2005\nORDER BY m.rating DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 40,
+      "empty": false,
+      "time": 14.77
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT g.name AS genre_name, m.title, m.rating, p.name AS director_name\nFROM public.genre g\nJOIN public.m_genre mg ON mg.gid = g.gid\nJOIN public.movie m ON m.mid = mg.mid\nJOIN public.m_director md ON md.mid = m.mid\nJOIN public.person p ON p.pid = md.pid\nWHERE m.rating = (\n    SELECT MAX(m2.rating)\n    FROM public.m_genre mg2\n    JOIN public.movie m2 ON m2.mid = mg2.mid\n    WHERE mg2.gid = g.gid\n)\nORDER BY g.name;",
+      "valid": true,
+      "executed": true,
+      "rows": 343,
+      "empty": false,
+      "time": 16.38
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.pid, p.name\nFROM public.person p\nJOIN public.m_director d ON p.pid = d.pid\nJOIN public.m_producer pr ON p.pid = pr.pid AND d.mid = pr.mid",
+      "valid": true,
+      "executed": true,
+      "rows": 422,
+      "empty": false,
+      "time": 15.15
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT\n  p.name AS director_name,\n  ROUND(AVG(m.rating)::numeric, 2) AS avg_rating,\n  COUNT(DISTINCT m.mid) AS movie_count,\n  best.title AS best_rated_film,\n  best.rating AS best_rating,\n  worst.title AS worst_rated_film,\n  worst.rating AS worst_rating\nFROM public.m_director md\nJOIN public.person p ON md.pid = p.pid\nJOIN public.movie m ON md.mid = m.mid\nCROSS JOIN LATERAL (\n  SELECT m2.title, m2.rating\n  FROM public.m_director md2\n  JOIN public.movie m2 ON md2.mid = m2.mid\n  WHERE md2.pid = md.pid AND m2.rating IS NOT NULL\n  ORDER BY m2.rating DESC, m2.title ASC\n  LIMIT 1\n) best\nCROSS JOIN LATERAL (\n  SELECT m3.title, m3.rating\n  FROM public.m_director md3\n  JOIN public.movie m3 ON md3.mid = m3.mid\n  WHERE md3.pid = md.pid AND m3.rating IS NOT NULL\n  ORDER BY m3.rating ASC, m3.title ASC\n  LIMIT 1\n) worst\nWHERE m.rating IS NOT NULL\nGROUP BY p.pid, p.name, best.title, best.rating, worst.title, worst.rating\nHAVING COUNT(DISTINCT m.mid) >= 5\nORDER BY AVG(m.rating) DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 178,
+      "empty": false,
+      "time": 19.38
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT year, genre_name, avg_rating, movie_count\nFROM (\n  SELECT m.year,\n         g.name AS genre_name,\n         AVG(m.rating) AS avg_rating,\n         COUNT(*) AS movie_count,\n         ROW_NUMBER() OVER (PARTITION BY m.year ORDER BY AVG(m.rating) DESC) AS rn\n  FROM public.movie m\n  JOIN public.m_genre mg ON mg.mid = m.mid\n  JOIN public.genre g ON g.gid = mg.gid\n  WHERE m.year IS NOT NULL AND m.rating IS NOT NULL\n  GROUP BY m.year, g.name\n) sub\nWHERE rn = 1\nORDER BY year;",
+      "valid": true,
+      "executed": true,
+      "rows": 78,
+      "empty": false,
+      "time": 15.65
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name AS director_name, MIN(m.year) AS breakout_year\nFROM public.m_director md\nJOIN public.person p ON md.pid = p.pid\nJOIN public.movie m ON md.mid = m.mid\nWHERE m.rating > 8.0\nGROUP BY p.pid, p.name\nORDER BY breakout_year;",
+      "valid": true,
+      "executed": true,
+      "rows": 117,
+      "empty": false,
+      "time": 16.19
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, MAX(m.year) - MIN(m.year) AS career_span\nFROM public.person p\nJOIN public.m_cast mc ON mc.pid = p.pid\nJOIN public.movie m ON m.mid = mc.mid\nWHERE m.year IS NOT NULL\nGROUP BY p.pid, p.name\nORDER BY career_span DESC\nLIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 14.78
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT\n  decade,\n  country_name,\n  movie_count,\n  ROUND(movie_count * 100.0 / SUM(movie_count) OVER (PARTITION BY decade), 2) AS percentage_contribution\nFROM (\n  SELECT\n    (m.year / 10) * 10 AS decade,\n    c.name AS country_name,\n    COUNT(DISTINCT m.mid) AS movie_count\n  FROM public.movie m\n  JOIN public.m_country mc ON mc.mid = m.mid\n  JOIN public.country c ON c.cid = mc.cid\n  WHERE m.year IS NOT NULL\n  GROUP BY (m.year / 10) * 10, c.name\n) sub\nORDER BY decade, percentage_contribution DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 66,
+      "empty": false,
+      "time": 15.8
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) \nFROM public.movie m\nWHERE NOT EXISTS (\n    SELECT 1 FROM public.m_location ml WHERE ml.mid = m.mid\n)",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.61
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.person WHERE gender IS NULL OR gender = '';",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.29
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title\nFROM public.movie m\nLEFT JOIN public.m_cast mc ON m.mid = mc.mid\nWHERE mc.id IS NULL;",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 14.4
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.pid, p.name\nFROM public.person p\nINNER JOIN public.m_director md ON p.pid = md.pid\nWHERE p.pid NOT IN (SELECT pid FROM public.m_producer)",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 14.44
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT l.laid, l.name\nFROM public.language l\nLEFT JOIN public.m_language ml ON l.laid = ml.laid\nWHERE ml.id IS NULL;",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 14.54
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m1.mid AS movie1_id, m1.title, m1.year AS year1, m2.mid AS movie2_id, m2.year AS year2\nFROM public.movie m1\nJOIN public.movie m2 ON m1.title = m2.title AND m1.year <> m2.year AND m1.mid < m2.mid;",
+      "valid": true,
+      "executed": true,
+      "rows": 139,
+      "empty": false,
+      "time": 15.08
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p1.name AS actor1, p2.name AS actor2, COUNT(DISTINCT c1.mid) AS movies_together\nFROM public.m_cast c1\nJOIN public.m_cast c2 ON c1.mid = c2.mid AND c1.pid < c2.pid\nJOIN public.person p1 ON c1.pid = p1.pid\nJOIN public.person p2 ON c2.pid = p2.pid\nGROUP BY p1.name, p2.name\nHAVING COUNT(DISTINCT c1.mid) > 3\nORDER BY movies_together DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 15726,
+      "empty": false,
+      "time": 23.4
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.name\nFROM public.person p\nWHERE p.pid IN (\n    SELECT pid FROM public.m_director\n    UNION\n    SELECT pid FROM public.m_producer\n);",
+      "valid": true,
+      "executed": true,
+      "rows": 6298,
+      "empty": false,
+      "time": 15.15
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.pid, p.name\nFROM public.person p\nINNER JOIN public.m_director md ON p.pid = md.pid\nWHERE p.pid NOT IN (SELECT pid FROM public.m_cast)",
+      "valid": true,
+      "executed": true,
+      "rows": 1070,
+      "empty": false,
+      "time": 15.02
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes\nFROM public.movie\nWHERE title ILIKE '%love%';",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 13.08
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT name FROM public.location WHERE name ILIKE '%Mumbai%';",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 14.02
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT (year / 10) * 10 AS decade, COUNT(*) AS movie_count\nFROM public.movie\nWHERE year IS NOT NULL\nGROUP BY decade\nORDER BY decade;",
+      "valid": true,
+      "executed": true,
+      "rows": 9,
+      "empty": false,
+      "time": 14.34
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT (year / 10) * 10 AS decade, AVG(rating) AS avg_rating\nFROM public.movie\nWHERE year IS NOT NULL AND rating IS NOT NULL\nGROUP BY decade\nORDER BY avg_rating DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.54
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, COUNT(DISTINCT mg.gid) AS distinct_genres\nFROM public.m_director md\nJOIN public.person p ON md.pid = p.pid\nJOIN public.m_genre mg ON md.mid = mg.mid\nGROUP BY p.pid, p.name\nORDER BY distinct_genres DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 1462,
+      "empty": false,
+      "time": 15.27
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT c.name AS country_name, COUNT(DISTINCT mg.gid) AS distinct_genres\nFROM public.country c\nJOIN public.m_country mc ON mc.cid = c.cid\nJOIN public.m_genre mg ON mg.mid = mc.mid\nGROUP BY c.name\nORDER BY distinct_genres DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.31
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT \n    m.mid,\n    m.title,\n    COUNT(mc.pid) AS cast_count,\n    AVG(COUNT(mc.pid)) OVER () AS avg_cast_size\nFROM public.movie m\nLEFT JOIN public.m_cast mc ON m.mid = mc.mid\nGROUP BY m.mid, m.title",
+      "valid": true,
+      "executed": true,
+      "rows": 3473,
+      "empty": false,
+      "time": 15.88
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.mid, m.title, m.rating, g.name AS genre_name\nFROM public.movie m\nJOIN public.m_genre mg ON m.mid = mg.mid\nJOIN public.genre g ON mg.gid = g.gid\nWHERE m.rating > (\n    SELECT AVG(m2.rating)\n    FROM public.movie m2\n    JOIN public.m_genre mg2 ON m2.mid = mg2.mid\n    WHERE mg2.gid = mg.gid\n)\nORDER BY m.title;",
+      "valid": true,
+      "executed": true,
+      "rows": 1835,
+      "empty": false,
+      "time": 17.56
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, rating, num_votes\nFROM public.movie\nWHERE num_votes > 1000\nORDER BY rating ASC\nLIMIT 3;",
+      "valid": true,
+      "executed": true,
+      "rows": 3,
+      "empty": false,
+      "time": 15.14
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT l.name AS language_name, m.title, m.year\nFROM (\n    SELECT ml.laid, ml.mid,\n           ROW_NUMBER() OVER (PARTITION BY ml.laid ORDER BY mv.year DESC) AS rn\n    FROM public.m_language ml\n    JOIN public.movie mv ON ml.mid = mv.mid\n) ranked\nJOIN public.movie m ON ranked.mid = m.mid\nJOIN public.language l ON ranked.laid = l.laid\nWHERE ranked.rn <= 5\nORDER BY l.name, m.year DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 86,
+      "empty": false,
+      "time": 15.57
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(DISTINCT mg.mid)\nFROM public.m_genre mg\nJOIN public.genre g ON mg.gid = g.gid\nWHERE g.name = 'Drama';",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.3
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_genre mg1 ON m.mid = mg1.mid\nJOIN public.genre g1 ON mg1.gid = g1.gid\nJOIN public.m_genre mg2 ON m.mid = mg2.mid\nJOIN public.genre g2 ON mg2.gid = g2.gid\nWHERE g1.name = 'Comedy' AND g2.name = 'Romance';",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 15.75
+    }
+  ],
+  "preserve_results": [
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.movie",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.34
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes FROM public.movie WHERE year = 2018;",
+      "valid": true,
+      "executed": true,
+      "rows": 104,
+      "empty": false,
+      "time": 14.64
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT title, rating, year FROM public.movie ORDER BY rating DESC LIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 14.44
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes FROM public.movie WHERE num_votes > 100000;",
+      "valid": true,
+      "executed": true,
+      "rows": 19,
+      "empty": false,
+      "time": 14.74
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(DISTINCT name) FROM public.language",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 16.08
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT name FROM public.country ORDER BY name;",
+      "valid": true,
+      "executed": true,
+      "rows": 34,
+      "empty": false,
+      "time": 13.93
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT AVG(rating) AS average_rating FROM public.movie;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.41
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT mid, title, year, rating, num_votes FROM public.movie WHERE year BETWEEN 2010 AND 2015;",
+      "valid": true,
+      "executed": true,
+      "rows": 732,
+      "empty": false,
+      "time": 14.26
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.person WHERE gender = 'Female';",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.2
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT title, year FROM public.movie WHERE year = (SELECT MIN(year) FROM public.movie);",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.13
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating, m.num_votes\nFROM public.movie m\nJOIN public.m_country mc ON m.mid = mc.mid\nJOIN public.country c ON mc.cid = c.cid\nWHERE c.name = 'India'",
+      "valid": true,
+      "executed": true,
+      "rows": 3295,
+      "empty": false,
+      "time": 14.49
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.m_language ml JOIN public.language l ON ml.laid = l.laid WHERE l.name ILIKE 'Hindi'",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 16.18
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, COUNT(*) AS num_movies\nFROM public.m_director d\nJOIN public.person p ON d.pid = p.pid\nGROUP BY p.pid, p.name\nORDER BY num_movies DESC\nLIMIT 5;",
+      "valid": true,
+      "executed": true,
+      "rows": 5,
+      "empty": false,
+      "time": 13.93
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT g.name, COUNT(mg.mid) AS movie_count\nFROM public.m_genre mg\nJOIN public.genre g ON mg.gid = g.gid\nGROUP BY g.name\nORDER BY movie_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 327,
+      "empty": false,
+      "time": 14.78
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_location ml ON m.mid = ml.mid\nJOIN public.location l ON ml.lid = l.lid\nWHERE l.name ILIKE '%Mumbai%'",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 14.04
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT c.name, COUNT(mc.mid) AS movie_count\nFROM public.country c\nLEFT JOIN public.m_country mc ON c.cid = mc.cid\nGROUP BY c.name\nORDER BY movie_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 34,
+      "empty": false,
+      "time": 14.61
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT AVG(rating) AS average_rating FROM public.movie WHERE year > 2010;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.61
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.pid, p.name, COUNT(DISTINCT mc.mid) AS movie_count\nFROM public.person p\nJOIN public.m_cast mc ON p.pid = mc.pid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT mc.mid) > 50\nORDER BY movie_count DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 170,
+      "empty": false,
+      "time": 15.05
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.title, m.rating\nFROM public.movie m\nJOIN public.m_country mc ON m.mid = mc.mid\nJOIN public.country c ON mc.cid = c.cid\nWHERE c.name = 'USA' AND m.rating > 8;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 14.02
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT l.name\nFROM public.language l\nJOIN public.m_language ml ON l.laid = ml.laid\nJOIN public.movie m ON ml.mid = m.mid\nGROUP BY l.name\nORDER BY AVG(m.rating) DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 18.85
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, AVG(m.rating) AS avg_rating, COUNT(*) AS movie_count\nFROM public.person p\nJOIN public.m_cast mc ON p.pid = mc.pid\nJOIN public.movie m ON mc.mid = m.mid\nGROUP BY p.pid, p.name\nHAVING COUNT(*) >= 10\nORDER BY avg_rating DESC\nLIMIT 5;",
+      "valid": true,
+      "executed": true,
+      "rows": 5,
+      "empty": false,
+      "time": 15.12
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.pid, p.name, COUNT(DISTINCT mg.gid) AS genre_count\nFROM public.person p\nJOIN public.m_director md ON p.pid = md.pid\nJOIN public.m_genre mg ON md.mid = mg.mid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT mg.gid) > 3",
+      "valid": true,
+      "executed": true,
+      "rows": 201,
+      "empty": false,
+      "time": 14.54
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_director d ON m.mid = d.mid\nJOIN public.m_cast c ON m.mid = c.mid AND d.pid = c.pid",
+      "valid": true,
+      "executed": true,
+      "rows": 299,
+      "empty": false,
+      "time": 15.81
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT year, ROUND(AVG(rating)::numeric, 2) AS avg_rating\nFROM public.movie\nWHERE year BETWEEN 2000 AND 2018\nGROUP BY year\nORDER BY year;",
+      "valid": true,
+      "executed": true,
+      "rows": 19,
+      "empty": false,
+      "time": 13.72
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT \n    p_actor.name AS actor_name,\n    p_director.name AS director_name,\n    COUNT(*) AS collaboration_count\nFROM public.m_cast c\nJOIN public.m_director d ON c.mid = d.mid\nJOIN public.person p_actor ON c.pid = p_actor.pid\nJOIN public.person p_director ON d.pid = p_director.pid\nGROUP BY p_actor.name, p_director.name\nORDER BY collaboration_count DESC\nLIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 15.66
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p_prod.name AS producer_name, p_dir.name AS director_name, COUNT(*) AS collaboration_count\nFROM public.m_producer mp\nJOIN public.m_director md ON mp.mid = md.mid\nJOIN public.person p_prod ON mp.pid = p_prod.pid\nJOIN public.person p_dir ON md.pid = p_dir.pid\nGROUP BY mp.pid, md.pid, p_prod.name, p_dir.name\nORDER BY collaboration_count DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.71
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.pid, p.name\nFROM public.person p\nJOIN public.m_cast mc ON p.pid = mc.pid\nJOIN public.m_language ml ON mc.mid = ml.mid\nJOIN public.language l ON ml.laid = l.laid\nGROUP BY p.pid, p.name\nHAVING COUNT(DISTINCT l.laid) >= 5",
+      "valid": true,
+      "executed": true,
+      "rows": 24,
+      "empty": false,
+      "time": 15.36
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT m.title, m.rating, m.year, l.name AS location\nFROM public.movie m\nJOIN public.m_location ml ON m.mid = ml.mid\nJOIN public.location l ON ml.lid = l.lid\nWHERE m.rating > 8\n  AND m.year > 2005\n  AND l.name ILIKE '%India%'\nORDER BY m.rating DESC;",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 14.4
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT g.name AS genre, m.title, m.rating, p.name AS director\nFROM public.genre g\nJOIN public.m_genre mg ON mg.gid = g.gid\nJOIN public.movie m ON m.mid = mg.mid\nJOIN public.m_director md ON md.mid = m.mid\nJOIN public.person p ON p.pid = md.pid\nWHERE m.rating = (\n    SELECT MAX(m2.rating)\n    FROM public.m_genre mg2\n    JOIN public.movie m2 ON m2.mid = mg2.mid\n    WHERE mg2.gid = g.gid\n)\nORDER BY g.name;",
+      "valid": true,
+      "executed": true,
+      "rows": 343,
+      "empty": false,
+      "time": 17.49
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.pid, p.name, d.mid\nFROM public.person p\nJOIN public.m_director d ON p.pid = d.pid\nJOIN public.m_producer pr ON p.pid = pr.pid AND d.mid = pr.mid",
+      "valid": true,
+      "executed": true,
+      "rows": 812,
+      "empty": false,
+      "time": 15.11
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT\n    p.name AS director_name,\n    ROUND(AVG(m.rating)::numeric, 2) AS avg_rating,\n    COUNT(*) AS movie_count,\n    best.title AS best_rated_film,\n    best.rating AS best_rating,\n    worst.title AS worst_rated_film,\n    worst.rating AS worst_rating\nFROM public.m_director md\nJOIN public.movie m ON md.mid = m.mid\nJOIN public.person p ON md.pid = p.pid\nJOIN LATERAL (\n    SELECT m2.title, m2.rating\n    FROM public.m_director md2\n    JOIN public.movie m2 ON md2.mid = m2.mid\n    WHERE md2.pid = md.pid\n    ORDER BY m2.rating DESC, m2.title\n    LIMIT 1\n) best ON TRUE\nJOIN LATERAL (\n    SELECT m3.title, m3.rating\n    FROM public.m_director md3\n    JOIN public.movie m3 ON md3.mid = m3.mid\n    WHERE md3.pid = md.pid\n    ORDER BY m3.rating ASC, m3.title\n    LIMIT 1\n) worst ON TRUE\nGROUP BY p.pid, p.name, best.title, best.rating, worst.title, worst.rating\nHAVING COUNT(*) >= 5\nORDER BY AVG(m.rating) DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 178,
+      "empty": false,
+      "time": 19.31
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT year, name AS genre, avg_rating, movie_count\nFROM (\n    SELECT m.year, g.name, AVG(m.rating) AS avg_rating, COUNT(*) AS movie_count,\n           ROW_NUMBER() OVER (PARTITION BY m.year ORDER BY AVG(m.rating) DESC) AS rn\n    FROM public.movie m\n    JOIN public.m_genre mg ON m.mid = mg.mid\n    JOIN public.genre g ON mg.gid = g.gid\n    WHERE m.year IS NOT NULL\n    GROUP BY m.year, g.name\n) sub\nWHERE rn = 1\nORDER BY year;",
+      "valid": true,
+      "executed": true,
+      "rows": 78,
+      "empty": false,
+      "time": 15.78
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name AS director_name, MIN(m.year) AS breakout_year\nFROM public.m_director md\nJOIN public.movie m ON md.mid = m.mid\nJOIN public.person p ON md.pid = p.pid\nWHERE m.rating > 8.0\nGROUP BY md.pid, p.name\nORDER BY breakout_year",
+      "valid": true,
+      "executed": true,
+      "rows": 117,
+      "empty": false,
+      "time": 14.3
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p.name, p.pid, MIN(m.year) AS first_year, MAX(m.year) AS last_year, MAX(m.year) - MIN(m.year) AS career_span\nFROM public.person p\nJOIN public.m_cast mc ON p.pid = mc.pid\nJOIN public.movie m ON mc.mid = m.mid\nWHERE m.year IS NOT NULL\nGROUP BY p.pid, p.name\nORDER BY career_span DESC\nLIMIT 10;",
+      "valid": true,
+      "executed": true,
+      "rows": 10,
+      "empty": false,
+      "time": 15.02
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT \n    decade,\n    country_name,\n    movie_count,\n    ROUND((movie_count * 100.0 / SUM(movie_count) OVER (PARTITION BY decade)), 2) AS percentage_contribution\nFROM (\n    SELECT \n        (m.year / 10) * 10 AS decade,\n        c.name AS country_name,\n        COUNT(*) AS movie_count\n    FROM public.m_country mc\n    JOIN public.movie m ON mc.mid = m.mid\n    JOIN public.country c ON mc.cid = c.cid\n    WHERE m.year IS NOT NULL AND c.name IS NOT NULL\n    GROUP BY (m.year / 10) * 10, c.name\n) sub\nORDER BY decade, percentage_contribution DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 66,
+      "empty": false,
+      "time": 15.98
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.m_location WHERE lid IS NULL;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.68
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(*) FROM public.person WHERE gender IS NULL",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.67
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year\nFROM public.movie m\nLEFT JOIN public.m_cast c ON m.mid = c.mid\nWHERE c.id IS NULL;",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 15.5
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT d.pid, p.name\nFROM public.m_director d\nJOIN public.person p ON d.pid = p.pid\nWHERE d.pid NOT IN (SELECT pid FROM public.m_producer WHERE pid IS NOT NULL)",
+      "valid": true,
+      "executed": true,
+      "rows": 937,
+      "empty": false,
+      "time": 15.36
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT l.laid, l.name\nFROM public.language l\nLEFT JOIN public.m_language ml ON l.laid = ml.laid\nWHERE ml.id IS NULL;",
+      "valid": true,
+      "executed": true,
+      "rows": 0,
+      "empty": true,
+      "time": 15.13
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m1.mid AS mid1, m1.title, m1.year AS year1, m2.mid AS mid2, m2.year AS year2\nFROM public.movie m1\nJOIN public.movie m2 ON m1.title = m2.title AND m1.year <> m2.year AND m1.mid < m2.mid;",
+      "valid": true,
+      "executed": true,
+      "rows": 139,
+      "empty": false,
+      "time": 14.8
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT p1.name AS actor1, p2.name AS actor2, COUNT(DISTINCT c1.mid) AS movies_together\nFROM public.m_cast c1\nJOIN public.m_cast c2 ON c1.mid = c2.mid AND c1.pid < c2.pid\nJOIN public.person p1 ON c1.pid = p1.pid\nJOIN public.person p2 ON c2.pid = p2.pid\nGROUP BY p1.name, p2.name\nHAVING COUNT(DISTINCT c1.mid) > 3\nORDER BY movies_together DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 15726,
+      "empty": false,
+      "time": 24.27
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.name\nFROM public.person p\nWHERE p.pid IN (\n    SELECT pid FROM public.m_director\n    UNION\n    SELECT pid FROM public.m_producer WHERE pid IS NOT NULL\n)",
+      "valid": true,
+      "executed": true,
+      "rows": 6298,
+      "empty": false,
+      "time": 16.52
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT DISTINCT p.pid, p.name\nFROM public.person p\nINNER JOIN public.m_director d ON p.pid = d.pid\nWHERE p.pid NOT IN (SELECT pid FROM public.m_cast)",
+      "valid": true,
+      "executed": true,
+      "rows": 1070,
+      "empty": false,
+      "time": 16.21
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT * FROM public.movie WHERE title ILIKE '%love%'",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 13.11
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT lid, name FROM public.location WHERE name ILIKE '%Mumbai%';",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 12.81
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT (year / 10) * 10 AS decade, COUNT(*) AS movie_count\nFROM public.movie\nGROUP BY decade\nORDER BY decade;",
+      "valid": true,
+      "executed": true,
+      "rows": 9,
+      "empty": false,
+      "time": 14.96
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT (year / 10) * 10 AS decade, AVG(rating) AS avg_rating\nFROM public.movie\nGROUP BY decade\nORDER BY avg_rating DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 13.81
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT d.pid, p.name, COUNT(DISTINCT g.gid) AS distinct_genres\nFROM public.m_director d\nJOIN public.m_genre g ON d.mid = g.mid\nJOIN public.person p ON d.pid = p.pid\nGROUP BY d.pid, p.name\nORDER BY distinct_genres DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 1462,
+      "empty": false,
+      "time": 16.59
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT c.name, COUNT(DISTINCT mg.gid) AS distinct_genres\nFROM public.country c\nJOIN public.m_country mc ON mc.cid = c.cid\nJOIN public.m_genre mg ON mg.mid = mc.mid\nGROUP BY c.name\nORDER BY distinct_genres DESC\nLIMIT 1;",
+      "valid": true,
+      "executed": true,
+      "rows": 1,
+      "empty": false,
+      "time": 15.82
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT \n    m.mid,\n    m.title,\n    COUNT(c.pid) AS cast_count,\n    AVG(COUNT(c.pid)) OVER () AS avg_cast_size\nFROM public.movie m\nLEFT JOIN public.m_cast c ON m.mid = c.mid\nGROUP BY m.mid, m.title",
+      "valid": true,
+      "executed": true,
+      "rows": 3473,
+      "empty": false,
+      "time": 16.7
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating, g.name AS genre\nFROM public.movie m\nJOIN public.m_genre mg ON m.mid = mg.mid\nJOIN public.genre g ON mg.gid = g.gid\nWHERE m.rating > (\n    SELECT AVG(m2.rating)\n    FROM public.movie m2\n    JOIN public.m_genre mg2 ON m2.mid = mg2.mid\n    WHERE mg2.gid = mg.gid\n)",
+      "valid": true,
+      "executed": true,
+      "rows": 1835,
+      "empty": false,
+      "time": 17.77
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT title, rating, num_votes\nFROM public.movie\nWHERE num_votes > 1000\nORDER BY rating ASC\nLIMIT 3;",
+      "valid": true,
+      "executed": true,
+      "rows": 3,
+      "empty": false,
+      "time": 13.82
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT name AS language_name, title, year\nFROM (\n    SELECT l.name, m.title, m.year,\n           ROW_NUMBER() OVER (PARTITION BY l.laid ORDER BY m.year DESC, m.title) AS rn\n    FROM public.movie m\n    JOIN public.m_language ml ON ml.mid = m.mid\n    JOIN public.language l ON l.laid = ml.laid\n) sub\nWHERE rn <= 5\nORDER BY language_name, year DESC;",
+      "valid": true,
+      "executed": true,
+      "rows": 86,
+      "empty": false,
+      "time": 14.47
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT COUNT(DISTINCT mg.mid)\nFROM public.m_genre mg\nJOIN public.genre g ON mg.gid = g.gid\nWHERE g.name ILIKE '%Drama%'",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 13.2
+    },
+    {
+      "sql_generated": true,
+      "sql": "SELECT m.mid, m.title, m.year, m.rating\nFROM public.movie m\nJOIN public.m_genre mg ON m.mid = mg.mid\nJOIN public.genre g ON mg.gid = g.gid\nWHERE g.name ILIKE '%Comedy%' AND g.name ILIKE '%Romance%'",
+      "valid": true,
+      "executed": false,
+      "exec_error": "0",
+      "time": 13.32
+    }
+  ],
+  "questions": [
+    "How many movies are in the database?",
+    "List all movies released in 2018.",
+    "What are the top 10 highest-rated movies?",
+    "Show all movies with more than 100,000 votes.",
+    "How many distinct languages are available?",
+    "List all countries in the database.",
+    "What is the average movie rating?",
+    "Show movies released between 2010 and 2015.",
+    "How many female persons are in the database?",
+    "What is the oldest movie in the database?",
+    "List all movies made in India.",
+    "How many movies are in Hindi?",
+    "Show the top 5 directors by number of movies directed.",
+    "Which genres have the most movies?",
+    "List all movies shot in Mumbai locations.",
+    "How many movies does each country have?",
+    "What is the average rating of movies released after 2010?",
+    "Show all actors who appeared in more than 50 movies.",
+    "List movies that were produced in the USA and rated above 8.",
+    "Which language has the highest average movie rating?",
+    "Who are the top 5 actors by average movie rating (minimum 10 movies)?",
+    "List directors who have directed movies in more than 3 different genres.",
+    "Find movies where the director also acted (present in both m_director and m_cast).",
+    "What is the year-over-year trend of average movie ratings from 2000 to 2018?",
+    "Which actor-director pairs have collaborated the most?",
+    "Find the most prolific producer-director combination.",
+    "List actors who have worked in movies across 5+ different languages.",
+    "What are the top-rated movies (rating > 8) that were shot in locations in India and released after 2005?",
+    "For each genre, what is the highest-rated movie and who directed it?",
+    "Find persons who have been both a director and a producer for the same movie.",
+    "Rank directors by their average movie rating, but only include those with at least 5 movies, and show their best and worst rated film.",
+    "For each year, show the genre that had the highest average rating along with the number of movies in that genre.",
+    "Find the breakout year for each director \u2014 the year their movie first crossed 8.0 rating.",
+    "Which actors have appeared in movies spanning the widest range of years (longest career)?",
+    "Calculate the percentage contribution of each country to total movie production per decade.",
+    "How many movies have no filming location recorded?",
+    "How many persons have unknown gender?",
+    "Which movies have no cast listed at all?",
+    "Find directors who have never produced a movie.",
+    "List languages that have no movies associated with them.",
+    "Find pairs of movies with the same title but different release years.",
+    "Which actors have appeared together in more than 3 movies?",
+    "List all person names who are either directors or producers (combined, deduplicated).",
+    "Which persons are directors but NOT actors?",
+    "Find all movies with love in the title.",
+    "List all filming locations that mention Mumbai.",
+    "How many movies were released per decade?",
+    "Which decade had the highest average rating?",
+    "For each director, how many distinct genres have they worked in?",
+    "Which country has the most diverse set of genres (most distinct genre combinations)?",
+    "For each movie, show the number of cast members vs the average cast size across all movies.",
+    "Find movies whose rating is above the average rating for their genre.",
+    "What are the 3 lowest-rated movies with more than 1000 votes?",
+    "Show the 5 most recent movies per language.",
+    "How many movies contain Drama as one of their genres?",
+    "Find movies that are both Comedy and Romance."
+  ],
+  "summary": {
+    "graph": {
+      "generated": 56,
+      "valid": 56,
+      "executed": 52,
+      "non_empty": 48
+    },
+    "preserve": {
+      "generated": 56,
+      "valid": 56,
+      "executed": 50,
+      "non_empty": 48
+    }
+  }
+}

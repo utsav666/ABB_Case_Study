@@ -4,11 +4,18 @@ from sqlalchemy import text
 
 FETCH_TABLES = text(
     """
-    SELECT table_name
-    FROM information_schema.tables
-    WHERE table_schema = :schema_name
-      AND table_type = 'BASE TABLE'
-    ORDER BY table_name
+    SELECT
+        t.table_name,
+        (
+            SELECT COUNT(*)
+            FROM information_schema.columns c
+            WHERE c.table_schema = t.table_schema
+              AND c.table_name = t.table_name
+        ) AS column_count
+    FROM information_schema.tables t
+    WHERE t.table_schema = :schema_name
+      AND t.table_type = 'BASE TABLE'
+    ORDER BY t.table_name
     """
 )
 
