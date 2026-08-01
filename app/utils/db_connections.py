@@ -59,13 +59,23 @@ class DBConnectionCreate(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _strip_env(value: str) -> str:
+    """Strip whitespace and surrounding quotes from an env var value.
+
+    Docker's --env-file does NOT strip surrounding quotes from values,
+    unlike python-dotenv. This normalises both cases so the same .env
+    file works locally (uvicorn) and inside a Docker container.
+    """
+    return value.strip().strip('"\'')
+
+
 def _get_settings_db_url() -> str:
     """Build the settings database connection URL from environment variables."""
-    db_host = os.getenv("SETTINGS_DB_HOST", os.getenv("DB_HOST", ""))
-    db_port = os.getenv("SETTINGS_DB_PORT", os.getenv("DB_PORT", "5432"))
-    db_name = os.getenv("SETTINGS_DB_NAME", os.getenv("DB_NAME", ""))
-    db_user = os.getenv("SETTINGS_DB_USER", os.getenv("DB_USER", ""))
-    db_password = os.getenv("SETTINGS_DB_PASSWORD", os.getenv("DB_PASSWORD", ""))
+    db_host = _strip_env(os.getenv("SETTINGS_DB_HOST", os.getenv("DB_HOST", "")))
+    db_port = _strip_env(os.getenv("SETTINGS_DB_PORT", os.getenv("DB_PORT", "5432")))
+    db_name = _strip_env(os.getenv("SETTINGS_DB_NAME", os.getenv("DB_NAME", "")))
+    db_user = _strip_env(os.getenv("SETTINGS_DB_USER", os.getenv("DB_USER", "")))
+    db_password = _strip_env(os.getenv("SETTINGS_DB_PASSWORD", os.getenv("DB_PASSWORD", "")))
 
     required_vars = {
         "SETTINGS_DB_HOST": db_host,

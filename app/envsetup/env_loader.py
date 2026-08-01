@@ -1,10 +1,59 @@
 # core/env_loader.py
+import json
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 _env_loaded = False  # simple flag to avoid loading multiple times
+
+
+def _load_from_aws_secrets() -> None:
+    """Pull secrets from AWS Secrets Manager and inject into os.environ.
+
+    Triggered only when the AWS_SECRET_NAME environment variable is set.
+    The secret value must be a JSON object whose keys map directly to env
+    var names, e.g.:
+        {
+            "OPENAI_API_KEY": "sk-...",
+            "MERCK_API_KEY": "...",
+            "OAUTH_CLIENT_SECRET": "...",
+            "DB_PASSWORD": "...",
+            "DATABASE_URL": "postgresql://..."
+        }
+
+    On ECS Fargate: set AWS_SECRET_NAME in the task definition environment.
+    Locally:        do NOT set AWS_SECRET_NAME — .env file is used instead.
+    """
+    secret_name = os.getenv("AWS_SECRET_NAME")
+    if not secret_name:
+        return
+
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError:
+        logger.warning("boto3 not installed — skipping AWS Secrets Manager load.")
+        return
+
+    region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
+
+    try:
+        client = boto3.client("secretsmanager", region_name=region)
+        response = client.get_secret_value(SecretId=secret_name)
+        secret_str = response.get("SecretString", "{}")
+        secrets: dict = json.loads(secret_str)
+        for key, value in secrets.items():
+            # Only inject — never overwrite values already explicitly set
+            if key not in os.environ:
+                os.environ[key] = str(value)
+        logger.info("Loaded %d secrets from AWS Secrets Manager (%s).", len(secrets), secret_name)
+    except (BotoCoreError, ClientError) as exc:
+        logger.error("Failed to load secrets from AWS Secrets Manager: %s", exc)
+        raise
 
 _PROVIDER_ALIASES = {
     "openai": "openai",
@@ -34,11 +83,22 @@ def _is_non_empty_env_value(env_name: str) -> bool:
 
 
 def load_env() -> None:
-    """Load environment variables from the project `.env` file when available."""
+    """Load environment variables with a two-tier strategy:
+
+    1. AWS Secrets Manager  — used when AWS_SECRET_NAME is set (ECS Fargate / prod).
+    2. .env file            — used when AWS_SECRET_NAME is NOT set (local dev).
+
+    The AWS path is tried first so that secrets injected there always take
+    precedence over any leftover values in the process environment.
+    """
     global _env_loaded
     if _env_loaded:
         return
 
+    # --- Tier 1: AWS Secrets Manager (prod / ECS Fargate) ---
+    _load_from_aws_secrets()
+
+    # --- Tier 2: .env file (local dev) ---
     app_dir = Path(__file__).resolve().parents[1]
     workspace_dir = app_dir.parent
 

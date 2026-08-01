@@ -25,18 +25,22 @@ class SettingsDatabaseConfig:
         Returns:
             SettingsDatabaseConfig: Validated settings database config.
         """
+        def _s(v: str) -> str:
+            """Strip whitespace and surrounding quotes (Docker --env-file compat)."""
+            return v.strip().strip('"\'')
+
         config = cls(
-            host=os.getenv("SETTINGS_DB_HOST", os.getenv("DB_HOST", "")).strip(),
-            port=os.getenv(
+            host=_s(os.getenv("SETTINGS_DB_HOST", os.getenv("DB_HOST", ""))),
+            port=_s(os.getenv(
                 "SETTINGS_DB_PORT",
                 os.getenv("DB_PORT", DEFAULT_SETTINGS_DB_PORT),
-            ).strip(),
-            name=os.getenv("SETTINGS_DB_NAME", os.getenv("DB_NAME", "")).strip(),
-            user=os.getenv("SETTINGS_DB_USER", os.getenv("DB_USER", "")).strip(),
-            password=os.getenv(
+            )),
+            name=_s(os.getenv("SETTINGS_DB_NAME", os.getenv("DB_NAME", ""))),
+            user=_s(os.getenv("SETTINGS_DB_USER", os.getenv("DB_USER", ""))),
+            password=_s(os.getenv(
                 "SETTINGS_DB_PASSWORD",
                 os.getenv("DB_PASSWORD", ""),
-            ).strip(),
+            )),
         )
         missing_variables = config.get_missing_variables()
         if missing_variables:

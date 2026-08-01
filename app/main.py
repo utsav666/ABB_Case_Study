@@ -1002,50 +1002,23 @@ def delete_agent(workspace_id: str) -> dict[str, str]:
 
 
 @app.post("/chat")
-async def chat(
-    request: Request,
-    question: str | None = None,
-    message: str | None = None,
-    query: str | None = None,
-    prompt: str | None = None,
-    text: str | None = None,
-) -> dict[str, Any]:
-    """Run the orchestrator and return a JSON response."""
-    normalized_question = (question or message or query or prompt or text or "").strip()
-    # Read the body once so we can pull both the question (fallback) and the
-    # optional connection_id that scopes the run to a real schema graph.
-    body_payload = await read_request_payload(request)
-    if not normalized_question:
-        normalized_question = extract_question_from_payload(body_payload)
+async def chat(payload: ChatRequest) -> dict[str, Any]:
+    """Run the orchestrator and return a JSON response.
 
-    connection_id: str | None = None
-    thread_id_from_client: str | None = None
-    workspace_id: str | None = None
-    if isinstance(body_payload, dict):
-        raw_connection_id = body_payload.get("connection_id")
-        if isinstance(raw_connection_id, str) and raw_connection_id.strip():
-            connection_id = raw_connection_id.strip()
-        raw_thread_id = body_payload.get("thread_id")
-        if isinstance(raw_thread_id, str) and raw_thread_id.strip():
-            thread_id_from_client = raw_thread_id.strip()
-        raw_workspace_id = body_payload.get("workspace_id")
-        if isinstance(raw_workspace_id, str) and raw_workspace_id.strip():
-            workspace_id = raw_workspace_id.strip()
-
-    if not normalized_question:
-        return jsonable_encoder(
-            {
-                "question": "",
-                "answer_type": "text",
-                "message": (
-                    "Please send a question using `question`, `message`, `query`, "
-                    "or `messages[].content`."
-                ),
-                "data": None,
-                "logs": None,
-                "chart_image_base64": None,
-            }
-        )
+    All fields are passed as a JSON body. Example:
+    ```json
+    {
+        "question": "How many customers are there?",
+        "connection_id": "optional-db-connection-uuid",
+        "thread_id": "optional-existing-thread-uuid",
+        "workspace_id": "optional-workspace-uuid"
+    }
+    ```
+    """
+    normalized_question = payload.question  # already normalized by ChatRequest validator
+    connection_id: str | None = payload.connection_id
+    thread_id_from_client: str | None = payload.thread_id
+    workspace_id: str | None = payload.workspace_id
 
     import asyncio
     import time
