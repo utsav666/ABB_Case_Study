@@ -5,3 +5,9 @@ model_config.json
 
 # Python virtual environment
 .venv/
+
+# Coverage artifacts (.coverage is a binary SQLite db; htmlcov/ is generated)
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

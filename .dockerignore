@@ -14,3 +14,7 @@ __pycache__/
 app/config/.env
 logs/
 tests/
+.coverage
+.coverage.*
+htmlcov/
+.coveragerc

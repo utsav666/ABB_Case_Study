@@ -470,21 +470,33 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         if cardinality == 0 or not actual_values:
             continue
 
-        # Sort by fuzzy similarity
+        # Sort by fuzzy similarity. Values with no real resemblance are dropped,
+        # so this can come back empty — string similarity cannot see aliases
+        # ("usa" vs "United States"). When it does, hand the LLM a plain sample of
+        # real values instead: it CAN resolve aliases, and it's the only step that
+        # can. What we must not do is let the fuzzy scorer's noise floor pass off
+        # an unrelated value as a near miss.
         fuzzy_sorted = get_fuzzy_matches(user_value, actual_values)
+        candidates = fuzzy_sorted or [str(v) for v in actual_values[:20]]
+        has_near_miss = bool(fuzzy_sorted)
 
         # Ask LLM for confidence
         resolution = resolve_filter_value(
             column_name=col_filter.column,
             table_name=table_name,
             user_value=user_value,
-            actual_values=fuzzy_sorted,
+            actual_values=candidates,
             cardinality=cardinality,
             provider=state.get("llm_provider"),
             model=state.get("llm_model"),
         )
 
-        if resolution["confidence"] == "high" and resolution["match"]:
+        # Only auto-resolve to a value that genuinely exists in the column. A
+        # confident-sounding match the LLM invented would silently produce a
+        # zero-row answer with no hint that the filter was fabricated.
+        actual_value_set = {str(v) for v in actual_values}
+        match_is_real = str(resolution.get("match") or "") in actual_value_set
+        if resolution["confidence"] == "high" and resolution["match"] and match_is_real:
             # LLM is confident → auto-resolve
             logger.info(
                 "### HITL — Auto-resolved: '%s' → '%s' (confidence=high)",
@@ -496,18 +508,29 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
             )
 
         else:
+            if resolution["match"] and not match_is_real:
+                logger.warning(
+                    "### HITL — Discarding hallucinated match '%s' (not present in %s.%s)",
+                    resolution["match"],
+                    table_name,
+                    col_filter.column,
+                )
             # LLM is NOT confident → trigger HITL interrupt
             logger.info(
                 "### HITL — Low confidence for '%s' in column '%s'. Triggering HITL.",
                 user_value,
                 col_filter.column,
             )
-            # Always give the user something to pick: prefer the LLM's
-            # alternatives, but fall back to the DB's fuzzy-closest actual
-            # values when the LLM returns none. De-dupe while preserving order.
-            suggestions = [s for s in (resolution.get("alternatives") or []) if s]
+            # Always give the user something real to pick. Prefer the LLM's
+            # alternatives, but keep only values that exist in the column, then
+            # fall back to actual candidates. De-dupe while preserving order.
+            suggestions = [
+                s
+                for s in (resolution.get("alternatives") or [])
+                if s and str(s) in actual_value_set
+            ]
             if not suggestions:
-                suggestions = fuzzy_sorted[:10]
+                suggestions = candidates[:10]
             seen: set[str] = set()
             deduped_suggestions: list[str] = []
             for value in suggestions:
@@ -530,10 +553,21 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
                     "user_typed": user_value,
                     "suggestions": suggestions,
                     "reasoning": resolution["reasoning"],
+                    # Say which situation this is. "I'm not sure which you mean"
+                    # implies a near miss; when nothing resembles their input,
+                    # claiming ambiguity is misleading — the value simply isn't there.
                     "message": (
-                        f"I'm not sure which '{col_filter.column}' value you mean. "
-                        f"You typed '{user_value}'. Please pick from the suggestions "
-                        f"or type the exact value."
+                        (
+                            f"I'm not sure which '{col_filter.column}' value you "
+                            f"mean. You typed '{user_value}'. Please pick from the "
+                            f"suggestions or type the exact value."
+                        )
+                        if has_near_miss
+                        else (
+                            f"I couldn't find anything like '{user_value}' in "
+                            f"'{col_filter.column}'. Here's what that column "
+                            f"actually contains — pick one, or type an exact value."
+                        )
                     ),
                 }
             )
@@ -1058,6 +1092,22 @@ def build_data_response_node(state: GraphState) -> GraphState:
     sql = state.get("sql", "")
 
     if data is not None:
+        # A zero-row result is a SUCCESS, not an error — but "Here are the query
+        # results." with an empty table below it reads as a broken app. Say so
+        # explicitly instead, so the user knows the filter matched nothing.
+        row_count = 0 if data is None else len(data)
+        if row_count == 0:
+            return {
+                "final_response": {
+                    "type": "data",
+                    "data": data,
+                    "sql": sql,
+                    "message": (
+                        "The query ran successfully but returned no rows — "
+                        "nothing in the data matches those filters."
+                    ),
+                }
+            }
         return {"final_response": {"type": "data", "data": data, "sql": sql}}
     return {
         "final_response": {

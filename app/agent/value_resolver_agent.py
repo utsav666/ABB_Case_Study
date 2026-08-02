@@ -265,12 +265,18 @@ def get_column_distinct_values(
 
 
 def get_fuzzy_matches(
-    user_value: str, actual_values: list[str], top_n: int = 20
+    user_value: str, actual_values: list[str], top_n: int = 20, min_score: float = 0.2
 ) -> list[str]:
     """### HITL — Sort actual values by fuzzy similarity to user's input.
 
     Uses simple containment + prefix matching (no external deps).
     For production, consider rapidfuzz or pg_trgm.
+
+    Values scoring below `min_score` are DROPPED rather than ranked. Without a
+    floor, the character-overlap fallback gives every value some tiny nonzero
+    score, so a value with no real relative (e.g. "Women" against
+    "Category A/B/C") still comes back "ranked" — and the top one gets offered
+    to the user as though it were a match. An empty list is the honest answer.
     """
     user_lower = user_value.lower().strip()
 
@@ -293,7 +299,8 @@ def get_fuzzy_matches(
                 len(common) / max(len(set(user_lower)), len(set(val_lower)), 1) * 0.4
             )
 
-        scored.append((score, val))
+        if score >= min_score:
+            scored.append((score, val))
 
     scored.sort(key=lambda x: -x[0])
     return [val for _, val in scored[:top_n]]

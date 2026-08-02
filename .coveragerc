@@ -1,0 +1,32 @@
+# Coverage configuration for the DMIA backend.
+#
+# Usage:
+#   coverage run -m pytest && coverage report
+#   pytest --cov          (reads this file too)
+#
+# fail_under makes BOTH `coverage report` and `pytest --cov` exit non-zero when
+# total coverage drops below the threshold, so CI needs no extra shell math.
+
+[run]
+# Measure only our own code. Without this, every imported site-package is
+# reported too and the total becomes meaningless.
+source = app
+branch = True
+omit =
+    */tests/*
+    */__main__.py
+    */.venv/*
+
+[report]
+fail_under = 50
+show_missing = True
+precision = 1
+# Don't count lines that are unreachable-by-design or test-only scaffolding.
+exclude_also =
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    @(abc\.)?abstractmethod
+
+[html]
+directory = htmlcov
