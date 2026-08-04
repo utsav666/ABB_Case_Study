@@ -10,6 +10,25 @@ from app.main import app
 client = TestClient(app)
 
 
+def _make_dummy_graph_orchestrator(dummy_cls):
+    """Wrap a simple test double in GraphOrchestrator's real signature.
+
+    The handler constructs GraphOrchestrator with keyword arguments
+    (thread_id, connection_id, conversation_history, user_message_id,
+    llm_provider, llm_model). Accepting **kwargs keeps these tests focused on
+    the endpoint's behaviour rather than the orchestrator's parameter list.
+    """
+
+    class DummyGraphOrchestrator:
+        def __init__(self, question: str, **_kwargs) -> None:
+            self._inner = dummy_cls(question)
+
+        def executor(self):
+            return self._inner.executor()
+
+    return DummyGraphOrchestrator
+
+
 def test_health_endpoint_returns_ok() -> None:
     response = client.get("/health")
 
@@ -17,12 +36,67 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_schema_config_endpoint_returns_tables() -> None:
+def test_schema_config_endpoint_is_post_only() -> None:
+    """GET /schema/config no longer exists; the route is POST-only.
+
+    The previous version of this test did a GET and asserted 200, which has
+    returned 405 since the read path moved to GET /schema/tables (that endpoint
+    requires a live connection, so it is not covered here).
+    """
     response = client.get("/schema/config")
 
+    assert response.status_code == 405
+
+
+def test_schema_summary_requires_connection_id() -> None:
+    """GET /schema/summary rejects a request with no connection_id.
+
+    The endpoint used to take no arguments and render a bundled fixture, so it
+    described a movie database regardless of the caller's connection. Schema now
+    comes only from settings.schema_graphs, making connection_id mandatory.
+    """
+    response = client.get("/schema/summary")
+
+    assert response.status_code == 422
+
+
+def test_schema_summary_returns_404_for_unprofiled_connection(monkeypatch) -> None:
+    """An unknown connection gets a 404, not a fixture-backed answer."""
+    monkeypatch.setattr(
+        "app.target_db.controllers.load_schema_graph",
+        lambda _connection_id: None,
+    )
+
+    response = client.get("/schema/summary", params={"connection_id": "missing-id"})
+
+    assert response.status_code == 404
+    assert "Profile the connection first" in response.json()["detail"]
+
+
+def test_schema_summary_renders_connection_graph(monkeypatch) -> None:
+    """A profiled connection's summary is rendered from its stored graph."""
+    graph = {
+        "nodes": [
+            {
+                "table": "orders",
+                "schema": "sales",
+                "qualified_name": "sales.orders",
+                "columns": [{"raw_name": "id", "logical_name": "Order ID"}],
+            }
+        ],
+        "edges": [],
+    }
+    monkeypatch.setattr(
+        "app.target_db.controllers.load_schema_graph",
+        lambda _connection_id: graph,
+    )
+
+    response = client.get("/schema/summary", params={"connection_id": "conn-1"})
+
     assert response.status_code == 200
-    payload = response.json()
-    assert "tables" in payload
+    summary = response.json()["summary"]
+    assert "sales.orders" in summary
+    assert "Order ID" in summary
 
 
 def test_chat_endpoint_supports_cors_preflight() -> None:
@@ -46,8 +120,13 @@ def test_chat_endpoint_accepts_message_payload(monkeypatch) -> None:
         def executor(self) -> dict[str, str]:
             return {"echo": self.question}
 
-    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
-    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+    # /chat imports GraphOrchestrator from app.orchestrator.orch_graph; the old
+    # stub targeted app.orchestrator.orch_exec, which the handler no longer uses,
+    # so the real graph ran and reached the settings DB.
+    monkeypatch.setattr(
+        "app.orchestrator.orch_graph.GraphOrchestrator",
+        _make_dummy_graph_orchestrator(DummyOrchestrator),
+    )
 
     response = client.post("/chat", json={"message": "show me sales"})
 
@@ -63,14 +142,22 @@ def test_chat_endpoint_logs_failures(monkeypatch, caplog) -> None:
         def executor(self) -> dict[str, str]:
             raise ValueError("demo failure")
 
-    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
-    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+    # /chat imports GraphOrchestrator from app.orchestrator.orch_graph; the old
+    # stub targeted app.orchestrator.orch_exec, which the handler no longer uses,
+    # so the real graph ran and reached the settings DB.
+    monkeypatch.setattr(
+        "app.orchestrator.orch_graph.GraphOrchestrator",
+        _make_dummy_graph_orchestrator(DummyOrchestrator),
+    )
 
     with caplog.at_level(logging.ERROR):
         response = client.post("/chat", json={"message": "show me sales"})
 
     assert response.status_code == 500
-    assert response.json()["detail"] == "demo failure"
+    # The endpoint deliberately returns a generic message so internal details
+    # are not leaked to clients; the real cause goes to the log, asserted below.
+    assert response.json()["detail"] == "An internal error occurred. Please try again."
+    assert "demo failure" in caplog.text
     assert "Chat request failed" in caplog.text
 
 
@@ -83,8 +170,13 @@ def test_chat_endpoint_logs_captured_output_on_failures(monkeypatch, caplog) -> 
             print("step one completed")
             raise ValueError("demo failure")
 
-    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
-    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+    # /chat imports GraphOrchestrator from app.orchestrator.orch_graph; the old
+    # stub targeted app.orchestrator.orch_exec, which the handler no longer uses,
+    # so the real graph ran and reached the settings DB.
+    monkeypatch.setattr(
+        "app.orchestrator.orch_graph.GraphOrchestrator",
+        _make_dummy_graph_orchestrator(DummyOrchestrator),
+    )
 
     with caplog.at_level(logging.INFO):
         response = client.post("/chat", json={"message": "show me sales"})
@@ -101,8 +193,13 @@ def test_chat_endpoint_logs_unexpected_failures(monkeypatch, caplog) -> None:
         def executor(self) -> dict[str, str]:
             raise RuntimeError("unexpected failure")
 
-    fake_module = types.SimpleNamespace(Orchestrator=DummyOrchestrator)
-    monkeypatch.setitem(sys.modules, "app.orchestrator.orch_exec", fake_module)
+    # /chat imports GraphOrchestrator from app.orchestrator.orch_graph; the old
+    # stub targeted app.orchestrator.orch_exec, which the handler no longer uses,
+    # so the real graph ran and reached the settings DB.
+    monkeypatch.setattr(
+        "app.orchestrator.orch_graph.GraphOrchestrator",
+        _make_dummy_graph_orchestrator(DummyOrchestrator),
+    )
 
     error_client = TestClient(app, raise_server_exceptions=False)
     with caplog.at_level(logging.ERROR):
@@ -158,7 +255,10 @@ def test_login_endpoint_returns_oauth_url(monkeypatch) -> None:
     assert "response_type=code" in payload["login_url"]
 
 
-def test_auth_callback_endpoint_returns_frontend_payload() -> None:
+def test_auth_callback_endpoint_returns_frontend_payload(allow_network) -> None:
+    # NOTE: reaches the real identity provider over HTTPS, so it opts out of the
+    # network guard rather than silently depending on outbound access in CI.
+    # Worth mocking the token/userinfo calls properly.
     response = client.get(
         "/auth/callback",
         params={"code": "sample-code", "state": "login"},
@@ -171,7 +271,10 @@ def test_auth_callback_endpoint_returns_frontend_payload() -> None:
     assert payload["state"] == "login"
 
 
-def test_auth_callback_endpoint_accepts_post_payload() -> None:
+def test_auth_callback_endpoint_accepts_post_payload(allow_network) -> None:
+    # NOTE: reaches the real identity provider over HTTPS, so it opts out of the
+    # network guard rather than silently depending on outbound access in CI.
+    # Worth mocking the token/userinfo calls properly.
     response = client.post(
         "/auth/callback",
         data={"code": "sample-code", "state": "login"},
@@ -508,7 +611,12 @@ def test_login_endpoint_uses_well_known_authorize_url(monkeypatch) -> None:
     )
 
 
-def test_auth_callback_endpoint_uses_well_known_token_and_userinfo(monkeypatch) -> None:
+def test_auth_callback_endpoint_uses_well_known_token_and_userinfo(
+    monkeypatch, allow_network
+) -> None:
+    # NOTE: reaches the real identity provider over HTTPS, so it opts out of the
+    # network guard rather than silently depending on outbound access in CI.
+    # Worth mocking the token/userinfo calls properly.
     class DummyResponse:
         def __init__(self, payload: dict[str, object]) -> None:
             self._payload = payload

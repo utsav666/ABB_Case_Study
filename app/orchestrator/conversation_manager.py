@@ -14,7 +14,7 @@ load_env()
 
 class ConversationHistoryManager:
     """Manages conversation threads using LangChain memory backed by database.
-    
+
     Each conversation has a unique thread_id and maintains a list of
     (user message, assistant message) exchanges.
     """
@@ -31,7 +31,7 @@ class ConversationHistoryManager:
         thread_id: str,
     ) -> dict[str, Any]:
         """Create a new conversation thread.
-        
+
         Returns:
             {"thread_id": "...", "title": "...", "created_at": ...}
         """
@@ -67,12 +67,12 @@ class ConversationHistoryManager:
         content: str,
     ) -> dict[str, Any]:
         """Add a message to the conversation thread.
-        
+
         Args:
             thread_id: Unique conversation identifier
             role: "user" or "assistant"
             content: Message text
-            
+
         Returns:
             {"message_id": "...", "timestamp": ...}
         """
@@ -80,7 +80,7 @@ class ConversationHistoryManager:
 
     def get_conversation_history(self, thread_id: str) -> list[dict[str, Any]]:
         """Retrieve all messages in a conversation thread.
-        
+
         Returns:
             [{"role": "user"|"assistant", "content": "..."}, ...]
         """
@@ -92,7 +92,7 @@ class ConversationHistoryManager:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """Retrieve all conversations for a workspace (metadata only).
-        
+
         Returns:
             [{"thread_id": "...", "title": "...", "created_at": ..., "message_count": ...}, ...]
         """
@@ -104,24 +104,24 @@ class ConversationHistoryManager:
 
     def get_langchain_memory(self, thread_id: str) -> ConversationBufferMemory:
         """Get a LangChain ConversationBufferMemory for a thread.
-        
+
         Useful for integrating with LangChain agents/chains.
         """
         messages = self.get_conversation_history(thread_id)
-        
+
         memory = ConversationBufferMemory(
             return_messages=True,
             human_prefix="User",
             ai_prefix="Assistant",
         )
-        
+
         # Load existing messages into memory
         for msg in messages:
             if msg["role"] == "user":
                 memory.chat_memory.add_user_message(msg["content"])
             elif msg["role"] == "assistant":
                 memory.chat_memory.add_ai_message(msg["content"])
-        
+
         return memory
 
     @staticmethod

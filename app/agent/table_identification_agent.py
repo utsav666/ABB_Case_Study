@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 from app.envsetup.env_loader import load_env
 from app.prompt.prompts import table_identify_prompts
 from app.utils.llm_factory import create_chat_llm
-from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +42,12 @@ def identify_tables(
     {"success": True, "tables": [...], "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        if schema_summary is None:
-            schema_summary = Summarizer.summarize_schema()
+        if not schema_summary:
+            raise ValueError(
+                "schema_summary is required: render it from the connection's "
+                "schema graph (settings.schema_graphs). There is no sample-schema "
+                "fallback."
+            )
         llm = create_chat_llm(purpose="table_identification", temperature=0, provider=provider, model=model)
         parser = JsonOutputParser(pydantic_object=TableIdentification)
         prompt = ChatPromptTemplate.from_template(table_identify_prompts)

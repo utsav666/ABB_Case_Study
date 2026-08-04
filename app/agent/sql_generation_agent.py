@@ -9,7 +9,6 @@ from typing import Any
 from app.envsetup.env_loader import get_llm_model, load_env
 from app.prompt.prompts import sql_gen_prompts
 from app.utils.llm_factory import create_chat_llm
-from app.utils.table_struc_creation import TabStrucCreation
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,9 @@ def _build_cost_summary(model_name: str, token_usage: dict[str, int]) -> dict[st
 
     input_price_per_million, output_price_per_million = pricing
     input_cost = (token_usage["prompt_tokens"] / 1_000_000) * input_price_per_million
-    output_cost = (token_usage["completion_tokens"] / 1_000_000) * output_price_per_million
+    output_cost = (
+        token_usage["completion_tokens"] / 1_000_000
+    ) * output_price_per_million
     total_cost = input_cost + output_cost
 
     return {
@@ -115,9 +116,10 @@ def generate_sql(
     table_list: List of relevant table names.
     dialect: SQL dialect (PostgreSQL, Snowflake, etc.)
     error_context: If retrying, the previous error message to help the LLM fix it.
-    table_structure: Optional pre-built table-structure string. When provided,
-        it overrides the default sample-data source (TabStrucCreation) — used to
-        feed a connection's real schema graph to the generator.
+    table_structure: The connection's table structure, rendered from its schema
+        graph. REQUIRED — there is no sample-data fallback, because generating
+        SQL against a bundled fixture produced queries for a database the user
+        was not connected to.
     conversation_history: Prior conversation text for context continuity.
 
     Returns
@@ -125,15 +127,21 @@ def generate_sql(
     {"success": True, "sql": "..."} or {"success": False, "error": "..."}
     """
     try:
-        selected_sql_model = model or DEFAULT_SQL_MODEL or get_llm_model("sql_generation")
+        selected_sql_model = (
+            model or DEFAULT_SQL_MODEL or get_llm_model("sql_generation")
+        )
         llm = create_chat_llm(
             purpose="sql_generation",
             model=selected_sql_model,
             provider=provider,
             temperature=0,
         )
-        if table_structure is None:
-            table_structure = TabStrucCreation(table_list).struc_creation()
+        if not table_structure:
+            raise ValueError(
+                "table_structure is required: it must be rendered from the "
+                "connection's schema graph (settings.schema_graphs). There is no "
+                "sample-schema fallback."
+            )
 
         prompt = sql_gen_prompts.format(
             table_structure=table_structure,
@@ -180,16 +188,23 @@ def generate_sql(
 
         # Validate that the response is actually SQL, not an error message
         sql_lower = sql.lower().strip()
-        if not sql_lower or any(sql_lower.startswith(prefix) for prefix in [
-            "sorry", "i cannot", "i can't", "unable to", "error:",
-            "the provided", "there is no", "no column", "not possible"
-        ]):
+        if not sql_lower or any(
+            sql_lower.startswith(prefix)
+            for prefix in [
+                "sorry",
+                "i cannot",
+                "i can't",
+                "unable to",
+                "error:",
+                "the provided",
+                "there is no",
+                "no column",
+                "not possible",
+            ]
+        ):
             error_msg = sql if len(sql) < 200 else sql[:200] + "..."
             logger.warning("LLM returned error message instead of SQL: %s", error_msg)
-            return {
-                "success": False,
-                "error": f"Cannot generate SQL: {error_msg}"
-            }
+            return {"success": False, "error": f"Cannot generate SQL: {error_msg}"}
 
         return {
             "success": True,

@@ -1,0 +1,103 @@
+#!/bin/sh
+#
+# Pre-commit hook: run Ruff format + lint checks on staged Python files.
+#
+# Only STAGED files are checked (not the whole project) so pre-existing issues in
+# untouched files never block an unrelated commit — you fix what you touch. This
+# matters here: `ruff format --check .` currently reports ~30 pre-existing files.
+#
+# Enable (once per clone):   git config core.hooksPath .githooks
+# Skip for one commit:       git commit --no-verify
+
+set -eu
+
+# Staged, still-present files (Added/Copied/Modified/Renamed) with a .py extension.
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.py$' || true)
+
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+# Locate ruff.
+#
+# git runs hooks with a minimal PATH, so an interpreter that has ruff in your
+# shell (conda, pyenv, a venv) may be invisible here — bare `python3` can resolve
+# to a system interpreter with nothing installed. So try each candidate
+# explicitly rather than trusting PATH.
+RUFF=""
+
+# 1. Direct ruff binaries, project-local first.
+for candidate in \
+  ".venv/bin/ruff" \
+  "venv/bin/ruff" \
+  "${HOME:-}/.local/bin/ruff" \
+  "/opt/homebrew/bin/ruff" \
+  "/usr/local/bin/ruff"
+do
+  if [ -x "$candidate" ]; then
+    RUFF="$candidate"
+    break
+  fi
+done
+
+# 2. Anything on the hook's PATH.
+if [ -z "$RUFF" ] && command -v ruff >/dev/null 2>&1; then
+  RUFF="ruff"
+fi
+
+# 3. `python -m ruff` for each interpreter we can find, including ones off PATH.
+if [ -z "$RUFF" ]; then
+  for py in \
+    ".venv/bin/python" \
+    "venv/bin/python" \
+    "$(command -v python3 2>/dev/null)" \
+    "/opt/homebrew/Caskroom/miniconda/base/bin/python3" \
+    "/opt/homebrew/bin/python3" \
+    "/usr/local/bin/python3"
+  do
+    [ -n "$py" ] && [ -x "$py" ] || continue
+    if "$py" -m ruff --version >/dev/null 2>&1; then
+      RUFF="$py -m ruff"
+      break
+    fi
+  done
+fi
+
+if [ -z "$RUFF" ]; then
+  # SKIP rather than block. git hooks run with a minimal PATH, so a conda/pyenv
+  # install is often invisible here — failing the commit would punish a tooling
+  # discovery problem, not a code problem. The CI workflow runs the same checks
+  # with ruff guaranteed present, so nothing unformatted reaches main either way.
+  echo "pre-commit: ruff not found on the hook's PATH — skipping local checks."
+  echo "            (CI still enforces them. To check locally: pip install ruff)"
+  exit 0
+fi
+
+status=0
+
+echo "pre-commit: checking formatting..."
+# shellcheck disable=SC2086 # word splitting is intended: one arg per file
+if ! $RUFF format --check $staged_files; then
+  echo
+  echo "pre-commit: formatting issues found. Fix with:"
+  echo "  $RUFF format \$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py\$')"
+  status=1
+fi
+
+echo "pre-commit: linting..."
+# shellcheck disable=SC2086
+if ! $RUFF check $staged_files; then
+  echo
+  echo "pre-commit: lint errors found. Fix with:"
+  echo "  $RUFF check --fix <file>     # auto-fix what can be fixed"
+  status=1
+fi
+
+if [ "$status" -ne 0 ]; then
+  echo
+  echo "pre-commit: checks failed. Fix the issues above, or bypass with:"
+  echo "  git commit --no-verify"
+  exit 1
+fi
+
+echo "pre-commit: ruff checks passed."

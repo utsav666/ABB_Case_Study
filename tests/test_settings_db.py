@@ -114,10 +114,13 @@ def test_settings_user_controller_builds_enriched_user_payload() -> None:
 
 def test_db_connection_controller_rejects_invalid_engine() -> None:
     controller = DBConnectionController(repository=FakeDBConnectionRepository())
+    # "mysql" used to be the unsupported engine here, but it is now in
+    # ALLOWED_ENGINES, so the test was asserting on an engine that is valid.
+    # Use a name that cannot become supported by accident.
     payload = DBConnectionCreate(
         workspace_id=uuid4(),
         name="Warehouse",
-        engine="mysql",
+        engine="not-a-real-engine",
         db_host="db.example.com",
         db_port=5432,
         db_name="analytics",
@@ -125,11 +128,15 @@ def test_db_connection_controller_rejects_invalid_engine() -> None:
         db_password="secret",
     )
 
+    # skip_validation=True keeps this a unit test. Without it,
+    # create_connection() runs a LIVE connectivity probe against db_host before
+    # checking the engine, so this asserted on a DNS error instead of the engine
+    # rejection.
     with pytest.raises(HTTPException) as error_info:
-        controller.create_connection(payload)
+        controller.create_connection(payload, skip_validation=True)
 
     assert error_info.value.status_code == 422
-    assert "Invalid engine 'mysql'" in error_info.value.detail
+    assert "Invalid engine 'not-a-real-engine'" in error_info.value.detail
 
 
 def test_db_connection_controller_serializes_created_connection() -> None:
@@ -162,7 +169,9 @@ def test_db_connection_controller_serializes_created_connection() -> None:
         db_password="secret",
     )
 
-    result = controller.create_connection(payload)
+    # skip_validation=True: the repository is already faked, so a real network
+    # probe would be the only thing left reaching outside the test.
+    result = controller.create_connection(payload, skip_validation=True)
 
     assert result["status"] == "created"
     assert result["connection"]["workspace_id"] == str(workspace_id)

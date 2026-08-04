@@ -125,10 +125,28 @@ class JsonFormatter(logging.Formatter):
     # emitting as a top-level field.
     _RESERVED = frozenset(
         {
-            "args", "asctime", "created", "exc_info", "exc_text", "filename",
-            "funcName", "levelname", "levelno", "lineno", "module", "msecs",
-            "message", "msg", "name", "pathname", "process", "processName",
-            "relativeCreated", "stack_info", "taskName", "thread",
+            "args",
+            "asctime",
+            "created",
+            "exc_info",
+            "exc_text",
+            "filename",
+            "funcName",
+            "levelname",
+            "levelno",
+            "lineno",
+            "module",
+            "msecs",
+            "message",
+            "msg",
+            "name",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "stack_info",
+            "taskName",
+            "thread",
             "threadName",
         }
     )
@@ -171,13 +189,27 @@ def log_duration(logger: logging.Logger, step: str, **fields: Any):
     except Exception:
         elapsed_ms = (time.perf_counter() - started) * 1000
         logger.exception(
-            "STEP %s failed after %.0f ms", step, elapsed_ms,
-            extra={"step": step, "duration_ms": round(elapsed_ms, 1), "ok": False, **fields},
+            "STEP %s failed after %.0f ms",
+            step,
+            elapsed_ms,
+            extra={
+                "step": step,
+                "duration_ms": round(elapsed_ms, 1),
+                "ok": False,
+                **fields,
+            },
         )
         raise
     else:
         elapsed_ms = (time.perf_counter() - started) * 1000
         logger.info(
-            "STEP %s took %.0f ms", step, elapsed_ms,
-            extra={"step": step, "duration_ms": round(elapsed_ms, 1), "ok": True, **fields},
+            "STEP %s took %.0f ms",
+            step,
+            elapsed_ms,
+            extra={
+                "step": step,
+                "duration_ms": round(elapsed_ms, 1),
+                "ok": True,
+                **fields,
+            },
         )

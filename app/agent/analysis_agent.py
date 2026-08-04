@@ -94,9 +94,9 @@ def compute_baseline_stats(
     focal_row = None
     if focal_label:
         matches = frame[
-            frame[label_column].astype(str).str.contains(
-                str(focal_label), case=False, regex=False
-            )
+            frame[label_column]
+            .astype(str)
+            .str.contains(str(focal_label), case=False, regex=False)
         ]
         if not matches.empty:
             focal_row = matches.iloc[0]
@@ -125,9 +125,13 @@ def compute_baseline_stats(
                     if others_mean
                     else None
                 ),
-                "max_other_period": str(others.loc[others[metric_column].idxmax()][label_column]),
+                "max_other_period": str(
+                    others.loc[others[metric_column].idxmax()][label_column]
+                ),
                 "max_other_value": float(others[metric_column].max()),
-                "min_other_period": str(others.loc[others[metric_column].idxmin()][label_column]),
+                "min_other_period": str(
+                    others.loc[others[metric_column].idxmin()][label_column]
+                ),
                 "min_other_value": float(others[metric_column].min()),
                 # Rank 1 = highest. Tells us whether "high" is even true.
                 "rank": int((frame[metric_column] > focal_value).sum() + 1),
@@ -271,7 +275,9 @@ def analyze_why(
             }
 
         # --- Step 3: compute. All arithmetic here, none in the LLM. ---
-        baseline_stats = compute_baseline_stats(periods, focal_label) if periods is not None else {}
+        baseline_stats = (
+            compute_baseline_stats(periods, focal_label) if periods is not None else {}
+        )
         contributions = (
             compute_contributions(breakdown, baseline_stats.get("focal_value"))
             if breakdown is not None
@@ -333,9 +339,7 @@ def analyze_why(
             "metric_description": plan.get("metric_description") or "",
             "inherited_filters": inherited,
             "sql": [
-                s
-                for s in (plan.get("baseline_sql"), plan.get("breakdown_sql"))
-                if s
+                s for s in (plan.get("baseline_sql"), plan.get("breakdown_sql")) if s
             ],
             "responses": responses,
         }

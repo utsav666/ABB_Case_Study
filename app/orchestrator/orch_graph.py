@@ -44,7 +44,6 @@ from app.agent.value_resolver_agent import (  ### HITL
 from app.envsetup.env_loader import get_llm_model, load_env
 from app.router.route_improvisation import Router
 from app.utils.char_context import ChartContext
-from app.utils.schema_summarizer import Summarizer
 from app.utils.sql_executor import SqlExec
 from app.utils.sql_parser import extract_where_filters, rewrite_sql_filter  ### HITL
 from app.utils.sql_validator import validator
@@ -132,7 +131,9 @@ def _load_schema_graph(connection_id: str | None):
             )
             return None
 
-        tables = [n.get("qualified_name") or n.get("table") for n in graph.get("nodes", [])]
+        tables = [
+            n.get("qualified_name") or n.get("table") for n in graph.get("nodes", [])
+        ]
         # Log the table names, not just a count: this is the line that makes a
         # wrong-database answer obvious at a glance.
         logger.info(
@@ -141,7 +142,10 @@ def _load_schema_graph(connection_id: str | None):
             len(graph.get("edges", [])),
             connection_id,
             ", ".join(str(t) for t in tables[:15]) + (" …" if len(tables) > 15 else ""),
-            extra={"table_count": len(tables), "relation_count": len(graph.get("edges", []))},
+            extra={
+                "table_count": len(tables),
+                "relation_count": len(graph.get("edges", [])),
+            },
         )
         return graph
     except Exception:  # noqa: BLE001 - fall back to default schema on any error
@@ -161,7 +165,9 @@ def router_node(state: GraphState) -> GraphState:
     if graph is not None:
         from app.target_db.controllers import render_graph_summary
 
-        router = Router(schema_summary=render_graph_summary(graph), provider=_provider, model=_model)
+        router = Router(
+            schema_summary=render_graph_summary(graph), provider=_provider, model=_model
+        )
     else:
         router = Router(provider=_provider, model=_model)
 
@@ -169,7 +175,11 @@ def router_node(state: GraphState) -> GraphState:
 
     # Track LLM call for routing
     if state.get("user_message_id"):
-        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        from app.utils.llm_tracker import (
+            track_llm_call,
+            extract_langchain_usage,
+            get_model_from_langchain_response,
+        )
         from app.settings_db.repositories import ConversationRepository
 
         usage = extract_langchain_usage(response)
@@ -214,13 +224,23 @@ def table_resolver_node(state: GraphState) -> GraphState:
             return {"tables": all_tables}
         # Identify against the connection's real schema, not sample data.
         result = identify_tables(
-            question, schema_summary=render_graph_summary(graph),
-            provider=_provider, model=_model,
+            question,
+            schema_summary=render_graph_summary(graph),
+            provider=_provider,
+            model=_model,
         )
 
         # Track LLM call for table identification
-        if result.get("success") and result.get("response") and state.get("user_message_id"):
-            from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+        if (
+            result.get("success")
+            and result.get("response")
+            and state.get("user_message_id")
+        ):
+            from app.utils.llm_tracker import (
+                track_llm_call,
+                extract_langchain_usage,
+                get_model_from_langchain_response,
+            )
             from app.settings_db.repositories import ConversationRepository
 
             response = result["response"]
@@ -244,54 +264,20 @@ def table_resolver_node(state: GraphState) -> GraphState:
         if result["success"] and result["tables"]:
             logger.info("Tables identified: %s", result["tables"])
             return {"tables": result["tables"]}
-        logger.warning(
-            "Table identification empty/failed; using all connection tables"
-        )
+        logger.warning("Table identification empty/failed; using all connection tables")
         return {"tables": all_tables}
 
-    # Default (sample/config) schema path
-    from app.sampledata.data_loader import DataLoader
-
-    data = DataLoader.load_data()
-    all_tables = list(data.get("tables", {}).keys())
-
-    if len(all_tables) == 1:
-        logger.info("Only 1 table in schema — skipping table identification LLM call")
-        return {"tables": all_tables}
-
-    # Multiple tables — use LLM to identify relevant ones
-    result = identify_tables(question, provider=_provider, model=_model)
-
-    # Track LLM call for table identification
-    if result.get("success") and result.get("response") and state.get("user_message_id") :
-        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
-        from app.settings_db.repositories import ConversationRepository
-
-        response = result["response"]
-        usage = extract_langchain_usage(response)
-        model = get_model_from_langchain_response(
-            response, default=get_llm_model("table_identification")
-        )
-
-        repo = ConversationRepository()
-        track_llm_call(
-            repo=repo,
-            message_id=state["user_message_id"],
-            thread_id=state.get("thread_id", ""),
-            llm_purpose="table-identifier",
-            model=model,
-            prompt_tokens=usage["prompt_tokens"],
-            completion_tokens=usage["completion_tokens"],
-            total_tokens=usage["total_tokens"],
-        )
-
-    if result["success"]:
-        logger.info("Tables identified: %s", result["tables"])
-        return {"tables": result["tables"]}
-    else:
-        logger.warning("Table identification failed: %s", result["error"])
-        # Fallback: use all tables
-        return {"tables": all_tables}
+    # No schema graph: there is no file-based fallback. The bundled sample
+    # schema was removed because it silently answered questions against a
+    # movie database when the user had a real connection selected.
+    logger.error(
+        "NODE table_resolver — no schema graph for connection %s; cannot resolve tables",
+        state.get("connection_id"),
+    )
+    raise ValueError(
+        "No schema graph is available for this connection. Profile the "
+        "connection so settings.schema_graphs is populated."
+    )
 
 
 def generate_sql_node(state: GraphState) -> GraphState:
@@ -330,7 +316,7 @@ def generate_sql_node(state: GraphState) -> GraphState:
         )
 
     # Track LLM call for SQL generation
-    if result.get("success") and state.get("user_message_id") :
+    if result.get("success") and state.get("user_message_id"):
         from app.utils.llm_tracker import track_llm_call
         from app.settings_db.repositories import ConversationRepository
 
@@ -402,7 +388,9 @@ def execute_sql_node(state: GraphState) -> GraphState:
                 elapsed_ms,
                 row_count,
                 len(result.columns),
-                " — ZERO ROWS: check filter values and join types" if row_count == 0 else "",
+                " — ZERO ROWS: check filter values and join types"
+                if row_count == 0
+                else "",
                 extra={"row_count": row_count, "duration_ms": round(elapsed_ms, 1)},
             )
             # ### HITL — Store as dict (records) for MemorySaver serialization
@@ -410,13 +398,16 @@ def execute_sql_node(state: GraphState) -> GraphState:
         else:
             logger.warning(
                 "SQL execution error after %.0f ms: %s\nSQL was:\n%s",
-                elapsed_ms, result, sql,
+                elapsed_ms,
+                result,
+                sql,
             )
             return {"data": None, "sql_error": str(result)}
     except Exception as e:
         logger.exception(
             "SQL execution raised after %.0f ms. SQL was:\n%s",
-            (time.perf_counter() - started) * 1000, sql,
+            (time.perf_counter() - started) * 1000,
+            sql,
         )
         return {"data": None, "sql_error": str(e)}
 
@@ -668,18 +659,31 @@ def chart_approval_node(state: GraphState) -> GraphState:
         import re
 
         # Check if question indicates comparison
-        comparison_keywords = ['compare', 'vs', 'versus', 'compared to', 'last year', 'previous year', 'year over year', 'yoy']
-        is_comparison = any(keyword in question_text.lower() for keyword in comparison_keywords)
+        comparison_keywords = [
+            "compare",
+            "vs",
+            "versus",
+            "compared to",
+            "last year",
+            "previous year",
+            "year over year",
+            "yoy",
+        ]
+        is_comparison = any(
+            keyword in question_text.lower() for keyword in comparison_keywords
+        )
 
         if not is_comparison:
             return df, False
 
         # Check if data is already pivoted (has multiple numeric columns)
         # SQL agent might have already done the pivot with CASE WHEN
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
         if len(numeric_cols) >= 2:
             # Data is already pivoted, just format it for multi-series chart
-            logger.info(f"Data already pivoted by SQL: {len(numeric_cols)} metric columns detected")
+            logger.info(
+                f"Data already pivoted by SQL: {len(numeric_cols)} metric columns detected"
+            )
             # Find the categorical column (likely date-based)
             cat_cols = [col for col in df.columns if col not in numeric_cols]
             if cat_cols:
@@ -692,22 +696,27 @@ def chart_approval_node(state: GraphState) -> GraphState:
         comparison_type = None  # 'year' or 'month'
 
         for col in df.columns:
-            if pd.api.types.is_datetime64_any_dtype(df[col]) or 'date' in col.lower() or 'day' in col.lower() or 'month' in col.lower():
+            if (
+                pd.api.types.is_datetime64_any_dtype(df[col])
+                or "date" in col.lower()
+                or "day" in col.lower()
+                or "month" in col.lower()
+            ):
                 try:
-                    dates = pd.to_datetime(df[col], errors='coerce')
+                    dates = pd.to_datetime(df[col], errors="coerce")
                     if dates.notna().any():
                         years = dates.dt.year.dropna().unique()
-                        months = dates.dt.to_period('M').dropna().unique()
+                        months = dates.dt.to_period("M").dropna().unique()
 
                         # Check for year-over-year comparison
                         if len(years) >= 2:
                             date_col = col
-                            comparison_type = 'year'
+                            comparison_type = "year"
                             break
                         # Check for month-over-month comparison (same year, different months)
                         elif len(months) >= 2 and len(years) == 1:
                             date_col = col
-                            comparison_type = 'month'
+                            comparison_type = "month"
                             break
                 except Exception:
                     continue
@@ -727,41 +736,52 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
         # Pivot the data based on comparison type
         df_copy = df.copy()
-        df_copy['date_parsed'] = pd.to_datetime(df_copy[date_col])
+        df_copy["date_parsed"] = pd.to_datetime(df_copy[date_col])
 
-        if comparison_type == 'year':
+        if comparison_type == "year":
             # Year-over-year: compare same days across different years
-            df_copy['year'] = df_copy['date_parsed'].dt.year
-            df_copy['month_day'] = df_copy['date_parsed'].dt.strftime('%m-%d')
+            df_copy["year"] = df_copy["date_parsed"].dt.year
+            df_copy["month_day"] = df_copy["date_parsed"].dt.strftime("%m-%d")
 
             # Pivot: rows = month_day, columns = year, values = metric
             pivoted = df_copy.pivot_table(
-                index='month_day',
-                columns='year',
-                values=metric_col,
-                aggfunc='mean'
+                index="month_day", columns="year", values=metric_col, aggfunc="mean"
             ).reset_index()
 
             # Rename columns to indicate years
-            pivoted.columns = [str(col) if col == 'month_day' else f"{metric_col}_{col}" for col in pivoted.columns]
-            logger.info(f"Pivoted YoY comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns")
+            pivoted.columns = [
+                str(col) if col == "month_day" else f"{metric_col}_{col}"
+                for col in pivoted.columns
+            ]
+            logger.info(
+                f"Pivoted YoY comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns"
+            )
 
-        elif comparison_type == 'month':
+        elif comparison_type == "month":
             # Month-over-month: compare same days across different months
-            df_copy['month_name'] = df_copy['date_parsed'].dt.strftime('%B')  # Full month name
-            df_copy['day_of_month'] = df_copy['date_parsed'].dt.day
+            df_copy["month_name"] = df_copy["date_parsed"].dt.strftime(
+                "%B"
+            )  # Full month name
+            df_copy["day_of_month"] = df_copy["date_parsed"].dt.day
 
             # Pivot: rows = day_of_month, columns = month_name, values = metric
             pivoted = df_copy.pivot_table(
-                index='day_of_month',
-                columns='month_name',
+                index="day_of_month",
+                columns="month_name",
                 values=metric_col,
-                aggfunc='mean'
+                aggfunc="mean",
             ).reset_index()
 
             # Rename columns to indicate months
-            pivoted.columns = [str(col) if col == 'day_of_month' else f"{metric_col}_{col.lower()}_2018" for col in pivoted.columns]
-            logger.info(f"Pivoted MoM comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns")
+            pivoted.columns = [
+                str(col)
+                if col == "day_of_month"
+                else f"{metric_col}_{col.lower()}_2018"
+                for col in pivoted.columns
+            ]
+            logger.info(
+                f"Pivoted MoM comparison data: {len(df)} rows → {len(pivoted)} rows, {len(pivoted.columns)} columns"
+            )
 
         return pivoted, True
 
@@ -777,6 +797,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
                 # Parse JSON if it's a string
                 if isinstance(graph_json, str):
                     import json
+
                     graph_json = json.loads(graph_json)
 
                 # Extract column display names from schema graph
@@ -792,11 +813,24 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     # Get LLM's chart suggestion
     chart_context = ChartContext.build_chart_context(data)
-    result = decide_chart(question, chart_context, provider=state.get("llm_provider"), model=state.get("llm_model"))
+    result = decide_chart(
+        question,
+        chart_context,
+        provider=state.get("llm_provider"),
+        model=state.get("llm_model"),
+    )
 
     # Track LLM call for chart generation
-    if result.get("success") and result.get("response") and state.get("user_message_id") :
-        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+    if (
+        result.get("success")
+        and result.get("response")
+        and state.get("user_message_id")
+    ):
+        from app.utils.llm_tracker import (
+            track_llm_call,
+            extract_langchain_usage,
+            get_model_from_langchain_response,
+        )
         from app.settings_db.repositories import ConversationRepository
 
         response = result["response"]
@@ -832,25 +866,27 @@ def chart_approval_node(state: GraphState) -> GraphState:
     # Override chart config for pivoted comparison data
     if is_pivoted:
         # Find categorical (X-axis) and numeric (Y-axis) columns
-        numeric_cols = data.select_dtypes(include=['number']).columns.tolist()
+        numeric_cols = data.select_dtypes(include=["number"]).columns.tolist()
         cat_cols = [col for col in data.columns if col not in numeric_cols]
 
         # Check if it's YoY (month_day) or MoM (day_of_month) comparison
-        if 'month_day' in data.columns:
+        if "month_day" in data.columns:
             # Year-over-year: convert month_day (05-01) to day number (1)
-            data['day_label'] = data['month_day'].apply(lambda x: str(int(x.split('-')[1])))
-            x_axis = 'day_label'
+            data["day_label"] = data["month_day"].apply(
+                lambda x: str(int(x.split("-")[1]))
+            )
+            x_axis = "day_label"
             y_axis = [col for col in numeric_cols]  # All numeric columns are series
-        elif 'day_of_month' in data.columns:
+        elif "day_of_month" in data.columns:
             # Month-over-month: use day_of_month directly
-            x_axis = 'day_of_month'
+            x_axis = "day_of_month"
             y_axis = [col for col in numeric_cols]  # All numeric columns are series
         else:
             # Already pivoted by SQL: use first categorical column as X
             x_axis = cat_cols[0] if cat_cols else data.columns[0]
             y_axis = numeric_cols  # All numeric columns are series
 
-        chart_type = 'line'  # Always use line for time comparisons
+        chart_type = "line"  # Always use line for time comparisons
         y_axis_secondary = None
         logger.info(f"Comparison detected: x={x_axis}, y={y_axis}")
     else:
@@ -859,7 +895,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
         chart_type = decision.chart_type
         x_axis = decision.x_axis
         y_axis = decision.y_axis
-        y_axis_secondary = getattr(decision, 'y_axis_secondary', None)
+        y_axis_secondary = getattr(decision, "y_axis_secondary", None)
 
     # Validate axes exist in data
     # Handle both single y_axis and list (for multi-series charts)
@@ -867,7 +903,9 @@ def chart_approval_node(state: GraphState) -> GraphState:
     if y_axis_secondary:
         y_axes_to_check.append(y_axis_secondary)
 
-    if x_axis not in data.columns or not all(y in data.columns for y in y_axes_to_check if y):
+    if x_axis not in data.columns or not all(
+        y in data.columns for y in y_axes_to_check if y
+    ):
         logger.warning("Chart axes not in columns, falling back to table view")
         return {
             "final_response": {
@@ -880,8 +918,10 @@ def chart_approval_node(state: GraphState) -> GraphState:
     # Chart auto-approved
     logger.info(
         "Chart auto-approved: %s (x=%s, y=%s%s)",
-        chart_type, x_axis, y_axis,
-        f", y2={y_axis_secondary}" if y_axis_secondary else ""
+        chart_type,
+        x_axis,
+        y_axis,
+        f", y2={y_axis_secondary}" if y_axis_secondary else "",
     )
 
     chart_config = {
@@ -898,6 +938,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
         """Detect if column is date and what granularity (day/week/month/year)."""
         try:
             import pandas as pd
+
             if col_name not in df.columns:
                 return None
 
@@ -907,7 +948,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
                 dates = col
             else:
                 try:
-                    dates = pd.to_datetime(col, errors='coerce')
+                    dates = pd.to_datetime(col, errors="coerce")
                 except Exception:
                     return None
 
@@ -923,13 +964,13 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
             # Classify granularity
             if avg_diff_days < 2:
-                return 'day'
+                return "day"
             elif avg_diff_days < 10:
-                return 'week'
+                return "week"
             elif avg_diff_days < 60:
-                return 'month'
+                return "month"
             else:
-                return 'year'
+                return "year"
         except Exception:
             return None
 
@@ -944,6 +985,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
             return None
         try:
             from app.settings_db.repositories import DBConnectionRepository
+
             conn = DBConnectionRepository().get_connection_by_id(connection_id)
             return conn.get("display_config") if conn else None
         except Exception:
@@ -965,7 +1007,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
             all_values = []
             for col in col_names:
                 if col and col in df.columns:
-                    col_data = pd.to_numeric(df[col], errors='coerce').dropna()
+                    col_data = pd.to_numeric(df[col], errors="coerce").dropna()
                     all_values.extend(col_data.values)
 
             if not all_values:
@@ -985,13 +1027,25 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
             # Determine format based on max value
             if max_val >= thresholds.get("billion", 1e9):
-                return {'suffix': suffixes.get("billion", "B"), 'divisor': thresholds.get("billion", 1e9), 'decimals': decimals}
+                return {
+                    "suffix": suffixes.get("billion", "B"),
+                    "divisor": thresholds.get("billion", 1e9),
+                    "decimals": decimals,
+                }
             elif max_val >= thresholds.get("million", 1e6):
-                return {'suffix': suffixes.get("million", "M"), 'divisor': thresholds.get("million", 1e6), 'decimals': decimals}
+                return {
+                    "suffix": suffixes.get("million", "M"),
+                    "divisor": thresholds.get("million", 1e6),
+                    "decimals": decimals,
+                }
             elif max_val >= thresholds.get("thousand", 1e3):
-                return {'suffix': suffixes.get("thousand", "K"), 'divisor': thresholds.get("thousand", 1e3), 'decimals': decimals}
+                return {
+                    "suffix": suffixes.get("thousand", "K"),
+                    "divisor": thresholds.get("thousand", 1e3),
+                    "decimals": decimals,
+                }
             else:
-                return {'suffix': '', 'divisor': 1, 'decimals': 0}
+                return {"suffix": "", "divisor": 1, "decimals": 0}
         except Exception:
             return None
 
@@ -1016,12 +1070,20 @@ def chart_approval_node(state: GraphState) -> GraphState:
         chart_config["colors"] = {
             "primary": "#3b82f6",
             "secondary": "#ef4444",
-            "palette": ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"]
+            "palette": [
+                "#3b82f6",
+                "#ef4444",
+                "#10b981",
+                "#f59e0b",
+                "#8b5cf6",
+                "#ec4899",
+            ],
         }
 
     # Add human-readable labels from column configuration
     # These will override the automatic snake_case → Title Case formatting
     if column_labels:
+
         def get_display_name(col_name):
             """Get display name for a column, stripping aggregation prefixes."""
             col_lower = col_name.lower()
@@ -1034,19 +1096,19 @@ def chart_approval_node(state: GraphState) -> GraphState:
             # Strip common aggregation prefixes and try again
             # Map abbreviated prefixes to their display names
             prefix_map = {
-                'average_': 'Average',
-                'total_': 'Total',
-                'sum_': 'Sum',
-                'avg_': 'Average',
-                'count_': 'Count',
-                'max_': 'Maximum',
-                'min_': 'Minimum',
+                "average_": "Average",
+                "total_": "Total",
+                "sum_": "Sum",
+                "avg_": "Average",
+                "count_": "Count",
+                "max_": "Maximum",
+                "min_": "Minimum",
             }
 
             for prefix, agg_display in prefix_map.items():
                 if col_lower.startswith(prefix):
                     agg_type = agg_display
-                    base_name = col_lower[len(prefix):]
+                    base_name = col_lower[len(prefix) :]
 
                     # Try exact match on base name
                     if base_name in column_labels:
@@ -1065,7 +1127,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
         labels = {}
         # Map each axis to its display name
         # For comparisons with day labels, use "Day" as X-axis label
-        if is_pivoted and x_axis in ['day_label', 'day_of_month']:
+        if is_pivoted and x_axis in ["day_label", "day_of_month"]:
             labels["x_axis_label"] = "Day"
         else:
             display = get_display_name(x_axis)
@@ -1090,7 +1152,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     # Convert DataFrame back to records for response
     # If data was pivoted, use the pivoted DataFrame; otherwise use original
-    response_data = data.to_dict('records') if is_pivoted else state.get("data")
+    response_data = data.to_dict("records") if is_pivoted else state.get("data")
 
     return {
         "hitl_triggered": False,  # No longer requiring approval
@@ -1207,13 +1269,23 @@ def explanation_node(state: GraphState) -> GraphState:
 def general_answer_node(state: GraphState) -> GraphState:
     """Node: Answer general questions (LLM)."""
     result = general_answer(
-        state["question"], router_reasoning=state.get("route_reasoning", ""),
-        provider=state.get("llm_provider"), model=state.get("llm_model"),
+        state["question"],
+        router_reasoning=state.get("route_reasoning", ""),
+        provider=state.get("llm_provider"),
+        model=state.get("llm_model"),
     )
 
     # Track LLM call for fallback/general answers
-    if result.get("success") and result.get("response") and state.get("user_message_id") :
-        from app.utils.llm_tracker import track_llm_call, extract_langchain_usage, get_model_from_langchain_response
+    if (
+        result.get("success")
+        and result.get("response")
+        and state.get("user_message_id")
+    ):
+        from app.utils.llm_tracker import (
+            track_llm_call,
+            extract_langchain_usage,
+            get_model_from_langchain_response,
+        )
         from app.settings_db.repositories import ConversationRepository
 
         response = result["response"]

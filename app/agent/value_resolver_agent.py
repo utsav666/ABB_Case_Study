@@ -18,7 +18,6 @@ from pydantic import BaseModel
 
 from app.envsetup.env_loader import load_env
 from app.utils.llm_factory import create_chat_llm
-from app.utils.schema_config import SchemaConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,9 @@ def resolve_filter_value(
     {"confidence": "high"|"low", "match": "...", "alternatives": [...], "reasoning": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="value_resolver", temperature=0, provider=provider, model=model)
+        llm = create_chat_llm(
+            purpose="value_resolver", temperature=0, provider=provider, model=model
+        )
         parser = JsonOutputParser(pydantic_object=ValueResolution)
 
         prompt = ChatPromptTemplate.from_template(VALUE_RESOLVER_PROMPT)
@@ -139,7 +140,9 @@ def resolve_filter_value(
 # ─── Helper: Get column values from DB ───────────────────────────────────────
 
 
-def _lookup_schema_for_table(table_name: str, schema_graph: dict[str, Any] | None) -> str | None:
+def _lookup_schema_for_table(
+    table_name: str, schema_graph: dict[str, Any] | None
+) -> str | None:
     """Find a bare table's schema in the connection's schema graph.
 
     The graph comes from the DB (schema_graph table) and is the source of truth.
@@ -156,38 +159,28 @@ def _lookup_schema_for_table(table_name: str, schema_graph: dict[str, Any] | Non
 def _qualify_table(table_name: str, schema_graph: dict[str, Any] | None = None) -> str:
     """### HITL — Build a schema-qualified, quoted table name.
 
-    Accepts "schema.table" or a bare "table".
+    Accepts "schema.table" or a bare "table". For a bare name the schema is
+    resolved from the connection's schema graph in ``settings.schema_graphs``,
+    which is the ONLY source of truth — there is no file-based fallback.
 
-    For a bare name the schema is resolved from the CONNECTION'S schema graph
-    (stored in the DB). The legacy ``sample_data/schema_preserve.json`` fixture
-    is only consulted when no graph is available — it describes a movie database
-    and will not contain the user's tables, so relying on it silently defaults
-    the schema to "public" and queries the wrong place.
+    Raises
+    ------
+    ValueError
+        When a bare table cannot be found in the graph. Guessing "public" here
+        produced a query against a schema the table does not live in, which
+        surfaced later as a confusing "relation does not exist" or, worse, as a
+        silently empty result.
     """
     if "." in table_name:
         table_schema, actual_table_name = table_name.split(".", 1)
         return f'"{table_schema}"."{actual_table_name}"'
 
     table_schema = _lookup_schema_for_table(table_name, schema_graph)
-
     if not table_schema:
-        # No graph, or the table isn't in it. Fall back to the legacy fixture,
-        # then to "public" — but say so, because a wrong schema here produces a
-        # confusing "relation does not exist" further down.
-        try:
-            raw_schema = SchemaConfigManager.load_raw_schema()
-            table_schema = (
-                raw_schema.get("tables", {}).get(table_name, {}).get("schema")
-            )
-        except Exception:  # noqa: BLE001 - fixture is optional
-            table_schema = None
-
-        if not table_schema:
-            table_schema = "public"
-        logger.warning(
-            "### HITL — No schema graph entry for table %r; falling back to schema %r",
-            table_name,
-            table_schema,
+        raise ValueError(
+            f"Table {table_name!r} is not in the connection's schema graph. "
+            "Ensure the connection has been profiled so settings.schema_graphs "
+            "contains it."
         )
 
     return f'"{table_schema}"."{table_name}"'
@@ -217,12 +210,24 @@ def value_exists_exactly(
     if not value_str:
         return False
 
-    qualified_table = _qualify_table(table_name, schema_graph)
+    try:
+        qualified_table = _qualify_table(table_name, schema_graph)
+    except ValueError:
+        # Unknown table → we cannot verify the value. Fail open (False) so the
+        # caller still attempts resolution rather than trusting an unchecked
+        # filter value.
+        logger.warning(
+            "### HITL — Cannot verify %r in %r: table not in schema graph",
+            value_str,
+            table_name,
+        )
+        return False
+
     # Escape single quotes to keep the literal safe.
     safe_value = value_str.replace("'", "''")
     exists_sql = (
-        f'SELECT 1 FROM {qualified_table} '
-        f'WHERE CAST("{column_name}" AS TEXT) = \'{safe_value}\' LIMIT 1'
+        f"SELECT 1 FROM {qualified_table} "
+        f"WHERE CAST(\"{column_name}\" AS TEXT) = '{safe_value}' LIMIT 1"
     )
 
     executor = SqlExec()
@@ -260,11 +265,17 @@ def get_column_distinct_values(
 
     executor = SqlExec()
 
-    # Schema comes from the connection's graph in settings.schema_graphs.
-    # This previously read sample_data/schema_preserve.json, which describes a
-    # movie database — so any table not in that fixture silently defaulted to
-    # the "public" schema and the query hit the wrong place (or nothing).
-    qualified_table = _qualify_table(table_name, schema_graph)
+    # Schema comes from the connection's graph in settings.schema_graphs, the
+    # only source of truth. An unknown table means no suggestions to offer, so
+    # return empty and let the caller ask the human directly.
+    try:
+        qualified_table = _qualify_table(table_name, schema_graph)
+    except ValueError:
+        logger.warning(
+            "### HITL — No distinct values for %r: table not in schema graph",
+            table_name,
+        )
+        return [], 0
 
     count_sql = f'SELECT COUNT(DISTINCT "{column_name}") as cnt FROM {qualified_table}'
     logger.info("### HITL — cardinality query: %s", count_sql)

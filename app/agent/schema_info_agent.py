@@ -8,7 +8,6 @@ from typing import Any
 from app.envsetup.env_loader import load_env
 from app.prompt.prompts import schema_info_gen_prompt
 from app.utils.llm_factory import create_chat_llm
-from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
@@ -27,36 +26,34 @@ def explain_schema(
     Parameters
     ----------
     schema_graph:
-        The connected database's schema graph. When provided, the answer is
-        grounded in THAT database. When omitted we fall back to the bundled
-        ``sample_data/schema_preserve.json`` fixture — which describes a movie
-        database and is almost certainly not what the user connected to. The
-        fallback exists only so local/dev runs without a connection still work.
+        The connected database's schema graph, from settings.schema_graphs.
+        REQUIRED — there is no file-based fallback. A bundled fixture previously
+        stood in here, which meant every schema question was answered from a
+        movie database regardless of the connection the user had selected.
 
     Returns
     -------
     {"success": True, "answer": "..."} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="schema_info", temperature=0, provider=provider, model=model)
+        llm = create_chat_llm(
+            purpose="schema_info", temperature=0, provider=provider, model=model
+        )
 
-        if schema_graph:
-            from app.target_db.controllers import render_graph_summary
+        if not schema_graph:
+            raise ValueError(
+                "A schema graph is required to answer schema questions. Select a "
+                "connection and ensure it has been profiled."
+            )
 
-            schema_summary = render_graph_summary(schema_graph)
-            logger.info(
-                "SCHEMA INFO — answering from the connection's schema graph (%d tables)",
-                len(schema_graph.get("nodes", [])),
-                extra={"schema_source": "connection_graph"},
-            )
-        else:
-            logger.warning(
-                "SCHEMA INFO — no schema graph supplied; answering from the BUNDLED "
-                "SAMPLE schema (sample_data/schema_preserve.json). This describes a "
-                "movie database and will not match the user's connection.",
-                extra={"schema_source": "bundled_sample"},
-            )
-            schema_summary = Summarizer.summarize_schema()
+        from app.target_db.controllers import render_graph_summary
+
+        schema_summary = render_graph_summary(schema_graph)
+        logger.info(
+            "SCHEMA INFO — answering from the connection's schema graph (%d tables)",
+            len(schema_graph.get("nodes", [])),
+            extra={"schema_source": "connection_graph"},
+        )
 
         prompt = schema_info_gen_prompt.format(
             schema_summary=schema_summary,
