@@ -34,7 +34,12 @@ class RoutingDecision(BaseModel):
 # Router Agent (Decision Only)
 # ----------------------------
 class Router:
-    def __init__(self, schema_summary: str | None = None, provider: str | None = None, model: str | None = None):
+    def __init__(
+        self,
+        schema_summary: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+    ):
         # Allow callers to inject a connection-scoped schema summary; fall back
         # to the default (sample/config) summary when none is provided.
         if not schema_summary:
@@ -45,7 +50,9 @@ class Router:
             )
         self.schema_summary = schema_summary
 
-        self.llm = create_chat_llm(purpose="router", temperature=0, provider=provider, model=model)
+        self.llm = create_chat_llm(
+            purpose="router", temperature=0, provider=provider, model=model
+        )
 
         # Output parser
         self.parser = JsonOutputParser(pydantic_object=RoutingDecision)

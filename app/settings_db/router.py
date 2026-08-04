@@ -57,7 +57,9 @@ def get_all_db_connections() -> dict[str, list[dict[str, Any]]]:
 @settings_db_router.post("")
 def save_db_connection(
     payload: DBConnectionCreate,
-    skip_validation: bool = Query(default=False, description="Skip connection validation"),
+    skip_validation: bool = Query(
+        default=False, description="Skip connection validation"
+    ),
 ) -> dict[str, Any]:
     """Validate and persist a database connection payload."""
     result = create_db_connection(payload, skip_validation)
@@ -66,6 +68,7 @@ def save_db_connection(
 
 class UpdateConnectionActiveRequest(BaseModel):
     """Request body for enabling/disabling a connection."""
+
     is_active: bool
 
 
@@ -93,6 +96,7 @@ def get_connection_tables(
 
 class SaveSelectedTablesRequest(BaseModel):
     """Request body for saving selected tables."""
+
     table_names: list[str]
     schema_name: str = "public"
 
@@ -157,6 +161,7 @@ def get_column_definitions(connection_id: str) -> dict[str, Any]:
 
 class UpdateColumnLogicalNameRequest(BaseModel):
     """Request body for editing a column's logical name."""
+
     logical_name: str | None = None
 
 
@@ -198,6 +203,7 @@ def get_schema_graph(connection_id: str) -> dict[str, Any]:
 
 class GenerateSqlRequest(BaseModel):
     """Request body for NL->SQL generation."""
+
     question: str
     dialect: str = "PostgreSQL"
 
@@ -276,6 +282,7 @@ def replace_column_relations(
 
 class ValidateSqlRequest(BaseModel):
     """Request body for validating SQL via EXPLAIN."""
+
     sql: str
 
 

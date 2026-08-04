@@ -75,8 +75,9 @@ def query_thread_token_usage(thread_id: str) -> dict[str, Any]:
     from app.envsetup.env_loader import load_env
 
     load_env()
-    from app.settings_db.gateway import SettingsDatabaseGateway
     from sqlalchemy import text
+
+    from app.settings_db.gateway import SettingsDatabaseGateway
 
     gw = SettingsDatabaseGateway()
     with gw.get_session() as s:
@@ -219,7 +220,9 @@ def main():
     print("SUMMARY")
     print("=" * 80)
 
-    graph_times = [r["graph"]["time_s"] for r in results if r["graph"]["status"] == "OK"]
+    graph_times = [
+        r["graph"]["time_s"] for r in results if r["graph"]["status"] == "OK"
+    ]
     preserve_times = [
         r["preserve"]["time_s"] for r in results if r["preserve"]["status"] == "OK"
     ]
@@ -233,16 +236,12 @@ def main():
     preserve_total_tokens = sum(
         r["preserve"]["tokens"]["totals"]["total_tokens"] for r in results
     )
-    graph_total_cost = sum(
-        r["graph"]["tokens"]["totals"]["cost_usd"] for r in results
-    )
+    graph_total_cost = sum(r["graph"]["tokens"]["totals"]["cost_usd"] for r in results)
     preserve_total_cost = sum(
         r["preserve"]["tokens"]["totals"]["cost_usd"] for r in results
     )
 
-    print(
-        f"\n{'Metric':<30} {'Graph (conn_id)':<20} {'Preserve (no conn)':<20}"
-    )
+    print(f"\n{'Metric':<30} {'Graph (conn_id)':<20} {'Preserve (no conn)':<20}")
     print("-" * 70)
     print(
         f"{'Success rate':<30} "

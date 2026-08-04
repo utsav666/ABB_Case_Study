@@ -29,8 +29,11 @@ class TargetMetadataController:
         schema_name: str = "public",
     ) -> dict[str, Any]:
         """Fetch table names for a configured connection."""
-        logger.info("get_tables_for_connection start: connection_id=%s schema=%s",
-                    connection_id, schema_name)
+        logger.info(
+            "get_tables_for_connection start: connection_id=%s schema=%s",
+            connection_id,
+            schema_name,
+        )
 
         t0 = time.monotonic()
         target_url = self._resolve_target_url(connection_id)
@@ -38,8 +41,11 @@ class TargetMetadataController:
 
         t1 = time.monotonic()
         table_rows = self._repository.fetch_tables(target_url, schema_name)
-        logger.info("fetch_tables returned %d rows in %.2fs",
-                    len(table_rows), time.monotonic() - t1)
+        logger.info(
+            "fetch_tables returned %d rows in %.2fs",
+            len(table_rows),
+            time.monotonic() - t1,
+        )
 
         return build_tables_response(connection_id, schema_name, table_rows)
 

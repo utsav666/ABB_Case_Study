@@ -20,19 +20,23 @@ fi
 
 # Locate ruff.
 #
-# git runs hooks with a minimal PATH, so an interpreter that has ruff in your
-# shell (conda, pyenv, a venv) may be invisible here — bare `python3` can resolve
-# to a system interpreter with nothing installed. So try each candidate
-# explicitly rather than trusting PATH.
+# Two things make this awkward:
+#  * git runs hooks with a minimal PATH, so an interpreter that has ruff in your
+#    interactive shell (conda, pyenv, a venv) can be invisible here — bare
+#    `python3` may resolve to a system interpreter with nothing installed.
+#  * this repo is worked on from both a macOS host and a Linux devcontainer, so
+#    hardcoding absolute paths (Homebrew, /usr/local) only helps one of them.
+#
+# So: search relative/PATH locations first, then probe every interpreter we can
+# discover, without assuming any particular OS layout.
 RUFF=""
 
-# 1. Direct ruff binaries, project-local first.
+# 1. Direct ruff binaries. Project-local venvs work identically on host and in a
+#    container; ~/.local/bin covers `pip install --user`.
 for candidate in \
   ".venv/bin/ruff" \
   "venv/bin/ruff" \
-  "${HOME:-}/.local/bin/ruff" \
-  "/opt/homebrew/bin/ruff" \
-  "/usr/local/bin/ruff"
+  "${HOME:-}/.local/bin/ruff"
 do
   if [ -x "$candidate" ]; then
     RUFF="$candidate"
@@ -45,15 +49,20 @@ if [ -z "$RUFF" ] && command -v ruff >/dev/null 2>&1; then
   RUFF="ruff"
 fi
 
-# 3. `python -m ruff` for each interpreter we can find, including ones off PATH.
+# 3. `python -m ruff`, probing interpreters found via PATH plus the common
+#    install prefixes for macOS (Homebrew, both architectures) and Linux
+#    containers. Missing paths are skipped, so listing both is harmless.
 if [ -z "$RUFF" ]; then
   for py in \
     ".venv/bin/python" \
     "venv/bin/python" \
     "$(command -v python3 2>/dev/null)" \
-    "/opt/homebrew/Caskroom/miniconda/base/bin/python3" \
+    "$(command -v python 2>/dev/null)" \
+    "/usr/local/bin/python3" \
+    "/usr/bin/python3" \
     "/opt/homebrew/bin/python3" \
-    "/usr/local/bin/python3"
+    "/opt/homebrew/Caskroom/miniconda/base/bin/python3" \
+    "/opt/conda/bin/python3"
   do
     [ -n "$py" ] && [ -x "$py" ] || continue
     if "$py" -m ruff --version >/dev/null 2>&1; then

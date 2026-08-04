@@ -119,6 +119,7 @@ class SettingsDatabaseGateway:
         except (ModuleNotFoundError, SQLAlchemyError) as error:
             session.rollback()
             import traceback
+
             print("=" * 80)
             print("SETTINGS DB ERROR:")
             print(f"Error type: {type(error).__name__}")

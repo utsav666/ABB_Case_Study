@@ -26,8 +26,10 @@ class TableIdentification(BaseModel):
 
 
 def identify_tables(
-    user_question: str, schema_summary: str | None = None,
-    provider: str | None = None, model: str | None = None,
+    user_question: str,
+    schema_summary: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Identify relevant tables for a user question.
 
@@ -48,7 +50,12 @@ def identify_tables(
                 "schema graph (settings.schema_graphs). There is no sample-schema "
                 "fallback."
             )
-        llm = create_chat_llm(purpose="table_identification", temperature=0, provider=provider, model=model)
+        llm = create_chat_llm(
+            purpose="table_identification",
+            temperature=0,
+            provider=provider,
+            model=model,
+        )
         parser = JsonOutputParser(pydantic_object=TableIdentification)
         prompt = ChatPromptTemplate.from_template(table_identify_prompts)
         formatted = prompt.format_messages(

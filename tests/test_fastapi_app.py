@@ -1,7 +1,5 @@
 import json
 import logging
-import sys
-import types
 
 from fastapi.testclient import TestClient
 

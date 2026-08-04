@@ -8,25 +8,27 @@ Compares:
   - Preserve path (without connection_id) → schema_preserve.json
 """
 
+import json
 import sys
 import time
-import json
 from typing import Any
 from unittest.mock import patch
 
 sys.path.insert(0, ".")
 
 from app.envsetup.env_loader import load_env
+
 load_env()
+
+from langchain_anthropic import ChatAnthropic
 
 from app.orchestrator.orch_graph import GraphOrchestrator
 from app.utils.llm_tracker import extract_langchain_usage
-from langchain_anthropic import ChatAnthropic
 
 CONNECTION_ID = "99bfd7ae-e09e-4649-8e0e-17f6c120d50e"
 
 # Claude Opus 4 pricing (per token)
-INPUT_PRICE = 15.0 / 1_000_000   # $15 per 1M input tokens
+INPUT_PRICE = 15.0 / 1_000_000  # $15 per 1M input tokens
 OUTPUT_PRICE = 75.0 / 1_000_000  # $75 per 1M output tokens
 
 QUESTIONS = [
@@ -43,7 +45,9 @@ QUESTIONS = [
 ]
 
 
-def run_with_tracking(question: str, connection_id: str | None = None) -> dict[str, Any]:
+def run_with_tracking(
+    question: str, connection_id: str | None = None
+) -> dict[str, Any]:
     """Run orchestrator and capture all LLM token usage."""
     acc = {"input": 0, "output": 0, "calls": 0}
     original_invoke = ChatAnthropic.invoke
@@ -77,8 +81,10 @@ def cost(inp, out):
 
 def main():
     print("=" * 90, flush=True)
-    print("COST COMPARISON: Graph (connection_id) vs Preserve (no connection)", flush=True)
-    print(f"Model: claude-opus-4-6 | Pricing: $15/M input, $75/M output", flush=True)
+    print(
+        "COST COMPARISON: Graph (connection_id) vs Preserve (no connection)", flush=True
+    )
+    print("Model: claude-opus-4-6 | Pricing: $15/M input, $75/M output", flush=True)
     print(f"Connection ID: {CONNECTION_ID}", flush=True)
     print(f"Questions: {len(QUESTIONS)}", flush=True)
     print("=" * 90, flush=True)
@@ -98,31 +104,41 @@ def main():
         gs = "OK" if g["ok"] else "ERR"
         ps = "OK" if p["ok"] else "ERR"
 
-        print(f"  Graph:    {gs} | {g['time']:.1f}s | {g['tokens']['calls']} calls | "
-              f"{g['tokens']['input']} in + {g['tokens']['output']} out | ${gc:.4f}", flush=True)
-        print(f"  Preserve: {ps} | {p['time']:.1f}s | {p['tokens']['calls']} calls | "
-              f"{p['tokens']['input']} in + {p['tokens']['output']} out | ${pc:.4f}", flush=True)
+        print(
+            f"  Graph:    {gs} | {g['time']:.1f}s | {g['tokens']['calls']} calls | "
+            f"{g['tokens']['input']} in + {g['tokens']['output']} out | ${gc:.4f}",
+            flush=True,
+        )
+        print(
+            f"  Preserve: {ps} | {p['time']:.1f}s | {p['tokens']['calls']} calls | "
+            f"{p['tokens']['input']} in + {p['tokens']['output']} out | ${pc:.4f}",
+            flush=True,
+        )
         print(flush=True)
 
-        results.append({
-            "question": q,
-            "graph": {
-                "status": gs, "time_s": g["time"],
-                "llm_calls": g["tokens"]["calls"],
-                "input_tokens": g["tokens"]["input"],
-                "output_tokens": g["tokens"]["output"],
-                "cost_usd": round(gc, 6),
-                "sql": g.get("sql", ""),
-            },
-            "preserve": {
-                "status": ps, "time_s": p["time"],
-                "llm_calls": p["tokens"]["calls"],
-                "input_tokens": p["tokens"]["input"],
-                "output_tokens": p["tokens"]["output"],
-                "cost_usd": round(pc, 6),
-                "sql": p.get("sql", ""),
-            },
-        })
+        results.append(
+            {
+                "question": q,
+                "graph": {
+                    "status": gs,
+                    "time_s": g["time"],
+                    "llm_calls": g["tokens"]["calls"],
+                    "input_tokens": g["tokens"]["input"],
+                    "output_tokens": g["tokens"]["output"],
+                    "cost_usd": round(gc, 6),
+                    "sql": g.get("sql", ""),
+                },
+                "preserve": {
+                    "status": ps,
+                    "time_s": p["time"],
+                    "llm_calls": p["tokens"]["calls"],
+                    "input_tokens": p["tokens"]["input"],
+                    "output_tokens": p["tokens"]["output"],
+                    "cost_usd": round(pc, 6),
+                    "sql": p.get("sql", ""),
+                },
+            }
+        )
 
     # Summary
     print("=" * 90, flush=True)
@@ -142,31 +158,49 @@ def main():
     p_time = sum(r["preserve"]["time_s"] for r in results)
 
     n = len(QUESTIONS)
-    print(f"\n{'Metric':<30} {'Graph (conn_id)':<25} {'Preserve (no conn)':<25}", flush=True)
+    print(
+        f"\n{'Metric':<30} {'Graph (conn_id)':<25} {'Preserve (no conn)':<25}",
+        flush=True,
+    )
     print("-" * 80, flush=True)
     print(f"{'Total LLM calls':<30} {g_calls:<25} {p_calls}", flush=True)
     print(f"{'Total input tokens':<30} {g_in:<25,} {p_in:,}", flush=True)
     print(f"{'Total output tokens':<30} {g_out:<25,} {p_out:,}", flush=True)
     print(f"{'Total tokens':<30} {g_in + g_out:<25,} {p_in + p_out:,}", flush=True)
     print(f"{'Total cost (USD)':<30} ${g_cost:<24.4f} ${p_cost:.4f}", flush=True)
-    print(f"{'Avg cost per question':<30} ${g_cost/n:<24.4f} ${p_cost/n:.4f}", flush=True)
+    print(
+        f"{'Avg cost per question':<30} ${g_cost / n:<24.4f} ${p_cost / n:.4f}",
+        flush=True,
+    )
     print(f"{'Total time':<30} {g_time:<25.1f}s {p_time:.1f}s", flush=True)
-    print(f"{'Avg time per question':<30} {g_time/n:<25.1f}s {p_time/n:.1f}s", flush=True)
+    print(
+        f"{'Avg time per question':<30} {g_time / n:<25.1f}s {p_time / n:.1f}s",
+        flush=True,
+    )
 
     diff = g_cost - p_cost
     if p_cost > 0:
         pct = (diff / p_cost) * 100
-        print(f"\n{'Cost difference':<30} ${diff:+.4f} ({pct:+.1f}% graph vs preserve)", flush=True)
+        print(
+            f"\n{'Cost difference':<30} ${diff:+.4f} ({pct:+.1f}% graph vs preserve)",
+            flush=True,
+        )
 
     # Per-question table
-    print(f"\n{'#':<4} {'Question':<40} {'G_in':<7} {'G_out':<6} {'G_$':<9} {'P_in':<7} {'P_out':<6} {'P_$':<9}", flush=True)
+    print(
+        f"\n{'#':<4} {'Question':<40} {'G_in':<7} {'G_out':<6} {'G_$':<9} {'P_in':<7} {'P_out':<6} {'P_$':<9}",
+        flush=True,
+    )
     print("-" * 88, flush=True)
     for i, r in enumerate(results, 1):
-        print(f"{i:<4} {r['question'][:38]:<40} "
-              f"{r['graph']['input_tokens']:<7} {r['graph']['output_tokens']:<6} "
-              f"${r['graph']['cost_usd']:<8.4f} "
-              f"{r['preserve']['input_tokens']:<7} {r['preserve']['output_tokens']:<6} "
-              f"${r['preserve']['cost_usd']:<8.4f}", flush=True)
+        print(
+            f"{i:<4} {r['question'][:38]:<40} "
+            f"{r['graph']['input_tokens']:<7} {r['graph']['output_tokens']:<6} "
+            f"${r['graph']['cost_usd']:<8.4f} "
+            f"{r['preserve']['input_tokens']:<7} {r['preserve']['output_tokens']:<6} "
+            f"${r['preserve']['cost_usd']:<8.4f}",
+            flush=True,
+        )
 
     # Save
     out_path = "tests/cost_comparison_v2_results.json"

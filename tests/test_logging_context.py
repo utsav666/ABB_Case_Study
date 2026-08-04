@@ -168,9 +168,11 @@ class TestLogDuration:
     def test_logs_duration_on_success(self, caplog) -> None:
         logger = logging.getLogger("app.test.duration")
 
-        with caplog.at_level(logging.INFO, logger="app.test.duration"):
-            with log_duration(logger, "router_llm"):
-                pass
+        with (
+            caplog.at_level(logging.INFO, logger="app.test.duration"),
+            log_duration(logger, "router_llm"),
+        ):
+            pass
 
         assert "STEP router_llm took" in caplog.text
 
@@ -178,16 +180,20 @@ class TestLogDuration:
         """A slow step that then fails is exactly what you want in the log."""
         logger = logging.getLogger("app.test.duration")
 
-        with caplog.at_level(logging.ERROR, logger="app.test.duration"):
-            with pytest.raises(ValueError):
-                with log_duration(logger, "sql_exec"):
-                    raise ValueError("query failed")
+        with (
+            caplog.at_level(logging.ERROR, logger="app.test.duration"),
+            pytest.raises(ValueError),
+            log_duration(logger, "sql_exec"),
+        ):
+            raise ValueError("query failed")
 
         assert "STEP sql_exec failed after" in caplog.text
 
     def test_reraises_the_original_exception(self) -> None:
         logger = logging.getLogger("app.test.duration")
 
-        with pytest.raises(ValueError, match="original"):
-            with log_duration(logger, "step"):
-                raise ValueError("original")
+        with (
+            pytest.raises(ValueError, match="original"),
+            log_duration(logger, "step"),
+        ):
+            raise ValueError("original")

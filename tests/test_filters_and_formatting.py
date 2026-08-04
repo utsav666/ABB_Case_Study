@@ -22,7 +22,11 @@ INDIAN_UNITS = {
     "decimal_places": 2,
     "number_format_enabled": True,
     "number_format_suffixes": {"billion": "Cr", "million": "L", "thousand": "K"},
-    "number_format_thresholds": {"billion": 10000000, "million": 100000, "thousand": 1000},
+    "number_format_thresholds": {
+        "billion": 10000000,
+        "million": 100000,
+        "thousand": 1000,
+    },
 }
 
 
@@ -73,8 +77,7 @@ class TestBuildAppliedFilters:
     def test_collapses_two_sided_range_into_one_chip(self) -> None:
         """`date >= X AND date < Y` is the natural way to write a year filter."""
         filters = build_applied_filters(
-            "SELECT 1 FROM sample "
-            "WHERE date >= '2016-01-01' AND date < '2017-01-01'"
+            "SELECT 1 FROM sample WHERE date >= '2016-01-01' AND date < '2017-01-01'"
         )
 
         assert len(filters) == 1
@@ -120,20 +123,93 @@ class TestBuildAppliedFilters:
     def test_none_and_non_string_are_safe(self) -> None:
         assert build_applied_filters(None) == []
         assert build_applied_filters(12345) == []
+        assert build_applied_filters("") == []
+
+    def test_table_alias_is_resolved_to_the_real_table_name(self) -> None:
+        """A chip reading `s.brand_name` would be meaningless to the user."""
+        filters = build_applied_filters(
+            "SELECT * FROM sales s WHERE s.brand_name = 'Brand A'"
+        )
+
+        assert filters[0]["table"] == "sales"
+        assert filters[0]["column"] == "brand_name"
+
+    def test_unqualified_column_reports_no_table(self) -> None:
+        filters = build_applied_filters("SELECT * FROM sales WHERE region = 'North'")
+
+        assert filters[0]["table"] is None
+
+    def test_extracts_every_branch_of_an_or(self) -> None:
+        """Both sides are part of the answer's scope, so both are shown."""
+        filters = build_applied_filters(
+            "SELECT * FROM sample WHERE region = 'North' OR region = 'South'"
+        )
+
+        assert {f["value"] for f in filters} == {"North", "South"}
+
+    def test_full_chip_shape_is_stable(self) -> None:
+        """The frontend reads these exact keys; a rename would break rendering."""
+        (chip,) = build_applied_filters(
+            "SELECT * FROM sales s WHERE s.brand_name = 'Brand A'"
+        )
+
+        assert chip == {
+            "table": "sales",
+            "column": "brand_name",
+            "label": "Brand Name",
+            "operator": "=",
+            "value": "Brand A",
+        }
+
+    def test_negated_equality_is_shown_without_the_negation(self) -> None:
+        """KNOWN LIMITATION, pinned so it is a deliberate choice.
+
+        `NOT category = 'X'` renders as `Category = X`, which states the opposite
+        of what the query does. Rare in generated SQL (the LLM writes `!=` or
+        `<>`), but a user reading the chip would be misled. Fixing it means
+        tracking negation context through the walk.
+        """
+        filters = build_applied_filters("SELECT * FROM sample WHERE NOT category = 'X'")
+
+        assert filters[0]["operator"] == "="
+        assert filters[0]["value"] == "X"
+
+    def test_subquery_filter_is_surfaced_as_if_top_level(self) -> None:
+        """KNOWN LIMITATION: an inner WHERE is not distinguished from an outer one.
+
+        Pinned because the chip implies the outer result was filtered on `k`,
+        which is only indirectly true.
+        """
+        filters = build_applied_filters(
+            "SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE k = 'v')"
+        )
+
+        assert [f["column"] for f in filters] == ["k"]
+
+    def test_function_wrapped_column_is_labelled_with_the_function(self) -> None:
+        """`lower(region) = 'north'` reads as "Region Lower", not bare "Region"."""
+        filters = build_applied_filters(
+            "SELECT * FROM sample WHERE lower(region) = 'north'"
+        )
+
+        assert filters[0]["column"] == "region"
+        assert filters[0]["label"] == "Region Lower"
+
+
+# One near-1-crore figure, matching the value from the reported bug.
+NUMBER_ROWS = {"rows": [{"m": "2016-11", "total_sales": 983041954.21}]}
 
 
 class TestBuildNumberFormat:
-    ROWS = {"rows": [{"m": "2016-11", "total_sales": 983041954.21}]}
-
     def test_uses_configured_thresholds_and_suffixes(self) -> None:
         """983,041,954 / 1e7 = 98.30Cr, matching the chart."""
-        result = build_number_format(self.ROWS, INDIAN_UNITS)
+        result = build_number_format(NUMBER_ROWS, INDIAN_UNITS)
 
         assert result == {"divisor": 10000000.0, "suffix": "Cr", "decimals": 2}
 
     def test_config_thresholds_are_not_merged_with_defaults(self) -> None:
         """Merging would let million (1e6) outrank the configured crore (1e7)."""
-        result = build_number_format(self.ROWS, INDIAN_UNITS)
+        result = build_number_format(NUMBER_ROWS, INDIAN_UNITS)
 
         assert result["suffix"] != "M"
 
@@ -143,10 +219,66 @@ class TestBuildNumberFormat:
         assert result["suffix"] == "L"
 
     def test_defaults_to_b_m_k_without_config(self) -> None:
-        assert build_number_format(self.ROWS, None)["suffix"] == "M"
+        """983,041,954 is under 1e9, so the default scale is M, not B."""
+        assert build_number_format(NUMBER_ROWS, None) == {
+            "divisor": 1e6,
+            "suffix": "M",
+            "decimals": 2,
+        }
+
+    def test_scale_is_chosen_from_the_largest_value_in_the_result(self) -> None:
+        """One scale per result, so a column of figures stays comparable.
+
+        The small value must not drag the scale down to K.
+        """
+        rows = {"rows": [{"v": 1500.0}, {"v": 983041954.0}]}
+
+        assert build_number_format(rows, INDIAN_UNITS)["suffix"] == "Cr"
+
+    def test_value_exactly_on_a_threshold_uses_that_scale(self) -> None:
+        """>= is inclusive: exactly 1 crore is 1.00Cr, not 100.00L."""
+        assert build_number_format({"rows": [{"v": 10000000}]}, INDIAN_UNITS) == {
+            "divisor": 10000000.0,
+            "suffix": "Cr",
+            "decimals": 2,
+        }
+
+    def test_value_one_below_a_threshold_uses_the_lower_scale(self) -> None:
+        assert (
+            build_number_format({"rows": [{"v": 9999999}]}, INDIAN_UNITS)["suffix"]
+            == "L"
+        )
+
+    def test_negative_magnitudes_are_sized_by_absolute_value(self) -> None:
+        """A large loss needs the same scale as a large gain."""
+        assert (
+            build_number_format({"rows": [{"v": -983041954.0}]}, INDIAN_UNITS)["suffix"]
+            == "Cr"
+        )
+
+    def test_decimal_places_come_from_config(self) -> None:
+        config = {**INDIAN_UNITS, "decimal_places": 0}
+
+        assert build_number_format(NUMBER_ROWS, config)["decimals"] == 0
+
+    def test_missing_suffix_for_a_configured_threshold_yields_empty_string(
+        self,
+    ) -> None:
+        """A partially-configured scale must not emit "None" into the UI."""
+        config = {
+            "number_format_thresholds": {"custom": 1000000},
+            "number_format_suffixes": {},
+        }
+
+        result = build_number_format({"rows": [{"v": 5000000}]}, config)
+
+        assert result["suffix"] == ""
+        assert result["divisor"] == 1000000.0
 
     def test_respects_explicit_opt_out(self) -> None:
-        assert build_number_format(self.ROWS, {"number_format_enabled": False}) is None
+        assert (
+            build_number_format(NUMBER_ROWS, {"number_format_enabled": False}) is None
+        )
 
     def test_small_values_are_left_unscaled(self) -> None:
         assert build_number_format({"rows": [{"v": 450}]}, INDIAN_UNITS) is None
@@ -171,7 +303,7 @@ class TestBuildNumberFormat:
             "number_format_suffixes": {"billion": "Cr"},
         }
 
-        assert build_number_format(self.ROWS, config)["suffix"] == "Cr"
+        assert build_number_format(NUMBER_ROWS, config)["suffix"] == "Cr"
 
 
 class TestHumanizeIdentifier:

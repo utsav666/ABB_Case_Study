@@ -269,7 +269,9 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
     if cache_key in _USERINFO_CACHE:
         cached_time, cached_data = _USERINFO_CACHE[cache_key]
         if current_time - cached_time < _USERINFO_CACHE_TTL_SECONDS:
-            logger.debug("Using cached userinfo (age: %.1fs)", current_time - cached_time)
+            logger.debug(
+                "Using cached userinfo (age: %.1fs)", current_time - cached_time
+            )
             return cached_data
         else:
             # Remove stale cache entry
@@ -279,14 +281,14 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
     timeout_seconds = get_oauth_http_timeout_seconds()
 
     # Check if this is Microsoft OAuth
-    is_microsoft = "microsoft" in provider_name.lower() or "azure" in provider_name.lower()
+    is_microsoft = (
+        "microsoft" in provider_name.lower() or "azure" in provider_name.lower()
+    )
 
     if is_microsoft:
         # For Microsoft, fetch from Graph API to get userPrincipalName
         graph_url = "https://graph.microsoft.com/v1.0/me"
-        params = {
-            "$select": "userPrincipalName,mail,displayName,givenName,surname,id"
-        }
+        params = {"$select": "userPrincipalName,mail,displayName,givenName,surname,id"}
 
         started_at = time.monotonic()
         try:
@@ -305,8 +307,11 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
         if not isinstance(graph_payload, dict):
             raise ValueError("Microsoft Graph response must be a JSON object.")
 
-        logger.info("Microsoft Graph payload: userPrincipalName=%s, mail=%s",
-                   graph_payload.get("userPrincipalName"), graph_payload.get("mail"))
+        logger.info(
+            "Microsoft Graph payload: userPrincipalName=%s, mail=%s",
+            graph_payload.get("userPrincipalName"),
+            graph_payload.get("mail"),
+        )
 
         # Try to fetch user's profile photo
         avatar_url = None
@@ -326,7 +331,9 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
                 photo_metadata = photo_response.json()
                 # Microsoft Graph photo metadata includes @odata.mediaContentType
                 # The actual photo URL would be /me/photo/$value but we'll store the endpoint
-                avatar_url = f"https://graph.microsoft.com/v1.0/me/photos/240x240/$value"
+                avatar_url = (
+                    f"https://graph.microsoft.com/v1.0/me/photos/240x240/$value"
+                )
                 logger.info("User has profile photo available")
             else:
                 logger.debug("No profile photo available for user")
@@ -339,7 +346,8 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
             "name": graph_payload.get("displayName"),
             "given_name": graph_payload.get("givenName"),
             "family_name": graph_payload.get("surname"),
-            "email": graph_payload.get("userPrincipalName") or graph_payload.get("mail"),
+            "email": graph_payload.get("userPrincipalName")
+            or graph_payload.get("mail"),
             "userPrincipalName": graph_payload.get("userPrincipalName"),
             "mail": graph_payload.get("mail"),
             "picture": avatar_url,

@@ -51,8 +51,15 @@ class SettingsUserController:
         if not email:
             return user_payload
 
-        logger.info("Creating/updating user with email: %s (from payload: %s)",
-                   email, {k: v for k, v in user_payload.items() if 'email' in k.lower() or 'principal' in k.lower()})
+        logger.info(
+            "Creating/updating user with email: %s (from payload: %s)",
+            email,
+            {
+                k: v
+                for k, v in user_payload.items()
+                if "email" in k.lower() or "principal" in k.lower()
+            },
+        )
 
         full_name = str(user_payload.get("name", "")).strip() or None
         avatar_url = str(user_payload.get("picture", "")).strip() or None

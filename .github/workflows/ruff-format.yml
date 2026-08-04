@@ -19,7 +19,9 @@ jobs:
           python-version: '3.x'
 
       - name: Install Ruff
-        run: pip install ruff jq
+        # Pinned to match requirements.txt: an unpinned ruff can format
+        # differently from the developer's version and fail a clean branch.
+        run: pip install ruff==0.16.1 jq
 
       - name: Check formatting with Ruff
         run: ruff format --check .

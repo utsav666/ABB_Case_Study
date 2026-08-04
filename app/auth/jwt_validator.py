@@ -215,7 +215,9 @@ def decode_jwt_unverified(token: str) -> dict[str, Any]:
         raise InvalidTokenError(f"Failed to decode token: {e}")
 
 
-def extract_user_email_from_jwt(token: str, verify_signature: bool = True) -> str | None:
+def extract_user_email_from_jwt(
+    token: str, verify_signature: bool = True
+) -> str | None:
     """Extract user email from JWT token with verification.
 
     Args:
@@ -240,7 +242,10 @@ def extract_user_email_from_jwt(token: str, verify_signature: bool = True) -> st
             logger.info("Extracted email from JWT: %s", email)
             return email.lower().strip()
 
-        logger.warning("No email claim found in JWT payload. Available claims: %s", list(payload.keys()))
+        logger.warning(
+            "No email claim found in JWT payload. Available claims: %s",
+            list(payload.keys()),
+        )
         return None
 
     except InvalidTokenError as e:

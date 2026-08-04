@@ -28,7 +28,9 @@ def general_answer(
     {"success": True, "answer": "...", "response": <AIMessage>} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="general_answer", temperature=0.2, provider=provider, model=model)
+        llm = create_chat_llm(
+            purpose="general_answer", temperature=0.2, provider=provider, model=model
+        )
 
         messages = [{"role": "system", "content": fall_back_prompt}]
 
