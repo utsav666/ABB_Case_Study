@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_router_prompt_improvise
 from app.utils.llm_factory import create_chat_llm
-from app.utils.schema_summarizer import Summarizer
 
 # ------------------------
 # Schema-aware Router Model
@@ -35,16 +34,25 @@ class RoutingDecision(BaseModel):
 # Router Agent (Decision Only)
 # ----------------------------
 class Router:
-    def __init__(self, schema_summary: str | None = None, provider: str | None = None, model: str | None = None):
+    def __init__(
+        self,
+        schema_summary: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+    ):
         # Allow callers to inject a connection-scoped schema summary; fall back
         # to the default (sample/config) summary when none is provided.
-        self.schema_summary = (
-            schema_summary
-            if schema_summary is not None
-            else Summarizer.summarize_schema()
-        )
+        if not schema_summary:
+            raise ValueError(
+                "schema_summary is required: render it from the connection's "
+                "schema graph (settings.schema_graphs). There is no sample-schema "
+                "fallback."
+            )
+        self.schema_summary = schema_summary
 
-        self.llm = create_chat_llm(purpose="router", temperature=0, provider=provider, model=model)
+        self.llm = create_chat_llm(
+            purpose="router", temperature=0, provider=provider, model=model
+        )
 
         # Output parser
         self.parser = JsonOutputParser(pydantic_object=RoutingDecision)

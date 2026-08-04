@@ -137,7 +137,7 @@ class ColumnAnnotator:
                 else str(response.content)
             )
             return _parse_response(raw_content, raw_names)
-        except Exception:  # noqa: BLE001 - never let annotation crash the sync
+        except Exception:
             logger.exception("Column annotation failed for table %s", table_name)
             return {}
 
@@ -165,9 +165,7 @@ class ColumnAnnotator:
 
         schema_text = _format_database_schema(tables_with_columns)
         expected = {
-            t["table_key"]: [
-                c["raw_name"] for c in t["columns"] if c.get("raw_name")
-            ]
+            t["table_key"]: [c["raw_name"] for c in t["columns"] if c.get("raw_name")]
             for t in tables_with_columns
         }
 
@@ -188,14 +186,12 @@ class ColumnAnnotator:
                 else str(response.content)
             )
             return _parse_db_response(raw_content, expected)
-        except Exception:  # noqa: BLE001 - never let annotation crash the sync
+        except Exception:
             logger.exception("DB-level column annotation failed")
             return {}
 
 
-def _parse_response(
-    raw: str, expected_columns: list[str]
-) -> dict[str, dict[str, str]]:
+def _parse_response(raw: str, expected_columns: list[str]) -> dict[str, dict[str, str]]:
     """Parse the LLM JSON response, tolerating markdown fences."""
     cleaned = raw.strip()
     if cleaned.startswith("```"):

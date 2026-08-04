@@ -106,11 +106,29 @@ Available routes:
   - Trend analysis (e.g., "over time", "by year")
   - Explicit visualization words: chart, graph, plot, visualize, show, compare
   **Default to sql_and_chart for any query with 2+ numeric metrics**
+- explanation: when the user asks WHY a number is high/low/changed, or asks for
+  analysis/drivers/reasons behind a value. These questions cannot be answered by
+  one query — they need a focal value compared against a baseline, plus a
+  breakdown of what drove the difference.
+  Trigger words: "why", "what drove", "what caused", "explain", "reason for",
+  "analysis of", "how come", "what's behind"
+  **IMPORTANT**: "why was X high" is explanation, NOT sql_and_chart — the user
+  wants an answer, not a picture. Only use sql_and_chart if they explicitly ask
+  to see/plot/chart it.
 - configuration: when user wants to configure the UI, edit DB column names/descriptions, or open a settings/configuration page
 - general_answer: when user asks general knowledge not related to DB
 - follow_up: when user asks something dependent on earlier context
 
 Examples:
+
+Question: "Why was sales in Nov 2016 high compared to other months?"
+→ {{"route": "explanation", "reasoning": "Asks WHY a value is high vs a baseline - needs comparison and driver breakdown, not a single query"}}
+
+Question: "What drove the drop in Q3 revenue?"
+→ {{"route": "explanation", "reasoning": "Asking for the drivers behind a change - requires decomposition analysis"}}
+
+Question: "Show me sales by month for 2016"
+→ {{"route": "sql_and_chart", "reasoning": "Wants to SEE the trend - visualization, not causal analysis"}}
 
 Question: "Top 5 products by sales and quantity"
 → {{"route": "sql_and_chart", "reasoning": "Query involves 2 metrics (sales AND quantity) for comparison - needs visualization"}}
@@ -297,4 +315,94 @@ Your task: analyze the user’s question and dataset, then select the most appro
 {context}
 
 **Remember:** If 2+ numeric columns exist, analyze their scales FIRST. If they differ by >10x, you MUST use dual_axis_column or column_line.
+"""
+
+
+# ============================================================
+# Explanation route — "why is X high/low compared to others?"
+# ============================================================
+
+analysis_plan_prompt = """You are planning an analysis to answer a "why" question about data.
+
+The user wants to know WHY a value is high, low, or changed. One query cannot
+answer that — you must produce TWO queries:
+
+1. **baseline_sql** — the focal value AND all comparable periods/groups, so the
+   value can be judged against its peers.
+   - Return exactly TWO columns: a label column, then the numeric metric.
+   - Include ALL periods for comparison, not just the focal one.
+   - Order by the label so the series reads chronologically.
+   - Example shape: one row per month for the whole year.
+
+2. **breakdown_sql** — the focal period ONLY, split by the most explanatory
+   dimension (category, region, product, etc.), so we can see what drove it.
+   - Return exactly TWO columns: the dimension label, then the numeric metric.
+   - Filter to the focal period.
+   - Order by the metric descending.
+
+Rules:
+- PostgreSQL syntax. Use only tables and columns from the schema below.
+- Aggregate — never return raw rows.
+- Use the exact table and column names given. Qualify with the schema when shown.
+- Do NOT use LIMIT on baseline_sql; every period is needed for the comparison.
+
+**CRITICAL — inherit context from the conversation.**
+"Why" questions are usually follow-ups and rely on filters the user already
+stated. If an earlier turn narrowed the data, BOTH queries must carry that
+filter forward, or you will explain the wrong number.
+
+Example:
+  Earlier turn: "trend of sales for Product A in 2016"
+  Now:          "why was Nov 2016 high?"
+  → BOTH queries MUST filter to Product A. A whole-database total would be a
+    wrong answer to this question, not merely a broader one.
+
+Apply every still-relevant filter from the history: product, region, customer,
+segment, date range. Only drop a filter if the new question clearly widens the
+scope (e.g. "how does that compare to all products?"). List what you carried
+forward in "inherited_filters" so it can be shown to the user.
+
+Schema Summary:
+{schema_summary}
+
+Conversation History (earlier turns — inherit their filters):
+{conversation_history}
+
+User Question:
+{user_question}
+
+Return ONLY a JSON object, no prose and no code fences:
+{{
+  "focal_period": "<the specific period or value being explained, e.g. '2016-11' or 'Nov 2016'; empty string if none named>",
+  "metric_description": "<short name of the metric, e.g. 'total sales for Product A'>",
+  "inherited_filters": ["<filters carried over from earlier turns, e.g. 'Product = Product A'>"],
+  "baseline_sql": "<SQL returning label + metric for ALL comparable periods, WITH inherited filters>",
+  "breakdown_sql": "<SQL returning dimension + metric for the FOCAL period only, WITH inherited filters>"
+}}
+"""
+
+
+analysis_synthesis_prompt = """Explain the user's question using ONLY the calculated figures below.
+
+CRITICAL RULES:
+- Every number you state MUST come from the evidence. Do not compute, estimate,
+  round differently, or infer any figure that is not present.
+- Do NOT speculate about business causes (promotions, holidays, weather) — the
+  data does not contain them. Describe WHAT the data shows, not WHY in the world.
+- If the evidence shows the premise is wrong (e.g. the user says "high" but the
+  rank shows otherwise), say so plainly in the first sentence.
+- Do not mention JSON, fields, queries, or that you were given evidence.
+
+Structure your answer as:
+1. One bold headline sentence with the focal value and how it compares to the baseline.
+2. A short bullet list of the biggest contributors, with their share.
+3. One closing sentence on what stands out — rank, or how far from typical it is.
+
+Keep it under 150 words. Use the metric's own scale; do not convert units.
+
+User Question:
+{user_question}
+
+Calculated evidence:
+{evidence}
 """

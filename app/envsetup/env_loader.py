@@ -162,9 +162,7 @@ def get_gemini_api_key() -> str:
     load_env()
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        raise ValueError(
-            "GEMINI_API_KEY/GOOGLE_API_KEY environment variable not set."
-        )
+        raise ValueError("GEMINI_API_KEY/GOOGLE_API_KEY environment variable not set.")
     return api_key.strip().strip("'\"")
 
 
@@ -193,7 +191,9 @@ def get_azure_openai_endpoint() -> str:
 def get_azure_openai_api_version() -> str:
     """Return Azure OpenAI API version with default."""
     load_env()
-    return os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview").strip().strip("'\"")
+    return (
+        os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview").strip().strip("'\"")
+    )
 
 
 def get_merck_api_key() -> str:

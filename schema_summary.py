@@ -1,6 +1,5 @@
 import json
 import os
-from typing import List
 
 import openai
 
@@ -29,7 +28,7 @@ llm = ChatOpenAI(model=get_openai_model(), temperature=0)
 # ---------- Pydantic Schema ----------
 class TableIdentification(BaseModel):
     user_question: str
-    relevant_tables: List[str]
+    relevant_tables: list[str]
 
 
 # Define parser

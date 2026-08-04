@@ -59,7 +59,10 @@ def test_db_connection_save_endpoint_uses_controller(monkeypatch) -> None:
     workspace_id = uuid4()
     monkeypatch.setattr(
         "app.settings_db.router.create_db_connection",
-        lambda payload: {
+        # The router calls create_db_connection(payload, skip_validation); this
+        # mock only accepted `payload`, so it raised TypeError once that second
+        # argument was added. Accept it and ignore it.
+        lambda payload, skip_validation=False: {
             "status": "created",
             "connection": {
                 "id": str(uuid4()),

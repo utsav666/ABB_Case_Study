@@ -1,13 +1,8 @@
 import os
 
-from app.utils.schema_config import SchemaConfigManager
-
-
-class DataLoader:
-    @staticmethod
-    def load_data():
-        """Return schema data enriched with any UI-saved column configuration."""
-        return SchemaConfigManager.get_schema_with_column_configuration()
+# NOTE: DataLoader was removed. It read the bundled sample_data/schema_preserve.json
+# fixture, which described a movie database and silently answered questions asked
+# against real connections. Schema now comes ONLY from settings.schema_graphs.
 
 
 class DBLoader:

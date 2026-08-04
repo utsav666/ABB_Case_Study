@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine, text
@@ -14,7 +15,6 @@ from app.target_db.connection_profiles import (
     get_validation_query,
     normalize_database_engine,
 )
-from app.utils.runtime_limits import get_db_connect_timeout_seconds
 
 logger = logging.getLogger(__name__)
 

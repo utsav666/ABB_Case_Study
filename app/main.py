@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import contextlib
 import io
 import json
@@ -9,13 +8,16 @@ import os
 from typing import Any
 from urllib.parse import parse_qsl
 
-import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
+from app.api.chat_response import (
+    build_chat_response,
+    build_persisted_assistant_content,
+)
 from app.auth.oauth_router import auth_router
 from app.envsetup.env_loader import get_llm_model, load_env
 from app.settings_db.controllers import (
@@ -24,18 +26,15 @@ from app.settings_db.controllers import (
 from app.settings_db.controllers import (
     validate_db_connection as validate_settings_db_connection,
 )
-from app.settings_db.models import DBConnectionCreate
-from app.settings_db.models import AgentCreate, AgentUpdate
+from app.settings_db.models import AgentCreate, AgentUpdate, DBConnectionCreate
 from app.settings_db.repositories import (
     AgentRepository,
     ColumnDefinitionRepository,
-    ConversationRepository,
     SelectedTableRepository,
 )
 from app.settings_db.router import settings_db_router
 from app.settings_db.workspace_router import workspace_router
 from app.utils.db_column_config_view import (
-    build_db_column_configuration_payload,
     get_table_configuration_payload,
     save_table_configuration,
 )
@@ -45,7 +44,6 @@ from app.utils.db_connections import (
 )
 from app.utils.schema_config import SchemaConfigManager
 from app.utils.schema_generator import generate_schema_config
-from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
@@ -53,20 +51,44 @@ load_env()
 
 
 def configure_logging() -> None:
-    """Configure application logging for local runs and Lambda CloudWatch."""
+    """Configure application logging for local runs and Lambda CloudWatch.
+
+    Set ``APP_LOG_FORMAT=json`` for one-JSON-object-per-line output, which lets
+    CloudWatch Logs Insights filter on request_id / connection_id / thread_id
+    directly. Defaults to human-readable.
+    """
+    from app.utils.logging_context import (
+        ContextFilter,
+        HumanFormatter,
+        JsonFormatter,
+    )
+
     log_level_name = os.getenv("APP_LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
+    use_json = os.getenv("APP_LOG_FORMAT", "").lower() == "json"
+
+    formatter = JsonFormatter() if use_json else HumanFormatter()
+    context_filter = ContextFilter()
 
     root_logger = logging.getLogger()
     if not root_logger.handlers:
-        logging.basicConfig(
-            level=log_level,
-            format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-        )
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+        handler.addFilter(context_filter)
+        root_logger.addHandler(handler)
     else:
-        root_logger.setLevel(log_level)
+        # Lambda pre-installs a handler; re-dress it rather than adding a
+        # second one, which would double every line.
+        for handler in root_logger.handlers:
+            handler.setFormatter(formatter)
+            handler.addFilter(context_filter)
 
+    root_logger.setLevel(log_level)
     logger.setLevel(log_level)
+
+    # These are chatty at INFO and drown out application logs.
+    for noisy in ("httpx", "httpcore", "urllib3", "botocore", "boto3", "s3transfer"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 configure_logging()
@@ -154,7 +176,7 @@ class ChatRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_question(self) -> "ChatRequest":
+    def normalize_question(self) -> ChatRequest:
         """Accept either `question` or `message` from the client."""
         normalized_question = (self.question or self.message).strip()
         if not normalized_question:
@@ -208,7 +230,7 @@ class TableSelection(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_empty_columns(self) -> "TableSelection":
+    def normalize_empty_columns(self) -> TableSelection:
         """Treat an empty column list the same as None (all columns)."""
         if self.column_names is not None and len(self.column_names) == 0:
             self.column_names = None
@@ -333,34 +355,6 @@ async def read_request_payload(request: Request) -> Any:
         return raw_body.decode("utf-8", errors="ignore")
 
 
-def serialize_dataframe(data_frame: pd.DataFrame) -> dict[str, Any]:
-    """Convert a DataFrame into a JSON-friendly structure.
-
-    Args:
-        data_frame: Pandas DataFrame returned by the orchestrator.
-
-    Returns:
-        A dictionary containing rows, columns, and row count.
-    """
-    safe_frame = data_frame.astype(object).where(data_frame.notna(), None)
-    return {
-        "columns": safe_frame.columns.tolist(),
-        "rows": safe_frame.to_dict(orient="records"),
-        "row_count": len(safe_frame.index),
-    }
-
-
-def serialize_figure_to_base64(figure: Any) -> str | None:
-    """Encode a Matplotlib figure as a base64 PNG string."""
-    if figure is None:
-        return None
-
-    buffer = io.BytesIO()
-    figure.savefig(buffer, format="png", bbox_inches="tight")
-    buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
-
-
 def log_captured_orchestrator_output(
     question: str,
     raw_logs: str,
@@ -383,135 +377,6 @@ def log_captured_orchestrator_output(
         question,
         cleaned_logs,
     )
-
-
-def build_chat_response(result: Any, logs: str) -> dict[str, Any]:
-    """Normalize orchestrator output for API responses."""
-    payload: dict[str, Any] = {
-        "logs": logs.strip() or None,
-        "data": None,
-        "sql": None,
-        "chart_image_base64": None,
-    }
-
-    # Extract SQL if present
-    if isinstance(result, dict):
-        payload["sql"] = result.get("sql")
-
-    # ### HITL — Return pending_hitl response as-is (graph is paused)
-    if isinstance(result, dict) and result.get("type") == "pending_hitl":
-        payload["answer_type"] = "pending_hitl"
-        payload["message"] = result.get("message", "Human input needed.")
-        payload["hitl_type"] = result.get("hitl_type")
-        payload["thread_id"] = result.get("thread_id")
-        payload["suggestions"] = result.get("suggestions")
-        payload["data"] = {
-            k: v
-            for k, v in result.items()
-            if k
-            not in ("type", "message", "hitl_type", "thread_id", "suggestions", "sql")
-        }
-        return payload
-
-    # --- Typed results from GraphOrchestrator ---
-    if isinstance(result, dict) and "type" in result:
-        result_type = result["type"]
-
-        if result_type == "chart":
-            chart_figure = result.get("figure")
-            chart_config = result.get("chart_config")
-            chart_data = result.get("data")
-            payload["answer_type"] = "chart"
-            payload["message"] = "Here is your chart."
-
-            # New format: chart_config + data (for frontend rendering)
-            if chart_config:
-                payload["chart_config"] = chart_config
-                if isinstance(chart_data, pd.DataFrame):
-                    payload["data"] = chart_data.to_dict(orient="records")
-                elif isinstance(chart_data, list):
-                    payload["data"] = chart_data
-                else:
-                    payload["data"] = []
-            # Legacy format: matplotlib figure as base64 image
-            elif chart_figure:
-                payload["chart_image_base64"] = serialize_figure_to_base64(chart_figure)
-                if isinstance(chart_data, pd.DataFrame):
-                    payload["data"] = serialize_dataframe(chart_data)
-                else:
-                    payload["data"] = chart_data
-
-            return payload
-
-        if result_type == "data":
-            data = result.get("data")
-            payload["answer_type"] = "table"
-            payload["message"] = result.get("message", "Here are the query results.")
-            if isinstance(data, pd.DataFrame):
-                payload["data"] = serialize_dataframe(data)
-            else:
-                payload["data"] = data
-            return payload
-
-        if result_type == "schema_info":
-            payload["answer_type"] = "schema_info"
-            payload["message"] = result.get("message", "Schema information retrieved.")
-            payload["data"] = result.get("data")
-            return payload
-
-        if result_type == "text":
-            payload["answer_type"] = "text"
-            payload["message"] = result.get("message", "Here is the response.")
-            return payload
-
-        if result_type == "error":
-            payload["answer_type"] = "error"
-            payload["message"] = result.get("message", "An error occurred.")
-            return payload
-
-    # --- Legacy fallbacks ---
-    if isinstance(result, pd.DataFrame):
-        payload["answer_type"] = "table"
-        payload["message"] = "Here are the query results."
-        payload["data"] = serialize_dataframe(result)
-        return payload
-
-    if isinstance(result, (dict, list)):
-        payload["answer_type"] = "json"
-        payload["message"] = "Structured response generated."
-        payload["data"] = result
-        return payload
-
-    payload["answer_type"] = "text"
-    payload["message"] = str(result)
-    return payload
-
-
-def build_persisted_assistant_content(response_payload: dict[str, Any]) -> str:
-    """Serialize a stable assistant payload for conversation history storage."""
-    persisted_payload = {
-        "answer_type": response_payload.get("answer_type"),
-        "message": response_payload.get("message"),
-        "data": response_payload.get("data"),
-        "chart_config": response_payload.get("chart_config"),  # New chart format
-        "chart_image_base64": response_payload.get("chart_image_base64"),  # Legacy
-        "sql": response_payload.get("sql"),
-    }
-
-    try:
-        return json.dumps(
-            {
-                "kind": "assistant_payload_v1",
-                "payload": persisted_payload,
-            },
-            ensure_ascii=True,
-            default=str,
-        )
-    except (TypeError, ValueError):
-        fallback_message = response_payload.get("message")
-        if isinstance(fallback_message, str) and fallback_message.strip():
-            return fallback_message
-        return "Request completed."
 
 
 @app.get("/")
@@ -543,9 +408,26 @@ def get_health() -> dict[str, str]:
 
 
 @app.get("/schema/summary")
-def get_schema_summary() -> dict[str, str]:
-    """Return the assistant-facing schema summary."""
-    return {"summary": Summarizer.summarize_schema()}
+def get_schema_summary(connection_id: str) -> dict[str, str]:
+    """Return the assistant-facing schema summary for a connection.
+
+    connection_id is REQUIRED. This previously took no arguments and rendered the
+    bundled sample fixture, so it described a movie database no matter which
+    connection the caller cared about. The schema now comes only from
+    settings.schema_graphs.
+    """
+    from app.target_db.controllers import load_schema_graph, render_graph_summary
+
+    graph = load_schema_graph(connection_id)
+    if not graph:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No schema graph for connection {connection_id}. "
+                "Profile the connection first."
+            ),
+        )
+    return {"summary": render_graph_summary(graph)}
 
 
 @app.get("/schema/tables")
@@ -1032,6 +914,18 @@ async def chat(
         if isinstance(raw_workspace_id, str) and raw_workspace_id.strip():
             workspace_id = raw_workspace_id.strip()
 
+    # Bind ids to the logging context BEFORE any real work, so every downstream
+    # log line — including failures in the early-return paths below — carries
+    # them. connection_id in particular: without it in the logs there is no way
+    # to tell that a run answered against the wrong database.
+    from app.utils.logging_context import bind_log_context, new_request_id
+
+    bind_log_context(
+        request_id=new_request_id(),
+        connection_id=connection_id or "none",
+        workspace_id=workspace_id or "",
+    )
+
     if not normalized_question:
         return jsonable_encoder(
             {
@@ -1050,11 +944,13 @@ async def chat(
     import asyncio
     import time
     import uuid
-    from app.orchestrator.orch_graph import GraphOrchestrator
+
     from app.orchestrator.conversation_manager import ConversationHistoryManager
+    from app.orchestrator.orch_graph import GraphOrchestrator
 
     # Use the client-provided thread_id or generate a new one for HITL
     thread_id = thread_id_from_client or str(uuid.uuid4())
+    bind_log_context(thread_id=thread_id)
     logger.info(
         "CHAT — received question=%r thread_id=%s workspace_id=%s connection_id=%s",
         normalized_question[:120],
@@ -1163,7 +1059,7 @@ async def chat(
     response_payload = {
         "question": normalized_question,
         "thread_id": thread_id,
-        **build_chat_response(result, buffer.getvalue()),
+        **build_chat_response(result, buffer.getvalue(), connection_id),
     }
 
     # Persist the assistant's reply in a structured format for reload hydration.
@@ -1182,8 +1078,11 @@ async def chat(
 # Conversation history endpoints
 # ============================================================
 
+
 @app.get("/conversations")
-async def list_conversations(workspace_id: str = Query(..., description="Workspace UUID")) -> list[dict[str, Any]]:
+async def list_conversations(
+    workspace_id: str = Query(..., description="Workspace UUID"),
+) -> list[dict[str, Any]]:
     """List all conversation threads for a workspace, newest first."""
     from app.orchestrator.conversation_manager import ConversationHistoryManager
 
@@ -1222,6 +1121,9 @@ class HitlResumeRequest(BaseModel):
 
     thread_id: str
     decision: Any  # Human's choice: string, dict, etc.
+    # Optional: lets the resumed response use the same number formatting as the
+    # original answer. Absent for older clients, which fall back to auto-detect.
+    connection_id: str | None = None
 
 
 @app.post("/chat/resume")
@@ -1232,6 +1134,7 @@ async def chat_resume(payload: HitlResumeRequest) -> dict[str, Any]:
     The frontend sends back the thread_id and the human's decision.
     """
     import asyncio
+
     from app.orchestrator.orch_graph import GraphOrchestrator
 
     buffer = io.StringIO()
@@ -1251,6 +1154,6 @@ async def chat_resume(payload: HitlResumeRequest) -> dict[str, Any]:
 
     response_payload = {
         "thread_id": payload.thread_id,
-        **build_chat_response(result, buffer.getvalue()),
+        **build_chat_response(result, buffer.getvalue(), payload.connection_id),
     }
     return jsonable_encoder(response_payload)

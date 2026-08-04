@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -10,11 +9,14 @@ from app.target_db.connection_profiles import (
     normalize_database_engine,
 )
 
+
 class DBConnectionInput(BaseModel):
     """Shared connection fields from the settings UI."""
 
     name: str = Field(min_length=1, description="Display name for this connection.")
-    engine: str = Field(min_length=1, description="Supported database engine identifier.")
+    engine: str = Field(
+        min_length=1, description="Supported database engine identifier."
+    )
     db_host: str = Field(default="", description="Database host address.")
     db_port: int | None = Field(
         default=None, ge=0, le=65535, description="Database port."
@@ -30,7 +32,7 @@ class DBConnectionInput(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_fields(self) -> "DBConnectionInput":
+    def normalize_fields(self) -> DBConnectionInput:
         """Normalize and validate required fields."""
         if not self.engine:
             raise ValueError("Database engine is required.")

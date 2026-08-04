@@ -8,23 +8,52 @@ from typing import Any
 from app.envsetup.env_loader import load_env
 from app.prompt.prompts import schema_info_gen_prompt
 from app.utils.llm_factory import create_chat_llm
-from app.utils.schema_summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
 load_env()
 
 
-def explain_schema(user_question: str, context: str = "", provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+def explain_schema(
+    user_question: str,
+    context: str = "",
+    provider: str | None = None,
+    model: str | None = None,
+    schema_graph: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Answer a schema-related question.
+
+    Parameters
+    ----------
+    schema_graph:
+        The connected database's schema graph, from settings.schema_graphs.
+        REQUIRED — there is no file-based fallback. A bundled fixture previously
+        stood in here, which meant every schema question was answered from a
+        movie database regardless of the connection the user had selected.
 
     Returns
     -------
     {"success": True, "answer": "..."} or {"success": False, "error": "..."}
     """
     try:
-        llm = create_chat_llm(purpose="schema_info", temperature=0, provider=provider, model=model)
-        schema_summary = Summarizer.summarize_schema()
+        llm = create_chat_llm(
+            purpose="schema_info", temperature=0, provider=provider, model=model
+        )
+
+        if not schema_graph:
+            raise ValueError(
+                "A schema graph is required to answer schema questions. Select a "
+                "connection and ensure it has been profiled."
+            )
+
+        from app.target_db.controllers import render_graph_summary
+
+        schema_summary = render_graph_summary(schema_graph)
+        logger.info(
+            "SCHEMA INFO — answering from the connection's schema graph (%d tables)",
+            len(schema_graph.get("nodes", [])),
+            extra={"schema_source": "connection_graph"},
+        )
 
         prompt = schema_info_gen_prompt.format(
             schema_summary=schema_summary,

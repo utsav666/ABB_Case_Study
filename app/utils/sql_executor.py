@@ -1,6 +1,5 @@
 import logging
 from threading import Lock
-from typing import Union
 
 import pandas as pd
 from sqlalchemy import create_engine
@@ -50,7 +49,7 @@ class SqlExec:
         # self.connection = sqlite3.connect(self.data_path)
         # self.sql_query = sql_query
 
-    def sql_executor(self, sql_query: str) -> Union[pd.DataFrame, str]:
+    def sql_executor(self, sql_query: str) -> pd.DataFrame | str:
         try:
             db_details = self.data_path["data_base_detail"]
             # Build connection URL with search_path to include both public and other schemas

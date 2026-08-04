@@ -674,9 +674,7 @@ class ColumnRelationRepository:
 
         return [dict(row) for row in row_mappings]
 
-    def get_relations_by_connection(
-        self, connection_id: str
-    ) -> list[dict[str, Any]]:
+    def get_relations_by_connection(self, connection_id: str) -> list[dict[str, Any]]:
         """Return all stored relations for a connection."""
         try:
             parsed_connection_id = UUID(connection_id)
@@ -902,20 +900,24 @@ class ConversationRepository:
         Returns:
             dict with thread_id, title, created_at.
         """
-        statement = insert(ConversationThreadEntity).values(
-            id=thread_id,
-            workspace_id=UUID(workspace_id),
-            connection_id=UUID(connection_id) if connection_id else None,
-            title=title,
-            message_count=0,
-        ).returning(
-            ConversationThreadEntity.id,
-            ConversationThreadEntity.workspace_id,
-            ConversationThreadEntity.connection_id,
-            ConversationThreadEntity.title,
-            ConversationThreadEntity.message_count,
-            ConversationThreadEntity.created_at,
-            ConversationThreadEntity.updated_at,
+        statement = (
+            insert(ConversationThreadEntity)
+            .values(
+                id=thread_id,
+                workspace_id=UUID(workspace_id),
+                connection_id=UUID(connection_id) if connection_id else None,
+                title=title,
+                message_count=0,
+            )
+            .returning(
+                ConversationThreadEntity.id,
+                ConversationThreadEntity.workspace_id,
+                ConversationThreadEntity.connection_id,
+                ConversationThreadEntity.title,
+                ConversationThreadEntity.message_count,
+                ConversationThreadEntity.created_at,
+                ConversationThreadEntity.updated_at,
+            )
         )
 
         with self._gateway.get_session() as session:
@@ -928,7 +930,9 @@ class ConversationRepository:
         result = dict(row)
         result["id"] = str(result["id"])
         result["workspace_id"] = str(result["workspace_id"])
-        result["connection_id"] = str(result["connection_id"]) if result["connection_id"] else None
+        result["connection_id"] = (
+            str(result["connection_id"]) if result["connection_id"] else None
+        )
         return result
 
     def conversation_exists(self, thread_id: str) -> bool:
@@ -960,16 +964,20 @@ class ConversationRepository:
         Returns:
             dict with message id and created_at.
         """
-        message_statement = insert(ConversationMessageEntity).values(
-            thread_id=thread_id,
-            role=role,
-            content=content,
-        ).returning(
-            ConversationMessageEntity.id,
-            ConversationMessageEntity.thread_id,
-            ConversationMessageEntity.role,
-            ConversationMessageEntity.content,
-            ConversationMessageEntity.created_at,
+        message_statement = (
+            insert(ConversationMessageEntity)
+            .values(
+                thread_id=thread_id,
+                role=role,
+                content=content,
+            )
+            .returning(
+                ConversationMessageEntity.id,
+                ConversationMessageEntity.thread_id,
+                ConversationMessageEntity.role,
+                ConversationMessageEntity.content,
+                ConversationMessageEntity.created_at,
+            )
         )
 
         # Increment message_count and update updated_at on the thread
@@ -1026,21 +1034,25 @@ class ConversationRepository:
         Returns:
             dict with llm_call id and created_at.
         """
-        llm_call_statement = insert(LLMCallEntity).values(
-            message_id=message_id,
-            thread_id=thread_id,
-            llm_model=llm_model,
-            llm_provider=llm_provider,
-            llm_purpose=llm_purpose,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            cost_usd=cost_usd,
-            duration_ms=duration_ms,
-            request_metadata=request_metadata,
-        ).returning(
-            LLMCallEntity.id,
-            LLMCallEntity.created_at,
+        llm_call_statement = (
+            insert(LLMCallEntity)
+            .values(
+                message_id=message_id,
+                thread_id=thread_id,
+                llm_model=llm_model,
+                llm_provider=llm_provider,
+                llm_purpose=llm_purpose,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                cost_usd=cost_usd,
+                duration_ms=duration_ms,
+                request_metadata=request_metadata,
+            )
+            .returning(
+                LLMCallEntity.id,
+                LLMCallEntity.created_at,
+            )
         )
 
         with self._gateway.get_session() as session:
@@ -1063,14 +1075,16 @@ class ConversationRepository:
         Returns:
             list of {role, content, created_at} dicts.
         """
-        statement = select(
-            ConversationMessageEntity.id,
-            ConversationMessageEntity.role,
-            ConversationMessageEntity.content,
-            ConversationMessageEntity.created_at,
-        ).where(
-            ConversationMessageEntity.thread_id == thread_id
-        ).order_by(ConversationMessageEntity.created_at.asc())
+        statement = (
+            select(
+                ConversationMessageEntity.id,
+                ConversationMessageEntity.role,
+                ConversationMessageEntity.content,
+                ConversationMessageEntity.created_at,
+            )
+            .where(ConversationMessageEntity.thread_id == thread_id)
+            .order_by(ConversationMessageEntity.created_at.asc())
+        )
 
         with self._gateway.get_session() as session:
             rows = session.execute(statement).mappings().all()
@@ -1080,7 +1094,9 @@ class ConversationRepository:
                 "id": str(row["id"]),
                 "role": row["role"],
                 "content": row["content"],
-                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "created_at": row["created_at"].isoformat()
+                if row["created_at"]
+                else None,
             }
             for row in rows
         ]
@@ -1099,18 +1115,19 @@ class ConversationRepository:
         Returns:
             list of {id, title, message_count, connection_id, created_at, updated_at}.
         """
-        statement = select(
-            ConversationThreadEntity.id,
-            ConversationThreadEntity.connection_id,
-            ConversationThreadEntity.title,
-            ConversationThreadEntity.message_count,
-            ConversationThreadEntity.created_at,
-            ConversationThreadEntity.updated_at,
-        ).where(
-            ConversationThreadEntity.workspace_id == UUID(workspace_id)
-        ).order_by(
-            ConversationThreadEntity.updated_at.desc()
-        ).limit(limit)
+        statement = (
+            select(
+                ConversationThreadEntity.id,
+                ConversationThreadEntity.connection_id,
+                ConversationThreadEntity.title,
+                ConversationThreadEntity.message_count,
+                ConversationThreadEntity.created_at,
+                ConversationThreadEntity.updated_at,
+            )
+            .where(ConversationThreadEntity.workspace_id == UUID(workspace_id))
+            .order_by(ConversationThreadEntity.updated_at.desc())
+            .limit(limit)
+        )
 
         with self._gateway.get_session() as session:
             rows = session.execute(statement).mappings().all()
@@ -1118,11 +1135,17 @@ class ConversationRepository:
         return [
             {
                 "id": str(row["id"]),
-                "connection_id": str(row["connection_id"]) if row["connection_id"] else None,
+                "connection_id": str(row["connection_id"])
+                if row["connection_id"]
+                else None,
                 "title": row["title"],
                 "message_count": row["message_count"],
-                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                "created_at": row["created_at"].isoformat()
+                if row["created_at"]
+                else None,
+                "updated_at": row["updated_at"].isoformat()
+                if row["updated_at"]
+                else None,
             }
             for row in rows
         ]

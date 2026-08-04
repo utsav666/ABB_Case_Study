@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.utils.schema_config import SchemaConfigManager
-from app.utils.schema_summarizer import Summarizer
 
 
 def build_db_column_configuration_payload(
@@ -25,7 +24,6 @@ def build_db_column_configuration_payload(
         "table_names": table_names,
         "selected_table": selected_table_name,
         "editor_rows": editor_rows,
-        "schema_summary": Summarizer.summarize_schema(),
         "saved_configuration": SchemaConfigManager.load_column_configuration(),
     }
 

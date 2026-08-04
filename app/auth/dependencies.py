@@ -9,7 +9,6 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from jwt.exceptions import InvalidTokenError
 
-from app.auth.jwt_validator import extract_user_email_from_jwt
 from app.settings_db.repositories import SettingsUserRepository
 
 logger = logging.getLogger(__name__)
@@ -31,7 +30,10 @@ def should_verify_jwt_signature() -> bool:
         return False
 
     # Always verify in production
-    if os.getenv("NODE_ENV") == "production" or os.getenv("ENVIRONMENT") == "production":
+    if (
+        os.getenv("NODE_ENV") == "production"
+        or os.getenv("ENVIRONMENT") == "production"
+    ):
         return True
 
     # Default: verify signatures
@@ -63,7 +65,7 @@ async def get_current_user_id(request: Request) -> UUID | None:
         verify_signature = should_verify_jwt_signature()
 
         # First, try to get the full JWT payload for user info
-        from app.auth.jwt_validator import verify_and_decode_jwt, decode_jwt_unverified
+        from app.auth.jwt_validator import decode_jwt_unverified, verify_and_decode_jwt
 
         try:
             if verify_signature:
@@ -82,7 +84,14 @@ async def get_current_user_id(request: Request) -> UUID | None:
 
         # Log all JWT claims for debugging
         logger.info("JWT payload claims: %s", list(jwt_payload.keys()))
-        logger.info("JWT payload: %s", {k: v for k, v in jwt_payload.items() if k not in ['iat', 'exp', 'nbf', 'aud', 'iss', 'sub', 'jti', 'nonce']})
+        logger.info(
+            "JWT payload: %s",
+            {
+                k: v
+                for k, v in jwt_payload.items()
+                if k not in ["iat", "exp", "nbf", "aud", "iss", "sub", "jti", "nonce"]
+            },
+        )
 
         # Get all possible email fields
         upn = jwt_payload.get("upn")
@@ -94,7 +103,10 @@ async def get_current_user_id(request: Request) -> UUID | None:
         primary_email = upn or email_claim or preferred_username or unique_name
 
         if not primary_email:
-            logger.warning("No email found in JWT payload. Available claims: %s", list(jwt_payload.keys()))
+            logger.warning(
+                "No email found in JWT payload. Available claims: %s",
+                list(jwt_payload.keys()),
+            )
             return None
 
         primary_email = primary_email.lower().strip()
@@ -109,7 +121,11 @@ async def get_current_user_id(request: Request) -> UUID | None:
         # Remove duplicates and None values
         email_aliases = list(set(filter(None, email_aliases)))
 
-        logger.info("Extracted emails from JWT - primary: %s, aliases: %s", primary_email, email_aliases)
+        logger.info(
+            "Extracted emails from JWT - primary: %s, aliases: %s",
+            primary_email,
+            email_aliases,
+        )
 
         # Extract additional user info from JWT
         full_name = jwt_payload.get("name") or jwt_payload.get("given_name")
@@ -125,14 +141,21 @@ async def get_current_user_id(request: Request) -> UUID | None:
                 break
 
         if not user:
-            logger.info("User not found in database with any alias, auto-creating for email: %s", primary_email)
+            logger.info(
+                "User not found in database with any alias, auto-creating for email: %s",
+                primary_email,
+            )
             # Auto-create user from JWT claims using primary email (UPN preferred)
             user = repository.upsert_user(
                 email=primary_email,
                 full_name=full_name,
                 avatar_url=None,
             )
-            logger.info("User auto-created with id: %s for email: %s", user.get("id"), primary_email)
+            logger.info(
+                "User auto-created with id: %s for email: %s",
+                user.get("id"),
+                primary_email,
+            )
 
         if not user:
             logger.error("Failed to get or create user for email: %s", primary_email)

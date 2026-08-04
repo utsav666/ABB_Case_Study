@@ -15,7 +15,17 @@ class SchemaConfigManager:
 
     @staticmethod
     def load_raw_schema() -> dict[str, Any]:
-        """Return the unmodified schema JSON from disk."""
+        """Return the unmodified schema JSON from disk, or an empty schema.
+
+        The bundled ``sample_data/schema_preserve.json`` fixture was removed: it
+        described a movie database and was silently answering questions asked
+        against real connections. Callers here are all no-connection fallback
+        paths, so an empty schema is the correct degraded result — raising
+        FileNotFoundError turned an endpoint into an unhandled 500.
+        """
+        if not SCHEMA_FILE_PATH.exists():
+            return {"tables": {}}
+
         with SCHEMA_FILE_PATH.open("r", encoding="utf-8") as schema_file:
             return json.load(schema_file)
 

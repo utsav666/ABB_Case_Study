@@ -29,7 +29,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from app.semantic_catalog.profiling_queries import (
-    HIGH_CARDINALITY_TOP_N,
     LOW_CARDINALITY_THRESHOLD,
     classify_column_type,
     infer_granularity,

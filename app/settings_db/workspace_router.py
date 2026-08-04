@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -23,6 +23,7 @@ workspace_router = APIRouter(
 
 class CreateWorkspaceRequest(BaseModel):
     """Request body for creating a workspace."""
+
     name: str
     slug: str
 
@@ -102,8 +103,12 @@ async def create_workspace(
         owner_id=user_id,  # Will be None if user not authenticated
     )
 
-    logger.info("Workspace statement values - name: %s, slug: %s, owner_id: %s",
-                payload.name, payload.slug, user_id)
+    logger.info(
+        "Workspace statement values - name: %s, slug: %s, owner_id: %s",
+        payload.name,
+        payload.slug,
+        user_id,
+    )
     workspace_statement = workspace_statement.returning(
         WorkspaceEntity.id,
         WorkspaceEntity.name,
@@ -116,11 +121,16 @@ async def create_workspace(
             workspace_row = session.execute(workspace_statement).mappings().first()
 
             if not workspace_row:
-                raise HTTPException(status_code=500, detail="Failed to create workspace")
+                raise HTTPException(
+                    status_code=500, detail="Failed to create workspace"
+                )
 
             workspace_id = workspace_row["id"]
-            logger.info("Workspace created with id: %s, owner_id from DB: %s",
-                       workspace_id, workspace_row.get("owner_id"))
+            logger.info(
+                "Workspace created with id: %s, owner_id from DB: %s",
+                workspace_id,
+                workspace_row.get("owner_id"),
+            )
 
             # Create workspace_member entry if user is authenticated
             if user_id:
@@ -135,7 +145,9 @@ async def create_workspace(
                 session.execute(member_statement)
                 logger.info("Workspace member entry created with role ADMIN")
             else:
-                logger.warning("No user_id provided, skipping workspace_member creation")
+                logger.warning(
+                    "No user_id provided, skipping workspace_member creation"
+                )
 
             session.commit()
             logger.info("Transaction committed successfully")
@@ -149,5 +161,7 @@ async def create_workspace(
         }
     except Exception as e:
         if "unique constraint" in str(e).lower():
-            raise HTTPException(status_code=400, detail="Workspace with this slug already exists")
+            raise HTTPException(
+                status_code=400, detail="Workspace with this slug already exists"
+            )
         raise HTTPException(status_code=500, detail=str(e))

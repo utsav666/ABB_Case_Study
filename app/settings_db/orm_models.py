@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSON as PostgreSQLJSON
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -284,7 +295,9 @@ class ConversationMessageEntity(SettingsBase):
         server_default=func.uuid_generate_v4(),
     )
     thread_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), nullable=False)  # "user" or "assistant"
+    role: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )  # "user" or "assistant"
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -1,13 +1,14 @@
 """Utility for tracking LLM API call costs and usage."""
 
 import logging
-import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_openai_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+def calculate_openai_cost(
+    model: str, prompt_tokens: int, completion_tokens: int
+) -> float:
     """Calculate LLM API cost in USD.
 
     Args:
@@ -18,15 +19,22 @@ def calculate_openai_cost(model: str, prompt_tokens: int, completion_tokens: int
     Returns:
         Cost in USD
     """
-    # Pricing per 1K tokens (input/output)
+    # Pricing per 1K tokens (input/output).
+    #
+    # Order matters: the loop below does a SUBSTRING match, so more specific
+    # keys must come first. "claude-opus-4-5" would otherwise be caught by a
+    # bare "claude-opus" entry.
     pricing = {
         "gpt-4": {"prompt": 0.03, "completion": 0.06},
         "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
         "gpt-4o": {"prompt": 0.005, "completion": 0.015},
         "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
-        "claude-opus": {"prompt": 0.015, "completion": 0.075},
+        # Claude 4.6+ Opus is $5/$25 per 1M = $0.005/$0.025 per 1K.
+        # This was previously $0.015/$0.075 — 3x the real rate — which
+        # overstated every logged Opus cost.
+        "claude-opus": {"prompt": 0.005, "completion": 0.025},
         "claude-sonnet": {"prompt": 0.003, "completion": 0.015},
-        "claude-haiku": {"prompt": 0.00025, "completion": 0.00125},
+        "claude-haiku": {"prompt": 0.001, "completion": 0.005},
     }
 
     # Find matching pricing
@@ -91,7 +99,10 @@ def track_llm_call(
 
         logger.debug(
             "Tracked LLM call: purpose=%s, model=%s, tokens=%d, cost=$%.4f",
-            llm_purpose, model, total_tokens, cost_usd
+            llm_purpose,
+            model,
+            total_tokens,
+            cost_usd,
         )
     except Exception:
         logger.exception("Failed to track LLM call for purpose: %s", llm_purpose)
@@ -106,14 +117,14 @@ def extract_openai_usage(response: Any) -> dict[str, int]:
     Returns:
         Dict with prompt_tokens, completion_tokens, total_tokens
     """
-    usage = getattr(response, 'usage', None)
+    usage = getattr(response, "usage", None)
     if not usage:
         return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     return {
-        "prompt_tokens": getattr(usage, 'prompt_tokens', 0),
-        "completion_tokens": getattr(usage, 'completion_tokens', 0),
-        "total_tokens": getattr(usage, 'total_tokens', 0),
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+        "completion_tokens": getattr(usage, "completion_tokens", 0),
+        "total_tokens": getattr(usage, "total_tokens", 0),
     }
 
 
@@ -127,7 +138,7 @@ def get_model_from_response(response: Any, default: str = "gpt-4") -> str:
     Returns:
         Model name
     """
-    return getattr(response, 'model', default)
+    return getattr(response, "model", default)
 
 
 def extract_langchain_usage(response: Any) -> dict[str, int]:
@@ -144,35 +155,36 @@ def extract_langchain_usage(response: Any) -> dict[str, int]:
         Dict with prompt_tokens, completion_tokens, total_tokens
     """
     # Try LangChain-standard usage_metadata first (works for all providers)
-    usage_meta = getattr(response, 'usage_metadata', None)
+    usage_meta = getattr(response, "usage_metadata", None)
     if usage_meta and isinstance(usage_meta, dict):
-        input_tok = usage_meta.get('input_tokens', 0)
-        output_tok = usage_meta.get('output_tokens', 0)
+        input_tok = usage_meta.get("input_tokens", 0)
+        output_tok = usage_meta.get("output_tokens", 0)
         if input_tok or output_tok:
             return {
                 "prompt_tokens": input_tok,
                 "completion_tokens": output_tok,
-                "total_tokens": usage_meta.get('total_tokens', input_tok + output_tok),
+                "total_tokens": usage_meta.get("total_tokens", input_tok + output_tok),
             }
 
-    metadata = getattr(response, 'response_metadata', {})
+    metadata = getattr(response, "response_metadata", {})
 
     # OpenAI format: response_metadata.token_usage
-    usage = metadata.get('token_usage', {})
+    usage = metadata.get("token_usage", {})
     if usage:
         return {
-            "prompt_tokens": usage.get('prompt_tokens', 0),
-            "completion_tokens": usage.get('completion_tokens', 0),
-            "total_tokens": usage.get('total_tokens', 0),
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
         }
 
     # Anthropic/Claude format: response_metadata.usage
-    usage = metadata.get('usage', {})
+    usage = metadata.get("usage", {})
     if usage:
         return {
-            "prompt_tokens": usage.get('input_tokens', 0),
-            "completion_tokens": usage.get('output_tokens', 0),
-            "total_tokens": usage.get('input_tokens', 0) + usage.get('output_tokens', 0),
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("input_tokens", 0)
+            + usage.get("output_tokens", 0),
         }
 
     return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -188,5 +200,5 @@ def get_model_from_langchain_response(response: Any, default: str = "gpt-4") -> 
     Returns:
         Model name
     """
-    metadata = getattr(response, 'response_metadata', {})
-    return metadata.get('model_name', default)
+    metadata = getattr(response, "response_metadata", {})
+    return metadata.get("model_name", default)

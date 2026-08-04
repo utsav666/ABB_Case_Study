@@ -26,7 +26,7 @@ EngineFactory = Callable[[str], Engine]
 # A short connect_timeout was previously removed from the connection path
 # because it caused AWS RDS connection failures (see connection_validation.py).
 _MAX_CACHED_ENGINES = 32
-_ENGINE_CACHE: "OrderedDict[str, Engine]" = OrderedDict()
+_ENGINE_CACHE: OrderedDict[str, Engine] = OrderedDict()
 _ENGINE_CACHE_LOCK = threading.Lock()
 
 
