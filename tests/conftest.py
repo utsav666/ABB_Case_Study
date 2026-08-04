@@ -19,6 +19,7 @@ Two guards below:
 from __future__ import annotations
 
 import socket
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -159,6 +160,141 @@ def patch_executor(monkeypatch: pytest.MonkeyPatch):
         return recorder
 
     return _install
+
+
+class FakeResult:
+    """Minimal stand-in for a SQLAlchemy Result.
+
+    Supports the chains the repositories actually use:
+    ``.mappings().first()``, ``.mappings().all()``, and ``.scalar()``.
+    """
+
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        self._rows = rows or []
+
+    def mappings(self) -> FakeResult:
+        return self
+
+    def first(self) -> dict[str, Any] | None:
+        return self._rows[0] if self._rows else None
+
+    def all(self) -> list[dict[str, Any]]:
+        return list(self._rows)
+
+    def scalar(self) -> Any:
+        if not self._rows:
+            return None
+        return next(iter(self._rows[0].values()))
+
+
+class FakeSession:
+    """Records executed statements and returns queued FakeResults."""
+
+    def __init__(self, *results: list[dict[str, Any]] | None) -> None:
+        self._results = list(results)
+        self.statements: list[Any] = []
+        self.committed = False
+        self.rolled_back = False
+
+    def execute(self, statement: Any, *_args: Any, **_kwargs: Any) -> FakeResult:
+        self.statements.append(statement)
+        rows = self._results.pop(0) if self._results else None
+        return FakeResult(rows)
+
+    def commit(self) -> None:
+        self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+    def add(self, _entity: Any) -> None:
+        return None
+
+    def flush(self) -> None:
+        return None
+
+
+class FakeGateway:
+    """Settings-DB gateway whose get_session() yields a FakeSession.
+
+    The repositories take ``gateway`` as a constructor argument, so no patching
+    is needed — pass one of these in. That injection point is what makes the
+    settings-DB layer testable at all; it is worth preserving.
+    """
+
+    def __init__(self, *results: list[dict[str, Any]] | None) -> None:
+        self.session = FakeSession(*results)
+
+    @contextmanager
+    def get_session(self) -> Any:
+        yield self.session
+
+
+@pytest.fixture
+def fake_gateway():
+    """Return a factory for FakeGateway, one queued result set per execute()."""
+
+    def _build(*results: list[dict[str, Any]] | None) -> FakeGateway:
+        return FakeGateway(*results)
+
+    return _build
+
+
+class StubMessage:
+    """A LangChain AIMessage stand-in.
+
+    Carries ``usage_metadata`` in the Anthropic shape (input_tokens /
+    output_tokens) because that is the path cost tracking actually takes — the
+    OpenAI-only extractor was the bug that logged every Claude call as 0 tokens.
+    """
+
+    def __init__(
+        self, content: str, input_tokens: int = 10, output_tokens: int = 5
+    ) -> None:
+        self.content = content
+        self.usage_metadata = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+        }
+        self.response_metadata = {"model_name": "stub-model"}
+
+
+class StubLlm:
+    """Returns queued responses in order and records the prompts it received.
+
+    Capturing prompts is the point: for an LLM-backed feature, "was the model
+    given the right context?" is usually the real assertion — that the schema
+    graph was included, that conversation history was carried forward, that the
+    figures handed to a synthesis step were already computed.
+    """
+
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = list(responses)
+        self.prompts: list[str] = []
+
+    def invoke(self, messages: Any) -> StubMessage:
+        if isinstance(messages, list) and messages:
+            last = messages[-1]
+            self.prompts.append(
+                last.get("content", "") if isinstance(last, dict) else str(last)
+            )
+        response = self._responses.pop(0) if self._responses else ""
+        return StubMessage(response)
+
+    @property
+    def last_prompt(self) -> str:
+        return self.prompts[-1] if self.prompts else ""
+
+
+@pytest.fixture
+def stub_llm():
+    """Return a factory building a StubLlm from queued response strings."""
+
+    def _build(*responses: str) -> StubLlm:
+        return StubLlm(list(responses))
+
+    return _build
 
 
 @pytest.fixture
