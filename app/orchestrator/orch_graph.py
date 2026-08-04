@@ -17,6 +17,7 @@ Flow:
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, TypedDict
 
 import matplotlib
@@ -112,11 +113,37 @@ def _connection_graph(state: GraphState):
 def _load_schema_graph(connection_id: str | None):
     """Read the stored schema graph for a connection from the DB, or None."""
     if not connection_id:
+        # Loud, because everything downstream then falls back to the bundled
+        # sample schema and will describe tables the user never connected to.
+        logger.warning(
+            "SCHEMA GRAPH — no connection_id on this run; downstream nodes will "
+            "fall back to the bundled sample schema"
+        )
         return None
     try:
         from app.target_db.controllers import load_schema_graph
 
-        return load_schema_graph(connection_id)
+        graph = load_schema_graph(connection_id)
+        if not graph:
+            logger.warning(
+                "SCHEMA GRAPH — connection %s has NO stored graph; nodes will fall "
+                "back to the bundled sample schema. Has this connection been profiled?",
+                connection_id,
+            )
+            return None
+
+        tables = [n.get("qualified_name") or n.get("table") for n in graph.get("nodes", [])]
+        # Log the table names, not just a count: this is the line that makes a
+        # wrong-database answer obvious at a glance.
+        logger.info(
+            "SCHEMA GRAPH — loaded %d table(s), %d relation(s) for connection %s: %s",
+            len(tables),
+            len(graph.get("edges", [])),
+            connection_id,
+            ", ".join(str(t) for t in tables[:15]) + (" …" if len(tables) > 15 else ""),
+            extra={"table_count": len(tables), "relation_count": len(graph.get("edges", []))},
+        )
+        return graph
     except Exception:  # noqa: BLE001 - fall back to default schema on any error
         logger.exception("Failed to load schema graph for connection %s", connection_id)
         return None
@@ -325,7 +352,15 @@ def generate_sql_node(state: GraphState) -> GraphState:
         )
 
     if result["success"]:
-        logger.info("SQL generated: %s", result["sql"][:100])
+        # Log the FULL statement. Truncating at 100 chars hid the interesting
+        # part of every non-trivial query — the JOINs and the WHERE clause are
+        # exactly what you need when an answer looks wrong.
+        logger.info(
+            "SQL generated (attempt %d):\n%s",
+            state.get("retry_count", 0) + 1,
+            result["sql"],
+            extra={"sql": result["sql"]},
+        )
         return {"sql": result["sql"], "sql_error": ""}
     else:
         logger.warning("SQL generation failed: %s", result["error"])
@@ -351,18 +386,38 @@ def validate_sql_node(state: GraphState) -> GraphState:
 def execute_sql_node(state: GraphState) -> GraphState:
     """Node 5: Execute SQL on database (no LLM)."""
     sql = state.get("sql", "")
+    started = time.perf_counter()
 
     try:
         result = SqlExec().sql_executor(sql)
+        elapsed_ms = (time.perf_counter() - started) * 1000
         if isinstance(result, DataFrame):
-            logger.info("SQL executed: %d rows returned", len(result))
+            row_count = len(result)
+            # A zero-row result is the signature of a wrong filter value or an
+            # INNER JOIN that should have been LEFT — worth a WARNING, not an
+            # INFO buried among successes.
+            log = logger.warning if row_count == 0 else logger.info
+            log(
+                "SQL executed in %.0f ms — %d row(s), %d column(s)%s",
+                elapsed_ms,
+                row_count,
+                len(result.columns),
+                " — ZERO ROWS: check filter values and join types" if row_count == 0 else "",
+                extra={"row_count": row_count, "duration_ms": round(elapsed_ms, 1)},
+            )
             # ### HITL — Store as dict (records) for MemorySaver serialization
             return {"data": result.to_dict(orient="records"), "sql_error": ""}
         else:
-            logger.warning("SQL execution error: %s", result)
+            logger.warning(
+                "SQL execution error after %.0f ms: %s\nSQL was:\n%s",
+                elapsed_ms, result, sql,
+            )
             return {"data": None, "sql_error": str(result)}
     except Exception as e:
-        logger.exception("SQL execution exception")
+        logger.exception(
+            "SQL execution raised after %.0f ms. SQL was:\n%s",
+            (time.perf_counter() - started) * 1000, sql,
+        )
         return {"data": None, "sql_error": str(e)}
 
 
@@ -428,6 +483,9 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         return {}
 
     rewritten_sql = sql
+    # Resolve table schemas from settings.schema_graphs, not the legacy JSON
+    # fixture. Loaded once per run and reused for every filter below.
+    schema_graph = _connection_graph(state)
 
     for col_filter in filters:
         # Skip non-string equality/LIKE filters (numeric comparisons don't need HITL)
@@ -453,7 +511,9 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         # TEXT) and country (TEXT) are all checked identically. An exact match
         # means there is nothing to disambiguate → skip fuzzy/LLM/HITL. Only a
         # miss (typo, alias, wrong casing) falls through to resolution.
-        if value_exists_exactly(table_name, col_filter.column, user_value):
+        if value_exists_exactly(
+            table_name, col_filter.column, user_value, schema_graph=schema_graph
+        ):
             logger.info(
                 "### HITL — '%s' exact-matches '%s.%s'; no disambiguation needed",
                 user_value,
@@ -464,7 +524,7 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
 
         # No exact match → fetch distinct values to resolve against
         actual_values, cardinality = get_column_distinct_values(
-            table_name, col_filter.column
+            table_name, col_filter.column, schema_graph=schema_graph
         )
 
         if cardinality == 0 or not actual_values:
@@ -1044,11 +1104,104 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
 
 def schema_info_node(state: GraphState) -> GraphState:
-    """Node: Answer schema questions (LLM)."""
-    result = explain_schema(state["question"], context=state.get("route_reasoning", ""), provider=state.get("llm_provider"), model=state.get("llm_model"))
+    """Node: Answer schema questions (LLM).
+
+    Passes the CONNECTED database's schema graph. Without it, explain_schema
+    falls back to the bundled movie-database fixture and confidently describes
+    tables the user has never connected to.
+    """
+    result = explain_schema(
+        state["question"],
+        context=state.get("route_reasoning", ""),
+        provider=state.get("llm_provider"),
+        model=state.get("llm_model"),
+        schema_graph=_connection_graph(state),
+    )
     if result["success"]:
         return {"final_response": {"type": "text", "message": result["answer"]}}
     return {"final_response": {"type": "error", "message": result["error"]}}
+
+
+def explanation_node(state: GraphState) -> GraphState:
+    """Node: Answer "why is X high/low?" with grounded comparative analysis.
+
+    A single SELECT cannot answer a "why" question — you need the focal value,
+    a baseline of peers to judge it against, and a breakdown of what drove the
+    gap. analyze_why() runs those queries and does the arithmetic in pandas,
+    so the narrative only ever restates verified numbers.
+    """
+    logger.info("NODE explanation — entering (comparative analysis)")
+    from app.agent.analysis_agent import analyze_why
+    from app.target_db.controllers import render_graph_summary
+
+    graph = _connection_graph(state)
+    if not graph:
+        return {
+            "final_response": {
+                "type": "error",
+                "message": (
+                    "I need a connected database to analyse this. Please select a "
+                    "connection and try again."
+                ),
+            }
+        }
+
+    result = analyze_why(
+        state["question"],
+        schema_summary=render_graph_summary(graph),
+        provider=state.get("llm_provider"),
+        model=state.get("llm_model"),
+        # "Why was Nov high?" is nearly always a follow-up; without the prior
+        # turns the planner drops filters the user already established.
+        conversation_history=state.get("conversation_history", ""),
+    )
+
+    # Track both LLM calls (plan + synthesis) so cost reporting stays accurate.
+    if state.get("user_message_id"):
+        from app.settings_db.repositories import ConversationRepository
+        from app.utils.llm_tracker import (
+            extract_langchain_usage,
+            get_model_from_langchain_response,
+            track_llm_call,
+        )
+
+        for index, response in enumerate(result.get("responses") or []):
+            usage = extract_langchain_usage(response)
+            track_llm_call(
+                repo=ConversationRepository(),
+                message_id=state["user_message_id"],
+                thread_id=state.get("thread_id", ""),
+                llm_purpose="analysis-plan" if index == 0 else "analysis-synthesis",
+                model=get_model_from_langchain_response(
+                    response, default=get_llm_model("analysis")
+                ),
+                prompt_tokens=usage["prompt_tokens"],
+                completion_tokens=usage["completion_tokens"],
+                total_tokens=usage["total_tokens"],
+            )
+
+    if not result["success"]:
+        return {"final_response": {"type": "error", "message": result["error"]}}
+
+    # Return the period series as data so the UI can chart the comparison the
+    # explanation refers to — the numbers and the picture stay in sync.
+    evidence = result.get("evidence") or {}
+    return {
+        "sql": "\n\n".join(result.get("sql") or []),
+        "final_response": {
+            "type": "data",
+            "message": result["answer"],
+            "data": evidence.get("period_series") or [],
+            "sql": "\n\n".join(result.get("sql") or []),
+            # Surfaced so the UI can show which scope the analysis actually used.
+            # A follow-up that inherited "Product A" looks identical to one that
+            # silently didn't, unless we say so.
+            "analysis_scope": {
+                "metric": result.get("metric_description") or "",
+                "inherited_filters": result.get("inherited_filters") or [],
+            },
+        },
+    }
 
 
 def general_answer_node(state: GraphState) -> GraphState:
@@ -1134,6 +1287,10 @@ def route_after_router(state: GraphState) -> str:
         return "sql_path"
     elif route == "schema_info":
         return "schema_info"
+    elif route == "explanation":
+        # Previously fell through to "general" — an LLM with NO database access —
+        # so "why was Nov high?" got an answer that could not see the data.
+        return "explanation"
     else:
         return "general"
 
@@ -1193,6 +1350,7 @@ def build_graph() -> StateGraph:
         "chart_approval", chart_approval_node
     )  ### HITL (replaces chart_decision)
     graph.add_node("schema_info", schema_info_node)
+    graph.add_node("explanation", explanation_node)
     graph.add_node("general_answer", general_answer_node)
     graph.add_node("build_data_response", build_data_response_node)
     graph.add_node("increment_retry", increment_retry_node)
@@ -1207,6 +1365,7 @@ def build_graph() -> StateGraph:
         {
             "sql_path": "table_resolver",
             "schema_info": "schema_info",
+            "explanation": "explanation",
             "general": "general_answer",
         },
     )
@@ -1257,6 +1416,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("chart_approval", END)  ### HITL
     graph.add_edge("build_data_response", END)
     graph.add_edge("schema_info", END)
+    graph.add_edge("explanation", END)
     graph.add_edge("general_answer", END)
 
     return graph

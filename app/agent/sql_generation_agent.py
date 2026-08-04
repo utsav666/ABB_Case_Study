@@ -18,12 +18,23 @@ load_env()
 DEFAULT_SQL_MODEL = os.getenv("SQL_GENERATION_MODEL", "").strip().strip("'\"")
 
 # Estimated USD pricing per 1M tokens (input, output).
+# (input, output) USD per 1M tokens.
 MODEL_PRICING_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
     "gpt-4": (30.0, 60.0),
     "gpt-4o": (5.0, 15.0),
     "gpt-4.1": (10.0, 30.0),
     "gpt-4.1-mini": (0.4, 1.6),
     "gpt-4.1-nano": (0.1, 0.4),
+    # Claude. Without these, every Claude call reported
+    # pricing_available=False and a $0.00 cost.
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-opus-4-6-v1": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
 }
 
 
@@ -45,20 +56,18 @@ def _normalize_model_name(model_name: str) -> str:
 
 
 def _extract_token_usage(response: Any) -> dict[str, int]:
-    """Extract token usage fields from a LangChain AIMessage response."""
-    metadata = getattr(response, "response_metadata", {})
-    usage = metadata.get("token_usage", {})
-    if not usage:
-        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    """Extract token usage fields from a LangChain AIMessage response.
 
-    prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
-    completion_tokens = int(usage.get("completion_tokens", 0) or 0)
-    total_tokens = int(usage.get("total_tokens", 0) or 0)
-    return {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": total_tokens,
-    }
+    Delegates to the shared extractor. This used to read ONLY
+    `response_metadata["token_usage"]` — the OpenAI shape — so Anthropic
+    responses (which report via `usage_metadata` with input_tokens/
+    output_tokens) always fell through to zeros. Result: sql-generator logged
+    0 tokens and $0.00 on every Claude call while routing and chart-generator,
+    which already used the shared helper, reported correctly.
+    """
+    from app.utils.llm_tracker import extract_langchain_usage
+
+    return extract_langchain_usage(response)
 
 
 def _build_cost_summary(model_name: str, token_usage: dict[str, int]) -> dict[str, Any]:

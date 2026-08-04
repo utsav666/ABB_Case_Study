@@ -18,15 +18,22 @@ def calculate_openai_cost(model: str, prompt_tokens: int, completion_tokens: int
     Returns:
         Cost in USD
     """
-    # Pricing per 1K tokens (input/output)
+    # Pricing per 1K tokens (input/output).
+    #
+    # Order matters: the loop below does a SUBSTRING match, so more specific
+    # keys must come first. "claude-opus-4-5" would otherwise be caught by a
+    # bare "claude-opus" entry.
     pricing = {
         "gpt-4": {"prompt": 0.03, "completion": 0.06},
         "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
         "gpt-4o": {"prompt": 0.005, "completion": 0.015},
         "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
-        "claude-opus": {"prompt": 0.015, "completion": 0.075},
+        # Claude 4.6+ Opus is $5/$25 per 1M = $0.005/$0.025 per 1K.
+        # This was previously $0.015/$0.075 — 3x the real rate — which
+        # overstated every logged Opus cost.
+        "claude-opus": {"prompt": 0.005, "completion": 0.025},
         "claude-sonnet": {"prompt": 0.003, "completion": 0.015},
-        "claude-haiku": {"prompt": 0.00025, "completion": 0.00125},
+        "claude-haiku": {"prompt": 0.001, "completion": 0.005},
     }
 
     # Find matching pricing

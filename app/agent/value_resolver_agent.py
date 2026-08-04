@@ -139,23 +139,66 @@ def resolve_filter_value(
 # ─── Helper: Get column values from DB ───────────────────────────────────────
 
 
-def _qualify_table(table_name: str) -> str:
+def _lookup_schema_for_table(table_name: str, schema_graph: dict[str, Any] | None) -> str | None:
+    """Find a bare table's schema in the connection's schema graph.
+
+    The graph comes from the DB (schema_graph table) and is the source of truth.
+    Returns None when the table isn't found, so callers can decide the fallback.
+    """
+    if not schema_graph:
+        return None
+    for node in schema_graph.get("nodes", []):
+        if str(node.get("table", "")).lower() == table_name.lower():
+            return node.get("schema") or None
+    return None
+
+
+def _qualify_table(table_name: str, schema_graph: dict[str, Any] | None = None) -> str:
     """### HITL — Build a schema-qualified, quoted table name.
 
-    Accepts "schema.table" or a bare "table" (schema looked up from
-    schema_preserve.json, defaulting to public).
+    Accepts "schema.table" or a bare "table".
+
+    For a bare name the schema is resolved from the CONNECTION'S schema graph
+    (stored in the DB). The legacy ``sample_data/schema_preserve.json`` fixture
+    is only consulted when no graph is available — it describes a movie database
+    and will not contain the user's tables, so relying on it silently defaults
+    the schema to "public" and queries the wrong place.
     """
     if "." in table_name:
         table_schema, actual_table_name = table_name.split(".", 1)
-    else:
-        raw_schema = SchemaConfigManager.load_raw_schema()
-        tables = raw_schema.get("tables", {})
-        table_schema = tables.get(table_name, {}).get("schema", "public")
-        actual_table_name = table_name
-    return f'"{table_schema}"."{actual_table_name}"'
+        return f'"{table_schema}"."{actual_table_name}"'
+
+    table_schema = _lookup_schema_for_table(table_name, schema_graph)
+
+    if not table_schema:
+        # No graph, or the table isn't in it. Fall back to the legacy fixture,
+        # then to "public" — but say so, because a wrong schema here produces a
+        # confusing "relation does not exist" further down.
+        try:
+            raw_schema = SchemaConfigManager.load_raw_schema()
+            table_schema = (
+                raw_schema.get("tables", {}).get(table_name, {}).get("schema")
+            )
+        except Exception:  # noqa: BLE001 - fixture is optional
+            table_schema = None
+
+        if not table_schema:
+            table_schema = "public"
+        logger.warning(
+            "### HITL — No schema graph entry for table %r; falling back to schema %r",
+            table_name,
+            table_schema,
+        )
+
+    return f'"{table_schema}"."{table_name}"'
 
 
-def value_exists_exactly(table_name: str, column_name: str, user_value: str) -> bool:
+def value_exists_exactly(
+    table_name: str,
+    column_name: str,
+    user_value: str,
+    schema_graph: dict[str, Any] | None = None,
+) -> bool:
     """### HITL — Does the user's value already match a value in this column?
 
     This is the ONLY signal that decides whether disambiguation is worthwhile,
@@ -174,7 +217,7 @@ def value_exists_exactly(table_name: str, column_name: str, user_value: str) -> 
     if not value_str:
         return False
 
-    qualified_table = _qualify_table(table_name)
+    qualified_table = _qualify_table(table_name, schema_graph)
     # Escape single quotes to keep the literal safe.
     safe_value = value_str.replace("'", "''")
     exists_sql = (
@@ -202,7 +245,10 @@ def value_exists_exactly(table_name: str, column_name: str, user_value: str) -> 
 
 
 def get_column_distinct_values(
-    table_name: str, column_name: str, limit: int = 100
+    table_name: str,
+    column_name: str,
+    limit: int = 100,
+    schema_graph: dict[str, Any] | None = None,
 ) -> tuple[list[str], int]:
     """### HITL — Query DB for distinct values and cardinality of a column.
 
@@ -214,27 +260,14 @@ def get_column_distinct_values(
 
     executor = SqlExec()
 
-    # Get cardinality
-    # ### HITL — Resolve schema from schema_preserve.json (not hardcoded)
-    # Parse table_name which might be "schema.table" or just "table"
-    if "." in table_name:
-        parts = table_name.split(".", 1)
-        table_schema = parts[0]
-        actual_table_name = parts[1]
-    else:
-        # Look up actual schema from schema_preserve.json
-        
-        raw_schema = SchemaConfigManager.load_raw_schema()
-        tables = raw_schema.get("tables", {})
-        table_schema = tables.get(table_name, {}).get("schema", "public")
-        actual_table_name = table_name
+    # Schema comes from the connection's graph in settings.schema_graphs.
+    # This previously read sample_data/schema_preserve.json, which describes a
+    # movie database — so any table not in that fixture silently defaulted to
+    # the "public" schema and the query hit the wrong place (or nothing).
+    qualified_table = _qualify_table(table_name, schema_graph)
 
-    qualified_table = f'"{table_schema}"."{actual_table_name}"'
-
-    logger.info("### DEBUG — table_name=%s, table_schema=%s, actual_table_name=%s, qualified_table=%s",
-                table_name, table_schema, actual_table_name, qualified_table)
     count_sql = f'SELECT COUNT(DISTINCT "{column_name}") as cnt FROM {qualified_table}'
-    logger.info("### DEBUG — Generated count_sql: %s", count_sql)
+    logger.info("### HITL — cardinality query: %s", count_sql)
     count_result = executor.sql_executor(count_sql)
 
     if isinstance(count_result, str):
