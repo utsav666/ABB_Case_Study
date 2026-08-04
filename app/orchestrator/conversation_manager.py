@@ -6,8 +6,8 @@ from typing import Any
 from langchain_classic.memory import ConversationBufferMemory
 from sqlalchemy.orm import Session
 
-from app.settings_db.repositories import ConversationRepository
 from app.envsetup.env_loader import load_env
+from app.settings_db.repositories import ConversationRepository
 
 load_env()
 

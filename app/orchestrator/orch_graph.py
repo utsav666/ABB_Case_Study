@@ -23,12 +23,10 @@ from typing import Any, TypedDict
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from langgraph.graph import END, StateGraph
-from pandas import DataFrame
-
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
+from pandas import DataFrame
 
 from app.agent.chart_gen_agent import decide_chart
 from app.agent.fall_back import general_answer
@@ -148,7 +146,7 @@ def _load_schema_graph(connection_id: str | None):
             },
         )
         return graph
-    except Exception:  # noqa: BLE001 - fall back to default schema on any error
+    except Exception:
         logger.exception("Failed to load schema graph for connection %s", connection_id)
         return None
 
@@ -175,12 +173,12 @@ def router_node(state: GraphState) -> GraphState:
 
     # Track LLM call for routing
     if state.get("user_message_id"):
+        from app.settings_db.repositories import ConversationRepository
         from app.utils.llm_tracker import (
-            track_llm_call,
             extract_langchain_usage,
             get_model_from_langchain_response,
+            track_llm_call,
         )
-        from app.settings_db.repositories import ConversationRepository
 
         usage = extract_langchain_usage(response)
         model = get_model_from_langchain_response(
@@ -236,12 +234,12 @@ def table_resolver_node(state: GraphState) -> GraphState:
             and result.get("response")
             and state.get("user_message_id")
         ):
+            from app.settings_db.repositories import ConversationRepository
             from app.utils.llm_tracker import (
-                track_llm_call,
                 extract_langchain_usage,
                 get_model_from_langchain_response,
+                track_llm_call,
             )
-            from app.settings_db.repositories import ConversationRepository
 
             response = result["response"]
             usage = extract_langchain_usage(response)
@@ -317,8 +315,8 @@ def generate_sql_node(state: GraphState) -> GraphState:
 
     # Track LLM call for SQL generation
     if result.get("success") and state.get("user_message_id"):
-        from app.utils.llm_tracker import track_llm_call
         from app.settings_db.repositories import ConversationRepository
+        from app.utils.llm_tracker import track_llm_call
 
         usage = result.get("usage", {})
         cost_info = result.get("cost", {})
@@ -655,8 +653,8 @@ def chart_approval_node(state: GraphState) -> GraphState:
     # Detect and pivot year-over-year comparison data
     def detect_and_pivot_yoy_comparison(df, question_text):
         """Detect YoY comparison and pivot data for multi-series chart."""
+
         import pandas as pd
-        import re
 
         # Check if question indicates comparison
         comparison_keywords = [
@@ -826,12 +824,12 @@ def chart_approval_node(state: GraphState) -> GraphState:
         and result.get("response")
         and state.get("user_message_id")
     ):
+        from app.settings_db.repositories import ConversationRepository
         from app.utils.llm_tracker import (
-            track_llm_call,
             extract_langchain_usage,
             get_model_from_langchain_response,
+            track_llm_call,
         )
-        from app.settings_db.repositories import ConversationRepository
 
         response = result["response"]
         usage = extract_langchain_usage(response)
@@ -1281,12 +1279,12 @@ def general_answer_node(state: GraphState) -> GraphState:
         and result.get("response")
         and state.get("user_message_id")
     ):
+        from app.settings_db.repositories import ConversationRepository
         from app.utils.llm_tracker import (
-            track_llm_call,
             extract_langchain_usage,
             get_model_from_langchain_response,
+            track_llm_call,
         )
-        from app.settings_db.repositories import ConversationRepository
 
         response = result["response"]
         usage = extract_langchain_usage(response)

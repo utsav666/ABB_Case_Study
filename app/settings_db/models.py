@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -33,7 +32,7 @@ class DBConnectionInput(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_fields(self) -> "DBConnectionInput":
+    def normalize_fields(self) -> DBConnectionInput:
         """Normalize and validate required fields."""
         if not self.engine:
             raise ValueError("Database engine is required.")

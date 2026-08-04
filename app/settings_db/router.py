@@ -3,19 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from pydantic import BaseModel
 
 from app.settings_db.controllers import (
     create_db_connection,
     get_supported_connection_engines,
     list_all_db_connections,
     validate_db_connection,
-)
-from app.target_db.controllers import (
-    build_and_store_schema_graph,
-    generate_sql_from_graph,
-    get_tables_for_connection,
-    sync_column_definitions_for_connection,
-    validate_sql_for_connection,
 )
 from app.settings_db.models import DBConnectionCreate, DBConnectionValidationRequest
 from app.settings_db.repositories import (
@@ -25,7 +19,13 @@ from app.settings_db.repositories import (
     SchemaGraphRepository,
     SelectedTableRepository,
 )
-from pydantic import BaseModel
+from app.target_db.controllers import (
+    build_and_store_schema_graph,
+    generate_sql_from_graph,
+    get_tables_for_connection,
+    sync_column_definitions_for_connection,
+    validate_sql_for_connection,
+)
 
 settings_db_router = APIRouter(
     prefix="/settings/db-connections",

@@ -1,0 +1,111 @@
+name: Quality
+
+# Merged from the former ruff-format.yml and coverage.yml. Both installed the
+# same dependency set, so running them as one job removes a duplicated
+# `pip install -r requirements.txt` (the slowest step in either).
+#
+# Steps are ordered cheapest-first — formatting fails in seconds, so a badly
+# formatted PR does not wait for the whole test suite before reporting.
+#
+# `if: always()` on the later steps means one push reports EVERY problem rather
+# than only the first: fixing lint then discovering a coverage failure is two
+# round-trips for no reason.
+
+on:
+  pull_request:
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - '.coveragerc'
+      - '.github/workflows/quality.yml'
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Match the runtime in the Dockerfile (public.ecr.aws/lambda/python:3.12)
+      # so lint and coverage reflect the version that actually ships.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ruff is pinned in requirements.txt so CI and developers format
+      # identically; an unpinned version can fail an otherwise clean branch.
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Lint
+        if: always()
+        run: ruff check . --output-format=json > ruff_output.json || true
+
+      # File-level pass rate: a file counts as failing if it has ANY issue.
+      # Excludes .venv and __pycache__ — `find .` alone walks a local virtualenv
+      # and inflates the denominator to five figures, making the gate meaningless.
+      - name: Enforce code quality threshold
+        if: always()
+        run: |
+          total_files=$(find . -name "*.py" \
+            -not -path "./.venv/*" \
+            -not -path "*/__pycache__/*" \
+            -not -path "./build/*" | wc -l)
+          if [ "$total_files" -eq 0 ]; then
+            echo "No Python files found."
+            exit 1
+          fi
+          # Parsed with python rather than jq: python is guaranteed present (we
+          # just set it up), whereas jq was only available because the old
+          # workflow pip-installed it.
+          files_with_issues=$(python -c "
+          import json
+          with open('ruff_output.json') as handle:
+              issues = json.load(handle)
+          print(len({issue['filename'] for issue in issues}))")
+          percent_passed=$((100 - (files_with_issues * 100 / total_files)))
+          echo "Files: $total_files | with issues: $files_with_issues"
+          echo "Code quality pass percentage: $percent_passed%"
+          if [ "$percent_passed" -lt 70 ]; then
+            echo "::error::Code quality ${percent_passed}% is below the 70% threshold."
+            python -c "
+          import collections, json
+          with open('ruff_output.json') as handle:
+              issues = json.load(handle)
+          worst = collections.Counter(i['filename'] for i in issues)
+          for name, count in worst.most_common(15):
+              print(f'{count:4} issue(s)  {name}')"
+            exit 1
+          fi
+
+      # The threshold lives in .coveragerc (fail_under), so `coverage report`
+      # exits non-zero on its own. Keep the number in ONE place.
+      - name: Run tests with coverage
+        if: always()
+        run: coverage run -m pytest
+
+      - name: Enforce coverage threshold
+        if: always()
+        run: coverage report
+
+      # Generated and uploaded even when the threshold check fails — that is
+      # exactly when you need to see which lines are uncovered.
+      - name: Generate HTML coverage report
+        if: always()
+        run: coverage html
+
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          retention-days: 14

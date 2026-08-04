@@ -9,7 +9,6 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from jwt.exceptions import InvalidTokenError
 
-from app.auth.jwt_validator import extract_user_email_from_jwt
 from app.settings_db.repositories import SettingsUserRepository
 
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ async def get_current_user_id(request: Request) -> UUID | None:
         verify_signature = should_verify_jwt_signature()
 
         # First, try to get the full JWT payload for user info
-        from app.auth.jwt_validator import verify_and_decode_jwt, decode_jwt_unverified
+        from app.auth.jwt_validator import decode_jwt_unverified, verify_and_decode_jwt
 
         try:
             if verify_signature:

@@ -111,7 +111,7 @@ def compute_baseline_stats(
         "focal_period": str(focal_row[label_column]),
         "focal_value": focal_value,
         "metric_name": metric_column,
-        "period_count": int(len(frame)),
+        "period_count": len(frame),
     }
 
     if not others.empty:
@@ -344,6 +344,6 @@ def analyze_why(
             "responses": responses,
         }
 
-    except Exception as error:  # noqa: BLE001 - surface a message, never a 500
+    except Exception as error:
         logger.exception("ANALYSIS failed")
         return {"success": False, "error": str(error), "responses": responses}

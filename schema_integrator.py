@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from typing import Any, Dict, List
+from typing import Any
 
 
 class SQLiteSchemaIngestor:
@@ -9,7 +9,7 @@ class SQLiteSchemaIngestor:
         self.conn.row_factory = sqlite3.Row
         self.sample_rows = sample_rows
 
-    def get_tables_and_views(self) -> List[Dict[str, str]]:
+    def get_tables_and_views(self) -> list[dict[str, str]]:
         cursor = self.conn.execute(
             "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%';"
         )
@@ -67,7 +67,7 @@ class SQLiteSchemaIngestor:
         except sqlite3.DatabaseError:
             return []  # views without data, etc.
 
-    def extract(self) -> Dict[str, Any]:
+    def extract(self) -> dict[str, Any]:
         schema = {"tables": {}}
         for entry in self.get_tables_and_views():
             table = entry["name"]

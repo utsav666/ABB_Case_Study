@@ -331,9 +331,7 @@ def fetch_oauth_user_details(access_token: str) -> dict[str, Any]:
                 photo_metadata = photo_response.json()
                 # Microsoft Graph photo metadata includes @odata.mediaContentType
                 # The actual photo URL would be /me/photo/$value but we'll store the endpoint
-                avatar_url = (
-                    f"https://graph.microsoft.com/v1.0/me/photos/240x240/$value"
-                )
+                avatar_url = "https://graph.microsoft.com/v1.0/me/photos/240x240/$value"
                 logger.info("User has profile photo available")
             else:
                 logger.debug("No profile photo available for user")

@@ -123,12 +123,12 @@ class SettingsDatabaseGateway:
             print("=" * 80)
             print("SETTINGS DB ERROR:")
             print(f"Error type: {type(error).__name__}")
-            print(f"Error message: {str(error)}")
+            print(f"Error message: {error!s}")
             print("Traceback:")
             traceback.print_exc()
             print("=" * 80)
             raise SettingsDatabaseQueryError(
-                f"Settings database query failed: {type(error).__name__}: {str(error)}"
+                f"Settings database query failed: {type(error).__name__}: {error!s}"
             ) from error
         finally:
             session.close()

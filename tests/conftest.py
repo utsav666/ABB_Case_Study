@@ -98,6 +98,69 @@ def _reset_log_context() -> None:
         var.set("")
 
 
+class RecordingExecutor:
+    """Stands in for SqlExec, capturing SQL and returning canned results.
+
+    Lives here rather than in one test module so any test needing a mocked target
+    DB reuses one implementation. ``results`` is consumed in order, so code that
+    issues several queries (e.g. count-then-fetch) can be given a distinct result
+    for each; once exhausted it yields an empty DataFrame.
+
+    Capturing the SQL matters as much as the return value: code that produces the
+    right answer from a query against the wrong schema is still broken, and that
+    is precisely the class of bug this seam exposes.
+    """
+
+    def __init__(self, *results: Any) -> None:
+        self._results = list(results)
+        self.queries: list[str] = []
+
+    def sql_executor(self, sql: str) -> Any:
+        self.queries.append(sql)
+        if not self._results:
+            import pandas as pd
+
+            return pd.DataFrame()
+        return self._results.pop(0)
+
+    @property
+    def last_query(self) -> str:
+        """The most recent SQL, for single-query assertions."""
+        return self.queries[-1] if self.queries else ""
+
+
+@pytest.fixture
+def patch_executor(monkeypatch: pytest.MonkeyPatch):
+    """Return a factory that installs a RecordingExecutor for SqlExec.
+
+    Usage::
+
+        recorder = patch_executor(pd.DataFrame({"1": [1]}))
+        ...
+        assert '"production"."workorder"' in recorder.last_query
+    """
+
+    def _install(*results: Any) -> RecordingExecutor:
+        recorder = RecordingExecutor(*results)
+
+        def factory() -> RecordingExecutor:
+            return recorder
+
+        # Patch the source module AND every module that did
+        # `from app.utils.sql_executor import SqlExec` at import time: that binds
+        # its own name, so patching only the source leaves the real class in
+        # place and the test silently hits a real database.
+        monkeypatch.setattr("app.utils.sql_executor.SqlExec", factory, raising=True)
+        for module_path in (
+            "app.orchestrator.orch_graph.SqlExec",
+            "app.agent.analysis_agent.SqlExec",
+        ):
+            monkeypatch.setattr(module_path, factory, raising=False)
+        return recorder
+
+    return _install
+
+
 @pytest.fixture
 def allow_network(monkeypatch: pytest.MonkeyPatch) -> None:
     """Opt back into real sockets for a test that genuinely needs them.

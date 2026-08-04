@@ -6,7 +6,7 @@ configuration in app.envsetup.env_loader.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from typing import Any
 
 from app.envsetup.env_loader import (
@@ -63,7 +63,7 @@ def create_chat_llm(
     return _build_chat_llm(provider, selected_model, temperature, **kwargs)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _get_cached_chat_llm(provider: str, selected_model: str, temperature: float):
     """Memoized client builder for the no-extra-kwargs path."""
     return _build_chat_llm(provider, selected_model, temperature)

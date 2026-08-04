@@ -19,7 +19,7 @@ class SettingsDatabaseConfig:
     password: str
 
     @classmethod
-    def from_environment(cls) -> "SettingsDatabaseConfig":
+    def from_environment(cls) -> SettingsDatabaseConfig:
         """Build a config object from environment variables.
 
         Returns:

@@ -176,7 +176,7 @@ class ChatRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_question(self) -> "ChatRequest":
+    def normalize_question(self) -> ChatRequest:
         """Accept either `question` or `message` from the client."""
         normalized_question = (self.question or self.message).strip()
         if not normalized_question:
@@ -230,7 +230,7 @@ class TableSelection(BaseModel):
     )
 
     @model_validator(mode="after")
-    def normalize_empty_columns(self) -> "TableSelection":
+    def normalize_empty_columns(self) -> TableSelection:
         """Treat an empty column list the same as None (all columns)."""
         if self.column_names is not None and len(self.column_names) == 0:
             self.column_names = None

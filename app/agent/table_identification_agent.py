@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -20,7 +20,7 @@ load_env()
 
 class TableIdentification(BaseModel):
     user_question: str = Field(..., description="question asked by the user")
-    relevant_tables: List[str] = Field(
+    relevant_tables: list[str] = Field(
         ..., description="Identify the tables absolutely relevant to the user question"
     )
 

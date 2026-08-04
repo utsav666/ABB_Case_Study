@@ -163,7 +163,7 @@ def sync_column_definitions_for_connection(
     # Resolve the target URL once and reuse for all tables.
     try:
         target_url = controller.get_target_db_url(connection_id)
-    except Exception as error:  # noqa: BLE001 - background task must not crash
+    except Exception as error:
         logger.exception(
             "Column sync aborted: could not resolve target URL for %s: %s",
             connection_id,
@@ -222,7 +222,7 @@ def sync_column_definitions_for_connection(
                 table_name,
                 table_id,
             )
-        except Exception as error:  # noqa: BLE001 - skip and continue
+        except Exception as error:
             logger.exception(
                 "Failed to sync columns for table %s.%s: %s",
                 table_schema,
@@ -238,7 +238,7 @@ def sync_column_definitions_for_connection(
             column_repository,
             inserted_by_table_key,
         )
-    except Exception as error:  # noqa: BLE001 - semantics are best-effort
+    except Exception as error:
         logger.exception(
             "DB-level annotation failed for connection_id=%s: %s",
             connection_id,
@@ -256,7 +256,7 @@ def sync_column_definitions_for_connection(
             schema_name,
             table_id_by_name,
         )
-    except Exception as error:  # noqa: BLE001 - relations are best-effort
+    except Exception as error:
         logger.exception(
             "Relation sync failed for connection_id=%s: %s", connection_id, error
         )
@@ -264,7 +264,7 @@ def sync_column_definitions_for_connection(
     # 4. Assemble and persist the schema graph (nodes + edges) for the LLM.
     try:
         build_and_store_schema_graph(connection_id)
-    except Exception as error:  # noqa: BLE001 - graph build is best-effort
+    except Exception as error:
         logger.exception(
             "Schema graph build failed for connection_id=%s: %s",
             connection_id,
@@ -318,7 +318,7 @@ def validate_sql_for_connection(
     controller = TargetMetadataController()
     try:
         target_url = controller.get_target_db_url(connection_id)
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         logger.exception("Could not resolve target URL for validation")
         return {"valid": False, "error": f"Could not resolve connection: {error}"}
 
@@ -333,7 +333,7 @@ def validate_sql_for_connection(
         message = str(error)
         # Unwrap the most useful part of SQLAlchemy/psycopg2 errors.
         if hasattr(error, "orig"):
-            message = str(getattr(error, "orig"))
+            message = str(error.orig)
         logger.info("SQL validation failed: %s", message)
         return {"valid": False, "error": message}
 

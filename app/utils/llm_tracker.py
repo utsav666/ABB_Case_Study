@@ -1,7 +1,6 @@
 """Utility for tracking LLM API call costs and usage."""
 
 import logging
-import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
