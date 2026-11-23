@@ -32,6 +32,11 @@ Guidelines:
 7. If a table has "schema" and "qualified_name" fields, use the qualified_name (schema.table) in the FROM/JOIN clauses. Do NOT wrap the qualified name in double quotes as a single identifier.
 8. When the user asks for data relative to a time period (e.g. "last 3 years"), do NOT use CURRENT_DATE. Instead, use a subquery to find the MAX date from the table and calculate the range relative to that. For example: WHERE date >= ((SELECT MAX(date) FROM schema.table) - INTERVAL '3 years').
 
+9. Some tables store many metrics as rows (for example a "type" column and a "field_name" column). For these, NEVER put a metric name into the filter by inventing a value like 'rsu_units_granted'. Instead, filter the category column and the field_name column separately, using values that appear in the table structure (for example: WHERE "type" = 'rsu' AND field_name = 'Granted').
+10. Copy filter values exactly as they appear in the table structure (case and spelling). Do not invent, snake_case or combine values.
+11. When a question asks for a time trend comparing categories stored in rows (for example, RSU versus Stock Options), include every requested category. Filter the shared measure (for example, field_name = 'Granted'), then pivot categories into separate numeric output columns with conditional aggregation. Group by the date and other requested dimensions, order by date ascending, and do not limit the result. This wide result lets the chart draw one line per category.
+12. Columns may include an "observed_values" list fetched from the connected database. Use those exact cell values when filtering categorical columns. Never use LIKE or ILIKE in the final SQL. Use equality predicates (column = 'actual value') without LOWER or guessed values. For multiple requested values in one column, combine equality predicates with OR.
+
 ------------------    
 Table Structure (JSON):
 {table_structure}
@@ -255,6 +260,7 @@ Your task: analyze the user’s question and dataset, then select the most appro
   - stacked_column: cumulative stacking
 
 - **Multiple series** → grouped_column or line (if time-based)
+- **Category comparison over time** (for example, RSU vs Stock Options granted): this rule takes priority over the scale guidance above. Use a **line** chart and set `y_axis` to every numeric category-specific column in the dataset. Do not select only one category series.
 
 ---
 
@@ -300,7 +306,7 @@ Your task: analyze the user’s question and dataset, then select the most appro
 
 ### For multi-series charts:
 {{
-  "chart_type": "grouped_column | stacked_column",
+  "chart_type": "grouped_column | stacked_column | line",
   "x_axis": "column_name",
   "y_axis": ["metric1", "metric2"],
   "reasoning": "brief explanation"
@@ -314,7 +320,7 @@ Your task: analyze the user’s question and dataset, then select the most appro
 ## 📊 Dataset Summary:
 {context}
 
-**Remember:** If 2+ numeric columns exist, analyze their scales FIRST. If they differ by >10x, you MUST use dual_axis_column or column_line.
+**Remember:** If 2+ numeric columns exist, analyze their scales FIRST, except for a requested category comparison over time, which must use a multi-series line chart.
 """
 
 

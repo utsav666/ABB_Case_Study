@@ -348,30 +348,41 @@ def load_schema_graph(connection_id: str) -> dict[str, Any] | None:
     return record["graph"]
 
 
-def render_graph_table_structure(graph: dict[str, Any]) -> tuple[str, list[str]]:
+def render_graph_table_structure(
+    graph: dict[str, Any],
+    observed_values: dict[str, dict[str, list[str]]] | None = None,
+) -> tuple[str, list[str]]:
     """Render a schema graph into a (table_structure_json, table_list) pair.
 
     The JSON matches the structure the SQL agent's prompt expects, including a
-    __relationships__ block describing valid joins.
+    __relationships__ block describing valid joins. Actual distinct values can
+    be supplied for categorical columns to help the SQL agent use exact filters.
     """
     import json
 
+    observed_values = observed_values or {}
     table_structure_payload: dict[str, Any] = {}
     table_list: list[str] = []
     for node in graph.get("nodes", []):
         qualified = node["qualified_name"]
         table_list.append(qualified)
+        column_payload: dict[str, Any] = {}
+        for column in node.get("columns", []):
+            column_name = column["raw_name"]
+            column_details: dict[str, Any] = {
+                "type": column.get("data_type"),
+                "logical_name": column.get("logical_name"),
+            }
+            values = observed_values.get(qualified, {}).get(column_name)
+            if values is not None:
+                column_details["observed_values"] = values
+            column_payload[column_name] = column_details
+
         table_structure_payload[node["table"]] = {
             "schema": node.get("schema"),
             "qualified_name": qualified,
             "description": node.get("description"),
-            "columns": {
-                col["raw_name"]: {
-                    "type": col.get("data_type"),
-                    "logical_name": col.get("logical_name"),
-                }
-                for col in node.get("columns", [])
-            },
+            "columns": column_payload,
         }
 
     table_structure_payload["__relationships__"] = [

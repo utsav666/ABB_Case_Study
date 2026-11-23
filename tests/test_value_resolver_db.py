@@ -18,6 +18,7 @@ import pytest
 from app.agent.value_resolver_agent import (
     _lookup_schema_for_table,
     _qualify_table,
+    discover_column_values,
     get_column_distinct_values,
     get_fuzzy_matches,
     value_exists_exactly,
@@ -177,6 +178,62 @@ class TestGetColumnDistinctValues:
         get_column_distinct_values("sample", "c", limit=25, schema_graph=SCHEMA_GRAPH)
 
         assert "LIMIT 25" in recorder.queries[1]
+
+
+class TestDiscoverColumnValues:
+    def test_fetches_live_values_for_categorical_columns_in_selected_tables(
+        self, monkeypatch
+    ) -> None:
+        schema_graph = {
+            "nodes": [
+                {
+                    "table": "app_sec_data",
+                    "qualified_name": "public.app_sec_data",
+                    "columns": [
+                        {"raw_name": "type", "data_type": "varchar"},
+                        {"raw_name": "field_name", "data_type": "varchar"},
+                        {"raw_name": "period_date", "data_type": "date"},
+                    ],
+                },
+                {
+                    "table": "companies",
+                    "qualified_name": "public.companies",
+                    "columns": [{"raw_name": "ticker", "data_type": "varchar"}],
+                },
+            ],
+            "edges": [],
+        }
+        requested_columns: list[str] = []
+
+        def fetch_values(
+            table_name: str,
+            column_name: str,
+            limit: int = 100,
+            schema_graph: dict | None = None,
+        ) -> tuple[list[str], int]:
+            requested_columns.append(column_name)
+            actual_values = {
+                "type": ["RSU", "Stock Options"],
+                "field_name": ["Granted", "Vested"],
+            }
+            return actual_values[column_name], len(actual_values[column_name])
+
+        monkeypatch.setattr(
+            "app.agent.value_resolver_agent.get_column_distinct_values",
+            fetch_values,
+        )
+
+        discovered_values = discover_column_values(
+            ["public.app_sec_data"], schema_graph
+        )
+
+        assert discovered_values == {
+            "public.app_sec_data": {
+                "type": ["RSU", "Stock Options"],
+                "field_name": ["Granted", "Vested"],
+            }
+        }
+        assert requested_columns == ["type", "field_name"]
 
     def test_excludes_nulls_from_the_value_list(self, patch_executor) -> None:
         """A NULL is not a value a user can be asked to pick."""

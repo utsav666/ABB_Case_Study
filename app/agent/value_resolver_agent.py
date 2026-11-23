@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 
 load_env()
 
+CATEGORICAL_COLUMN_NAME_PARTS = (
+    "category",
+    "field_name",
+    "fieldname",
+    "kind",
+    "metric",
+    "status",
+    "type",
+)
+DISCOVERED_VALUE_LIMIT = 100
+
 
 # ─── Structured Output ────────────────────────────────────────────────────────
 
@@ -306,6 +317,47 @@ def get_column_distinct_values(
     )
 
     return values, cardinality
+
+
+def discover_column_values(
+    table_names: list[str],
+    schema_graph: dict[str, Any] | None,
+) -> dict[str, dict[str, list[str]]]:
+    """Fetch actual values for categorical columns before SQL generation."""
+    if not schema_graph:
+        return {}
+
+    discovered_values: dict[str, dict[str, list[str]]] = {}
+    selected_table_names = {table_name.lower() for table_name in table_names}
+
+    for table_node in schema_graph.get("nodes", []):
+        qualified_table_name = str(table_node.get("qualified_name", ""))
+        table_name = str(table_node.get("table", ""))
+        if (
+            qualified_table_name.lower() not in selected_table_names
+            and table_name.lower() not in selected_table_names
+        ):
+            continue
+
+        for column in table_node.get("columns", []):
+            column_name = str(column.get("raw_name", ""))
+            logical_name = str(column.get("logical_name") or "")
+            searchable_name = f"{column_name} {logical_name}".lower()
+            if not any(part in searchable_name for part in CATEGORICAL_COLUMN_NAME_PARTS):
+                continue
+
+            actual_values, _ = get_column_distinct_values(
+                qualified_table_name,
+                column_name,
+                limit=DISCOVERED_VALUE_LIMIT,
+                schema_graph=schema_graph,
+            )
+            if actual_values:
+                discovered_values.setdefault(qualified_table_name, {})[
+                    column_name
+                ] = actual_values
+
+    return discovered_values
 
 
 def get_fuzzy_matches(

@@ -1,12 +1,16 @@
 import logging
+import os
 from threading import Lock
 
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.sampledata.data_loader import DBLoader
+from app.settings_db.controllers import get_settings_connection_credentials
+from app.target_db.views import build_target_db_url
+from app.utils.logging_context import get_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,56 @@ logger = logging.getLogger(__name__)
 # more than one target database is in play — each gets its own pool.
 _ENGINE_CACHE: dict[str, Engine] = {}
 _ENGINE_CACHE_LOCK = Lock()
+
+
+def _get_backend_database_name() -> str:
+    """Return the configured backend database name."""
+    return (os.getenv("DB_NAME") or "").strip() or (
+        os.getenv("SETTINGS_DB_NAME") or ""
+    ).strip()
+
+
+def _get_backend_database_url() -> str:
+    """Build the legacy database URL when no target connection is selected."""
+    database_details = DBLoader.db_loader()["data_base_detail"]
+    return (
+        f"postgresql://{database_details['user']}:{database_details['password']}"
+        f"@{database_details['host']}:{database_details['port']}"
+        f"/{database_details['database']}"
+    )
+
+
+def resolve_sql_database_url() -> str:
+    """Resolve the SQL URL from the active saved connection or backend defaults.
+
+    Returns:
+        str: SQLAlchemy URL for the active database.
+    """
+    connection_id = get_log_context()["connection_id"]
+    if not connection_id or connection_id == "none":
+        return _get_backend_database_url()
+
+    connection_credentials = dict(
+        get_settings_connection_credentials(connection_id)
+    )
+    saved_database_name = str(connection_credentials.get("db_name") or "").strip()
+    if saved_database_name:
+        connection_credentials["db_name"] = saved_database_name
+        return build_target_db_url(connection_credentials)
+
+    fallback_database_name = _get_backend_database_name()
+    if not fallback_database_name:
+        raise ValueError(
+            f"Connection '{connection_id}' has no database name, and "
+            "DB_NAME/SETTINGS_DB_NAME is not configured."
+        )
+
+    logger.warning(
+        "Connection %s has no database name; using backend database fallback.",
+        connection_id,
+    )
+    connection_credentials["db_name"] = fallback_database_name
+    return build_target_db_url(connection_credentials)
 
 
 def _get_engine(url: str) -> Engine:
@@ -43,21 +97,15 @@ def _get_engine(url: str) -> Engine:
 
 
 class SqlExec:
-    def __init__(self):
-        # self.data_path = 'SQL-Agent/sample_data/database_cred.json'
-        self.data_path = DBLoader.db_loader()
-        # self.connection = sqlite3.connect(self.data_path)
-        # self.sql_query = sql_query
+    def __init__(self) -> None:
+        self.database_url = resolve_sql_database_url()
 
     def sql_executor(self, sql_query: str) -> pd.DataFrame | str:
         try:
-            db_details = self.data_path["data_base_detail"]
-            # Build connection URL with search_path to include both public and other schemas
-            url = f"postgresql://{db_details['user']}:{db_details['password']}@{db_details['host']}:{db_details['port']}/{db_details['database']}"
-            engine = _get_engine(url)
+            engine = _get_engine(self.database_url)
             # Reuse a pooled connection; do NOT dispose the engine here — that
             # would tear down the pool and defeat the caching.
-            df = pd.read_sql_query(sql_query, engine)
+            df = pd.read_sql_query(text(sql_query), engine)
             return df
         except (KeyError, SQLAlchemyError, ValueError) as error:
             logger.exception("SQL execution failed")

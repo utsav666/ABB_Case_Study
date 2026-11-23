@@ -34,6 +34,7 @@ from app.agent.schema_info_agent import explain_schema
 from app.agent.sql_generation_agent import generate_sql
 from app.agent.table_identification_agent import identify_tables
 from app.agent.value_resolver_agent import (  ### HITL
+    discover_column_values,
     get_column_distinct_values,
     get_fuzzy_matches,
     resolve_filter_value,
@@ -298,10 +299,15 @@ def generate_sql_node(state: GraphState) -> GraphState:
     if graph is not None:
         from app.target_db.controllers import render_graph_table_structure
 
-        table_structure, all_tables = render_graph_table_structure(graph)
+        all_tables = [node["qualified_name"] for node in graph.get("nodes", [])]
+        selected_tables = tables or all_tables
+        observed_values = discover_column_values(selected_tables, graph)
+        table_structure, _ = render_graph_table_structure(
+            graph, observed_values=observed_values
+        )
         result = generate_sql(
             question,
-            tables or all_tables,
+            selected_tables,
             error_context=error_context,
             table_structure=table_structure,
             conversation_history=conversation_history,

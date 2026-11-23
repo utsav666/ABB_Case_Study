@@ -158,6 +158,18 @@ class TestRenderGraphTableStructure:
 
         assert columns["id"] == {"type": "integer", "logical_name": "Order ID"}
 
+    def test_observed_values_are_attached_to_the_matching_column(self) -> None:
+        structure, _ = render_graph_table_structure(
+            SMALL_GRAPH,
+            observed_values={
+                "sales.orders": {"customer_id": ["1", "2"]},
+            },
+        )
+
+        assert json.loads(structure)["orders"]["columns"]["customer_id"][
+            "observed_values"
+        ] == ["1", "2"]
+
     def test_relationships_block_lists_every_join(self) -> None:
         """The prompt relies on __relationships__ to know valid joins."""
         structure, _ = render_graph_table_structure(SMALL_GRAPH)
