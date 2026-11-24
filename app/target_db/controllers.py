@@ -261,9 +261,10 @@ def sync_column_definitions_for_connection(
             "Relation sync failed for connection_id=%s: %s", connection_id, error
         )
 
-    # 4. Assemble and persist the schema graph (nodes + edges) for the LLM.
+    # 4. Assemble and persist the schema graph (nodes + edges + semantic
+    #    profile) for the LLM. The data may have changed, so re-profile it.
     try:
-        build_and_store_schema_graph(connection_id)
+        build_and_store_schema_graph(connection_id, refresh_profile=True)
     except Exception as error:
         logger.exception(
             "Schema graph build failed for connection_id=%s: %s",
@@ -348,24 +349,64 @@ def load_schema_graph(connection_id: str) -> dict[str, Any] | None:
     return record["graph"]
 
 
+MAX_FULL_SCHEMA_TABLES = 15
+
+
+def _tables_with_join_neighbours(
+    graph: dict[str, Any], selected: list[str] | None
+) -> set[str] | None:
+    """Selected tables plus every table one join away, or None for all tables.
+
+    Small schemas are always sent whole: the table picker can miss a table, and
+    an omitted table cannot be recovered by the SQL generator. Only large
+    schemas are narrowed, where sending everything would drown the prompt.
+    """
+    nodes = graph.get("nodes", [])
+    if not selected or len(nodes) <= MAX_FULL_SCHEMA_TABLES:
+        return None
+    wanted = {name.lower() for name in selected}
+    keep = {
+        node["qualified_name"]
+        for node in nodes
+        if node["qualified_name"].lower() in wanted or node["table"].lower() in wanted
+    }
+    for edge in graph.get("edges", []):
+        if edge["from_table"] in keep:
+            keep.add(edge["to_table"])
+        if edge["to_table"] in keep:
+            keep.add(edge["from_table"])
+    return keep or None
+
+
 def render_graph_table_structure(
     graph: dict[str, Any],
     observed_values: dict[str, dict[str, list[str]]] | None = None,
+    profile: dict[str, Any] | None = None,
+    selected_tables: list[str] | None = None,
 ) -> tuple[str, list[str]]:
     """Render a schema graph into a (table_structure_json, table_list) pair.
 
     The JSON matches the structure the SQL agent's prompt expects, including a
-    __relationships__ block describing valid joins. Actual distinct values can
-    be supplied for categorical columns to help the SQL agent use exact filters.
+    __relationships__ block describing valid joins. When a semantic ``profile``
+    is given, each table carries its grain/scenario/version notes and each
+    column its distinct count, real values and range, so filters use values
+    that exist instead of guesses. ``observed_values`` is the legacy per-column
+    value list and is used only for columns the profile does not cover.
     """
     import json
 
+    from app.semantic_catalog.connection_profile import render_table_profile
+
     observed_values = observed_values or {}
+    included = _tables_with_join_neighbours(graph, selected_tables)
     table_structure_payload: dict[str, Any] = {}
     table_list: list[str] = []
     for node in graph.get("nodes", []):
         qualified = node["qualified_name"]
+        if included is not None and qualified not in included:
+            continue
         table_list.append(qualified)
+        table_profile, column_profiles = render_table_profile(profile, qualified)
         column_payload: dict[str, Any] = {}
         for column in node.get("columns", []):
             column_name = column["raw_name"]
@@ -373,17 +414,24 @@ def render_graph_table_structure(
                 "type": column.get("data_type"),
                 "logical_name": column.get("logical_name"),
             }
-            values = observed_values.get(qualified, {}).get(column_name)
-            if values is not None:
-                column_details["observed_values"] = values
+            if column.get("description"):
+                column_details["description"] = column["description"]
+            if column_name in column_profiles:
+                column_details.update(column_profiles[column_name])
+            else:
+                values = observed_values.get(qualified, {}).get(column_name)
+                if values is not None:
+                    column_details["observed_values"] = values
             column_payload[column_name] = column_details
 
-        table_structure_payload[node["table"]] = {
+        table_payload: dict[str, Any] = {
             "schema": node.get("schema"),
             "qualified_name": qualified,
             "description": node.get("description"),
-            "columns": column_payload,
         }
+        table_payload.update(table_profile)
+        table_payload["columns"] = column_payload
+        table_structure_payload[node["table"]] = table_payload
 
     table_structure_payload["__relationships__"] = [
         {
@@ -391,9 +439,11 @@ def render_graph_table_structure(
             "to": f"{edge['to_table']}.{edge['to_column']}",
         }
         for edge in graph.get("edges", [])
+        if included is None
+        or (edge["from_table"] in included and edge["to_table"] in included)
     ]
 
-    return json.dumps(table_structure_payload, indent=2, default=str), table_list
+    return json.dumps(table_structure_payload, default=str), table_list
 
 
 def render_graph_summary(graph: dict[str, Any]) -> str:
@@ -446,7 +496,11 @@ def generate_sql_from_graph(
             "error": "No schema graph available. Select tables first to build it.",
         }
 
-    table_structure, table_list = render_graph_table_structure(graph)
+    from app.semantic_catalog.connection_profile import get_connection_profile
+
+    table_structure, table_list = render_graph_table_structure(
+        graph, profile=get_connection_profile(connection_id, graph)
+    )
 
     return generate_sql(
         user_question=user_question,
@@ -456,7 +510,9 @@ def generate_sql_from_graph(
     )
 
 
-def build_and_store_schema_graph(connection_id: str) -> dict[str, Any]:
+def build_and_store_schema_graph(
+    connection_id: str, *, refresh_profile: bool = False
+) -> dict[str, Any]:
     """Assemble a JSON schema graph from stored metadata and persist it.
 
     The graph is deterministic (no LLM): nodes are the selected tables with
@@ -472,8 +528,13 @@ def build_and_store_schema_graph(connection_id: str) -> dict[str, Any]:
           "edges": [
             {"from_table", "from_column", "to_table", "to_column",
              "constraint_name"}
-          ]
+          ],
+          "profile": {...}   # semantic profile, see semantic_catalog.connection_profile
         }
+
+    ``refresh_profile`` re-profiles the live data (facts + LLM inference). When
+    False the previously stored profile is carried over, so a relation edit
+    does not discard it.
 
     Returns the persisted graph payload.
     """
@@ -509,6 +570,7 @@ def build_and_store_schema_graph(connection_id: str) -> dict[str, Any]:
                     {
                         "raw_name": col["raw_name"],
                         "logical_name": col.get("logical_name"),
+                        "description": col.get("description"),
                         "data_type": col.get("data_type"),
                     }
                     for col in table.get("columns", [])
@@ -539,6 +601,19 @@ def build_and_store_schema_graph(connection_id: str) -> dict[str, Any]:
         "table_count": len(nodes),
         "relation_count": len(edges),
     }
+
+    if refresh_profile:
+        from app.semantic_catalog.connection_profile import build_profile
+
+        try:
+            graph["profile"] = build_profile(graph, connection_id, infer=True)
+        except Exception:
+            logger.exception("Semantic profiling failed for %s", connection_id)
+    if "profile" not in graph:
+        previous = graph_repository.get_graph_by_connection(connection_id) or {}
+        previous_profile = (previous.get("graph") or {}).get("profile")
+        if previous_profile:
+            graph["profile"] = previous_profile
 
     graph_repository.upsert_graph(connection_id, graph)
     logger.info(

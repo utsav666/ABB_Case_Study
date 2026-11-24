@@ -170,9 +170,11 @@ def generate_sql(
                     "role": "system",
                     "content": (
                         f"You are a world-class {dialect} SQL generator. "
-                        "Return ONLY the SQL query - no explanation, no prose, "
-                        "no markdown code fences. If a previous attempt failed, "
-                        "return a corrected SQL query, never a description of the error."
+                        "Return ONLY the SQL query, preceded by its single "
+                        "'-- Assumptions:' comment line - no other explanation, no "
+                        "prose, no markdown code fences. Write exactly one read-only "
+                        "SELECT statement. If a previous attempt failed, return a "
+                        "corrected SQL query, never a description of the error."
                     ),
                 },
                 {"role": "user", "content": prompt},

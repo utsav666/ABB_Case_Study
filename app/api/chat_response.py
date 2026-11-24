@@ -409,7 +409,7 @@ def build_chat_response(
             chart_config = result.get("chart_config")
             chart_data = result.get("data")
             payload["answer_type"] = "chart"
-            payload["message"] = "Here is your chart."
+            payload["message"] = result.get("message") or "Here is your chart."
 
             # New format: chart_config + data (for frontend rendering)
             if chart_config:
@@ -433,7 +433,7 @@ def build_chat_response(
         if result_type == "data":
             data = result.get("data")
             payload["answer_type"] = "table"
-            payload["message"] = result.get("message", "Here are the query results.")
+            payload["message"] = result.get("message") or "Here are the query results."
             if isinstance(data, pd.DataFrame):
                 payload["data"] = serialize_dataframe(data)
             else:

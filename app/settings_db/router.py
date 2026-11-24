@@ -169,14 +169,24 @@ class UpdateColumnLogicalNameRequest(BaseModel):
 def update_column_logical_name(
     column_id: str,
     payload: UpdateColumnLogicalNameRequest,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    """Update a single column's logical name."""
+    """Update a single column's logical name and refresh the schema graph.
+
+    Chat reads the stored graph, not column_definitions, so without the rebuild
+    an edited name never reaches the LLM.
+    """
     repository = ColumnDefinitionRepository()
     # Normalize empty string to NULL so cleared values are stored as empty.
     logical_name = (payload.logical_name or "").strip() or None
     updated = repository.update_column_logical_name(column_id, logical_name)
     if updated is None:
         raise HTTPException(status_code=404, detail="Column not found")
+    connection_id = SelectedTableRepository().get_connection_id_for_table(
+        updated["table_id"]
+    )
+    if connection_id:
+        background_tasks.add_task(build_and_store_schema_graph, connection_id)
     return {"column": updated}
 
 
@@ -199,6 +209,33 @@ def get_schema_graph(connection_id: str) -> dict[str, Any]:
     if record is None:
         return {"connection_id": connection_id, "graph": None}
     return {"connection_id": connection_id, "graph": record["graph"]}
+
+
+@settings_db_router.get("/{connection_id}/semantic-profile")
+def get_semantic_profile(connection_id: str) -> dict[str, Any]:
+    """Return the stored semantic profile (facts + inferred table semantics)."""
+    record = SchemaGraphRepository().get_graph_by_connection(connection_id)
+    profile = ((record or {}).get("graph") or {}).get("profile")
+    return {"connection_id": connection_id, "profile": profile}
+
+
+@settings_db_router.post("/{connection_id}/semantic-profile/refresh", status_code=202)
+def refresh_semantic_profile(
+    connection_id: str, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
+    """Re-profile the live data and re-infer table semantics in the background.
+
+    Run after the data changes shape (new scenarios, versions, metric names).
+    Profiling plus inference can take longer than an HTTP request should.
+    """
+    from app.semantic_catalog.connection_profile import refresh_connection_profile
+
+    if SchemaGraphRepository().get_graph_by_connection(connection_id) is None:
+        raise HTTPException(
+            status_code=404, detail="No schema graph. Select tables first."
+        )
+    background_tasks.add_task(refresh_connection_profile, connection_id)
+    return {"connection_id": connection_id, "status": "refresh_started"}
 
 
 class GenerateSqlRequest(BaseModel):

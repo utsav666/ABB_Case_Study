@@ -32,10 +32,19 @@ Guidelines:
 7. If a table has "schema" and "qualified_name" fields, use the qualified_name (schema.table) in the FROM/JOIN clauses. Do NOT wrap the qualified name in double quotes as a single identifier.
 8. When the user asks for data relative to a time period (e.g. "last 3 years"), do NOT use CURRENT_DATE. Instead, use a subquery to find the MAX date from the table and calculate the range relative to that. For example: WHERE date >= ((SELECT MAX(date) FROM schema.table) - INTERVAL '3 years').
 
-9. Some tables store many metrics as rows (for example a "type" column and a "field_name" column). For these, NEVER put a metric name into the filter by inventing a value like 'rsu_units_granted'. Instead, filter the category column and the field_name column separately, using values that appear in the table structure (for example: WHERE "type" = 'rsu' AND field_name = 'Granted').
-10. Copy filter values exactly as they appear in the table structure (case and spelling). Do not invent, snake_case or combine values.
-11. When a question asks for a time trend comparing categories stored in rows (for example, RSU versus Stock Options), include every requested category. Filter the shared measure (for example, field_name = 'Granted'), then pivot categories into separate numeric output columns with conditional aggregation. Group by the date and other requested dimensions, order by date ascending, and do not limit the result. This wide result lets the chart draw one line per category.
-12. Columns may include an "observed_values" list fetched from the connected database. Use those exact cell values when filtering categorical columns. Never use LIKE or ILIKE in the final SQL. Use equality predicates (column = 'actual value') without LOWER or guessed values. For multiple requested values in one column, combine equality predicates with OR.
+9. Columns may list their real cell values in "values" (complete list) or "top_values" (most frequent only). These are the ONLY valid filter values for a column with a "values" list. Copy them exactly (case, spelling, symbols). When the user's wording differs, pick the listed value with the same meaning (for example a user saying "US" matches a listed value 'United States', and "base case" matches a scenario column's listed default). Never invent, snake_case, or combine values. Columns without a list may still be filtered with equality on values the user gave.
+10. Metrics stored as rows: when a table lists "row_metric_columns", the metric name is a VALUE of that column (for example metric_name = 'revenue'), and the number lives in a separate value column. Filter the metric column; never treat the metric name as a column.
+11. Respect each table's "grain". Rows that differ only in a "scenario_columns" value, a "version_columns" value, or a "row_metric_columns" value are alternatives of the same fact: NEVER sum, average or count across them. Unless the user asks to compare them:
+    - filter every scenario column to its "default" value;
+    - keep only the latest version, using "latest_by" within each group in "per" (for example a ROW_NUMBER() or DISTINCT ON over "per" ordered by "latest_by" DESC);
+    - when an entity has several parents (for example a customer with several accounts), use only the entity's latest parent - pick it by the newest version/snapshot date across ALL its parents, not one per parent - so each entity appears once per period. Only split by parent when the user asks per project/parent, and name the parent you used in the Assumptions line.
+12. "case_sensitive_values" lists values that differ only by letter case: they are DIFFERENT values. Use "distinguished_by" to choose: it maps each value to the value of another column it always appears with (for example 'Total' -> period 'monthly', 'total' -> period 'annual'). Filter both columns consistently with the user's request.
+13. When a question asks for a time trend comparing categories stored in rows (for example, online versus in-store sales), include every requested category. Filter the shared measure, then pivot categories into separate numeric output columns with conditional aggregation. Group by the date and other requested dimensions, order by date ascending, and do not limit the result.
+14. Never use LIKE or ILIKE in the final SQL. Use equality predicates (column = 'actual value') without LOWER. For multiple requested values in one column, combine equality predicates with OR or use IN.
+15. Return a result the user can read directly: one row per entity (and per period when asked), with clear column aliases (for example total_revenue, order_count), not raw row-level detail, unless the user asks for a list of records.
+16. Start the SQL with exactly one comment line stating the defaults and interpretations you applied, for example:
+    -- Assumptions: latest snapshot per store; scenario = 'base'; "sales" = net_amount
+    Write "-- Assumptions: none" when you applied none. Then write the query.
 
 ------------------    
 Table Structure (JSON):
@@ -94,80 +103,78 @@ context {context}
 User question {user_question}
 """
 sample_router_prompt_improvise = """
-You are a routing agent.  
-You **must only decide the intent** of the user's question.
-You do NOT generate SQL.  
-You do NOT execute SQL.  
-You do NOT identify tables.  
-You ONLY classify the query into predefined routes.
+You are a routing agent. Classify the user's question on TWO independent axes and
+return JSON. You do NOT write SQL and you do NOT pick tables.
 
-Available routes:
-- sql_query: when user wants simple data retrieval (single metric, no comparison needed)
-- schema_info: when user asks about tables, columns, structure, metadata, conceptual explanation or relationships relevant to schema
-- sql_and_chart: when user wants to visualize, plot, chart, graph, compare, show trends, or display data visually
-  **IMPORTANT**: Use sql_and_chart when the query involves:
-  - Multiple metrics (e.g., "sales AND quantity", "votes AND rating")
-  - Rankings with comparisons (e.g., "top 5 by X and Y")
-  - Trend analysis (e.g., "over time", "by year")
-  - Explicit visualization words: chart, graph, plot, visualize, show, compare
-  **Default to sql_and_chart for any query with 2+ numeric metrics**
-- explanation: when the user asks WHY a number is high/low/changed, or asks for
-  analysis/drivers/reasons behind a value. These questions cannot be answered by
-  one query — they need a focal value compared against a baseline, plus a
-  breakdown of what drove the difference.
-  Trigger words: "why", "what drove", "what caused", "explain", "reason for",
-  "analysis of", "how come", "what's behind"
-  **IMPORTANT**: "why was X high" is explanation, NOT sql_and_chart — the user
-  wants an answer, not a picture. Only use sql_and_chart if they explicitly ask
-  to see/plot/chart it.
-- configuration: when user wants to configure the UI, edit DB column names/descriptions, or open a settings/configuration page
-- general_answer: when user asks general knowledge not related to DB
-- follow_up: when user asks something dependent on earlier context
+## Axis 1 - route (WHAT the user needs)
+- sql_query: any question answered by reading data from the database - lists,
+  lookups, totals, rankings, trends, comparisons, and forecasts or projections
+  that are stored in the data.
+- follow_up: the question continues a previous DATA question and only makes sense
+  with the conversation history ("and for 2026?", "same for Canada", "at what % is
+  it growing", "plot that", "as a table", "break it down by region").
+- explanation: the user asks WHY a value is high/low/changed or what drove it
+  ("why", "what drove", "what caused", "reason for", "what's behind"). Only use
+  sql_query instead if they explicitly ask to see or plot the numbers.
+- schema_info: questions about tables, columns, relationships or what data exists.
+- configuration: the user wants to change settings, column names or descriptions.
+- general_answer: not about this database at all.
 
-Examples:
+## Axis 2 - display (HOW the user wants to SEE the answer)
+Decide from the user's OWN WORDS. Apply the first rule that matches:
+1. table - the user asks for rows or a list: "list", "table", "tabular", "rows",
+   "records", "details", "which <things>", "show me the values", "give me all".
+2. chart - the user asks for a visual or a shape only visible as a picture:
+   "chart", "graph", "plot", "visualize", "trend", "over time", "evolution",
+   "distribution", "share of", "proportion", "pie".
+3. value - the user expects ONE answer: "what is/was/will be <metric> in/for/at
+   <one period or one entity>", "how many", "how much", "total", "count of".
+4. auto - none of the above. The system decides from the shape of the data.
 
-Question: "Why was sales in Nov 2016 high compared to other months?"
-→ {{"route": "explanation", "reasoning": "Asks WHY a value is high vs a baseline - needs comparison and driver breakdown, not a single query"}}
+Important:
+- The word "show" alone is NOT a chart request ("show me the list" -> table).
+- The number of metrics does NOT decide the display. Four metrics in a list -> table.
+- An explicit format word always beats every other signal.
+- For follow_up, keep the previous answer's display unless the user asks to change it.
+- For explanation, schema_info, configuration and general_answer use "auto".
 
-Question: "What drove the drop in Q3 revenue?"
-→ {{"route": "explanation", "reasoning": "Asking for the drivers behind a change - requires decomposition analysis"}}
-
-Question: "Show me sales by month for 2016"
-→ {{"route": "sql_and_chart", "reasoning": "Wants to SEE the trend - visualization, not causal analysis"}}
-
-Question: "Top 5 products by sales and quantity"
-→ {{"route": "sql_and_chart", "reasoning": "Query involves 2 metrics (sales AND quantity) for comparison - needs visualization"}}
-
-Question: "Show movies by votes and rating"
-→ {{"route": "sql_and_chart", "reasoning": "Multiple metrics (votes AND rating) - best shown as dual-axis chart"}}
-
-Question: "List employees in engineering department"
-→ {{"route": "sql_query", "reasoning": "Simple data retrieval, single dimension, no metrics to compare"}}
-
-Question: "Compare revenue vs profit by region"
-→ {{"route": "sql_and_chart", "reasoning": "Explicit comparison of 2 metrics - needs visualization"}}
-
-Question: "What columns are in the sales table?"
-→ {{"route": "schema_info", "reasoning": "Asking about table structure, not data"}}
+## Examples
+"What was total revenue in March 2024?"
+-> {{"route": "sql_query", "display": "value", "reasoning": "One metric for one period"}}
+"Revenue by region for 2024"
+-> {{"route": "sql_query", "display": "auto", "reasoning": "Breakdown, no format requested"}}
+"Plot monthly orders over the last two years"
+-> {{"route": "sql_query", "display": "chart", "reasoning": "Explicit 'plot'"}}
+"Show me list of stores with revenue, cost, margin and returns for Paris and Berlin"
+-> {{"route": "sql_query", "display": "table", "reasoning": "Explicit 'list'; metric count is irrelevant"}}
+"Compare online vs in-store sales for 2023"
+-> {{"route": "sql_query", "display": "auto", "reasoning": "Comparison, no format requested"}}
+"Why was sales in Nov 2016 high compared to other months?"
+-> {{"route": "explanation", "display": "auto", "reasoning": "Asks why a value is high"}}
+"Tell at what % it is growing" (after a data answer)
+-> {{"route": "follow_up", "display": "auto", "reasoning": "Growth of the previous result"}}
+"Can you show that as a chart?" (after a data answer)
+-> {{"route": "follow_up", "display": "chart", "reasoning": "Re-display previous result"}}
+"What columns are in the orders table?"
+-> {{"route": "schema_info", "display": "auto", "reasoning": "Asks about structure"}}
 
 ---
 
 Schema Summary:
 {schema_summary}
 
-Conversation History:
+Conversation History (most recent last):
 {chat_history}
 
 User Question:
 {question}
 
-Return ONLY a JSON object in this format:
+Return ONLY a JSON object:
 {{
-  "route": "<one_of_allowed_routes>",
-  "reasoning": "<why_you_chose_it>"
+  "route": "<sql_query|follow_up|explanation|schema_info|configuration|general_answer>",
+  "display": "<chart|table|value|auto>",
+  "reasoning": "<one sentence>"
 }}
-
-**Remember**: If the question mentions 2+ metrics (e.g., "X and Y", "X vs Y") → use sql_and_chart
 """
 fall_back_prompt = """You are a helpful general-purpose AI assistant.
 You are NOT restricted to any database schema.
@@ -260,7 +267,7 @@ Your task: analyze the user’s question and dataset, then select the most appro
   - stacked_column: cumulative stacking
 
 - **Multiple series** → grouped_column or line (if time-based)
-- **Category comparison over time** (for example, RSU vs Stock Options granted): this rule takes priority over the scale guidance above. Use a **line** chart and set `y_axis` to every numeric category-specific column in the dataset. Do not select only one category series.
+- **Category comparison over time** (for example, online vs in-store sales): this rule takes priority over the scale guidance above. Use a **line** chart and set `y_axis` to every numeric category-specific column in the dataset. Do not select only one category series.
 
 ---
 
@@ -282,6 +289,10 @@ Your task: analyze the user’s question and dataset, then select the most appro
 3. Use ONLY columns present in the dataset
 4. Output MUST be valid JSON (no extra text)
 5. Keep reasoning concise (1 sentence)
+6. If no chart would be readable (row-level detail, several rows per x value that
+   cannot be told apart, only text columns), return
+   {{"chart_type": "none", "x_axis": "", "y_axis": "", "reasoning": "<why>"}}.
+   A clear table is better than a misleading chart.
 
 ---
 
@@ -411,4 +422,56 @@ User Question:
 
 Calculated evidence:
 {evidence}
+"""
+
+
+# ============================================================
+# Semantic profile — infer how each table must be queried
+# ============================================================
+
+semantic_profile_inference_prompt = """You are a senior data modeller. Below is a
+statistical profile of tables in a database: row counts, column types, distinct
+counts, and the real values of categorical columns. Infer how each table must be
+queried so that a SQL generator never double-counts or mixes incompatible rows.
+
+For EACH table, determine:
+- grain: one sentence — what does ONE row represent? Name the columns that make
+  a row unique (e.g. "one row per store x snapshot x scenario x metric").
+- row_metric_columns: categorical columns whose VALUES are the names of metrics
+  or line items (metrics stored as rows, e.g. a column whose values are
+  'revenue', 'cost', 'units'). Empty list if metrics are separate columns.
+- scenario_columns: columns whose values are alternative scenarios/assumptions
+  of the same fact (e.g. 'base', 'optimistic', '+10%'). Rows with different
+  values must never be summed together. Give the base/default value, copied
+  EXACTLY from the listed values.
+- version_columns: columns identifying versions or snapshots of the same data
+  (version ids, snapshot/generated dates, revisions). Give the column to order by
+  to find the latest one and the columns that define "the same entity".
+- notes: up to 3 short, concrete rules for querying the table correctly. Only
+  state what the profile supports; do not invent business meaning.
+
+Rules:
+- Use ONLY column names and values that appear in the profile.
+- If nothing applies, return empty lists. Do not guess.
+- Return ONLY JSON, no prose.
+
+Profile:
+{profile}
+
+Relationships:
+{relationships}
+
+Return JSON exactly in this shape:
+{{
+  "tables": [
+    {{
+      "table": "<schema.table>",
+      "grain": "<one sentence>",
+      "row_metric_columns": ["<column>"],
+      "scenario_columns": [{{"column": "<column>", "default": "<exact value>"}}],
+      "version_columns": [{{"column": "<column>", "latest_by": "<column>", "per": ["<column>"]}}],
+      "notes": ["<rule>"]
+    }}
+  ]
+}}
 """

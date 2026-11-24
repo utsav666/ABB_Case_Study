@@ -20,6 +20,7 @@ load_env()
 
 class ChartDecision(BaseModel):
     chart_type: Literal[
+        "none",  # no readable chart exists; the caller shows a table instead
         "bar",
         "line",
         "scatter",
@@ -32,8 +33,8 @@ class ChartDecision(BaseModel):
         "grouped_column",  # Multiple series side-by-side
         "stacked_column",  # Multiple series stacked
     ]
-    x_axis: str
-    y_axis: str | list[str]  # Single axis or list for multi-metric charts
+    x_axis: str = ""
+    y_axis: str | list[str] = ""  # Single axis or list for multi-metric charts
     y_axis_secondary: str | None = None  # For dual-axis charts
     reasoning: str
 

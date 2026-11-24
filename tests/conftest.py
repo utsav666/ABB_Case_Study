@@ -116,7 +116,7 @@ class RecordingExecutor:
         self._results = list(results)
         self.queries: list[str] = []
 
-    def sql_executor(self, sql: str) -> Any:
+    def sql_executor(self, sql: str, timeout_ms: int | None = None) -> Any:
         self.queries.append(sql)
         if not self._results:
             import pandas as pd
@@ -144,7 +144,7 @@ def patch_executor(monkeypatch: pytest.MonkeyPatch):
     def _install(*results: Any) -> RecordingExecutor:
         recorder = RecordingExecutor(*results)
 
-        def factory() -> RecordingExecutor:
+        def factory(*_args: Any, **_kwargs: Any) -> RecordingExecutor:
             return recorder
 
         # Patch the source module AND every module that did

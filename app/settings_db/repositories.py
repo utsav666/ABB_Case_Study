@@ -364,6 +364,19 @@ class SelectedTableRepository:
 
         return [dict(row) for row in row_mappings]
 
+    def get_connection_id_for_table(self, table_id: str) -> str | None:
+        """Return the db_connection_id owning a selected table, if any."""
+        try:
+            parsed_table_id = UUID(table_id)
+        except ValueError:
+            return None
+        statement = select(SelectedTableEntity.db_connection_id).where(
+            SelectedTableEntity.id == parsed_table_id
+        )
+        with self._gateway.get_session() as session:
+            connection_id = session.execute(statement).scalar_one_or_none()
+        return str(connection_id) if connection_id else None
+
     def bulk_replace_selected_tables(
         self, connection_id: str, table_names: list[str], schema_name: str = "public"
     ) -> list[dict[str, Any]]:
@@ -594,6 +607,7 @@ class ColumnDefinitionRepository:
                 ColumnDefinitionEntity.logical_name,
                 ColumnDefinitionEntity.description,
                 ColumnDefinitionEntity.data_type,
+                ColumnDefinitionEntity.table_id,
             )
         )
 
@@ -606,6 +620,7 @@ class ColumnDefinitionRepository:
 
         row_dict = dict(row_mapping)
         row_dict["id"] = str(row_dict["id"])
+        row_dict["table_id"] = str(row_dict["table_id"])
         return row_dict
 
 

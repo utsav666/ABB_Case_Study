@@ -11,6 +11,7 @@ from app.sampledata.data_loader import DBLoader
 from app.settings_db.controllers import get_settings_connection_credentials
 from app.target_db.views import build_target_db_url
 from app.utils.logging_context import get_log_context
+from app.utils.runtime_limits import get_db_statement_timeout_ms
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +41,21 @@ def _get_backend_database_url() -> str:
     )
 
 
-def resolve_sql_database_url() -> str:
+def resolve_sql_database_url(connection_id: str | None = None) -> str:
     """Resolve the SQL URL from the active saved connection or backend defaults.
+
+    Args:
+        connection_id: Explicit connection to use. Defaults to the connection
+            bound to the current request's logging context.
 
     Returns:
         str: SQLAlchemy URL for the active database.
     """
-    connection_id = get_log_context()["connection_id"]
+    connection_id = connection_id or get_log_context()["connection_id"]
     if not connection_id or connection_id == "none":
         return _get_backend_database_url()
 
-    connection_credentials = dict(
-        get_settings_connection_credentials(connection_id)
-    )
+    connection_credentials = dict(get_settings_connection_credentials(connection_id))
     saved_database_name = str(connection_credentials.get("db_name") or "").strip()
     if saved_database_name:
         connection_credentials["db_name"] = saved_database_name
@@ -97,17 +100,39 @@ def _get_engine(url: str) -> Engine:
 
 
 class SqlExec:
-    def __init__(self) -> None:
-        self.database_url = resolve_sql_database_url()
+    def __init__(self, connection_id: str | None = None) -> None:
+        self.database_url = resolve_sql_database_url(connection_id)
 
-    def sql_executor(self, sql_query: str) -> pd.DataFrame | str:
+    def sql_executor(
+        self, sql_query: str, timeout_ms: int | None = None
+    ) -> pd.DataFrame | str:
+        """Run a query in a read-only transaction and return a DataFrame.
+
+        SQL here is LLM-generated, so the database enforces read-only access
+        and a statement timeout on PostgreSQL in addition to the validator's
+        parse-level checks. Errors are returned as a string, not raised.
+        """
         try:
             engine = _get_engine(self.database_url)
             # Reuse a pooled connection; do NOT dispose the engine here — that
             # would tear down the pool and defeat the caching.
-            df = pd.read_sql_query(text(sql_query), engine)
-            return df
-        except (KeyError, SQLAlchemyError, ValueError) as error:
+            with engine.connect() as connection, connection.begin():
+                if engine.dialect.name == "postgresql":
+                    statement_timeout_ms = int(
+                        timeout_ms or get_db_statement_timeout_ms()
+                    )
+                    # One round trip for both settings: the target DB is remote.
+                    connection.exec_driver_sql(
+                        "SET TRANSACTION READ ONLY; "
+                        f"SET LOCAL statement_timeout = {statement_timeout_ms}"
+                    )
+                return pd.read_sql_query(text(sql_query), connection)
+        except (
+            KeyError,
+            SQLAlchemyError,
+            ValueError,
+            pd.errors.DatabaseError,
+        ) as error:
             logger.exception("SQL execution failed")
             return str(error)
 

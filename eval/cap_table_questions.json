@@ -1,0 +1,60 @@
+{
+  "description": "Golden questions for the PDP cap-table connection. Expected values were verified with hand-written read-only SQL (latest version per ticker, Market premium). Re-verify after data reloads.",
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "What should be the headcount forecasted till Q4 2027?",
+      "expect": {"min_rows": 1}
+    },
+    {
+      "id": "Q1b",
+      "question": "What will the headcount be in Q4 2027?",
+      "expect": {"min_rows": 1}
+    },
+    {
+      "id": "Q2",
+      "question": "List my Companies with more $4B value?",
+      "expect": {
+        "display": "table",
+        "min_rows": 1,
+        "must_contain": ["INSM", "ORKA", "MDGL", "CGON"],
+        "must_not_contain": ["ATYR"]
+      }
+    },
+    {
+      "id": "Q3",
+      "question": "Compare Stock options granted for TNGX vs ORKA.",
+      "expect": {"min_rows": 1}
+    },
+    {
+      "id": "Q3b",
+      "follow_up_of": "Q3",
+      "question": "Tell at what % they are growing",
+      "expect": {"min_rows": 1}
+    },
+    {
+      "id": "Q4",
+      "question": "Compare enterprise value for 0% vs 25%",
+      "expect": {"min_rows": 1, "must_contain": ["3891823160", "5116832031"]}
+    },
+    {
+      "id": "Q5",
+      "question": "Show me list of companies with SHare price, Common Stocks, Current Warrants, Net Cash for TNGX & ORKA",
+      "expect": {
+        "display": "table",
+        "min_rows": 2,
+        "max_rows": 2,
+        "must_contain": ["TNGX", "ORKA", "24.17"]
+      }
+    },
+    {
+      "id": "Q6",
+      "question": "Show me Enterprise value for all premiums for TNGX",
+      "expect": {
+        "min_rows": 6,
+        "max_rows": 6,
+        "must_contain": ["3891823160", "9771865742"]
+      }
+    }
+  ]
+}

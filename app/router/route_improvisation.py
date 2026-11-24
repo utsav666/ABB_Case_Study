@@ -1,8 +1,10 @@
-from typing import Literal
+from __future__ import annotations
+
+from typing import Any, Literal
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.envsetup.env_loader import load_env
 from app.prompt.prompts import sample_router_prompt_improvise
@@ -27,7 +29,30 @@ class RoutingDecision(BaseModel):
         "explanation",
         "follow_up",
     ]
+    display: Literal["chart", "table", "value", "auto"] = "auto"
     reasoning: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_display(cls, data: Any) -> Any:
+        """Unknown display values become "auto" rather than failing the route."""
+        if isinstance(data, dict) and data.get("display") not in (
+            "chart",
+            "table",
+            "value",
+            "auto",
+        ):
+            data = {**data, "display": "auto"}
+        return data
+
+    @model_validator(mode="after")
+    def _normalize_legacy_chart_route(self) -> RoutingDecision:
+        """`sql_and_chart` is the old way of asking for a chart."""
+        if self.route == "sql_and_chart":
+            self.route = "sql_query"
+            if self.display == "auto":
+                self.display = "chart"
+        return self
 
 
 # ----------------------------
@@ -63,15 +88,21 @@ class Router:
     # ----------------------------
     # PUBLIC METHOD
     # ----------------------------
-    def route_question(self, question: str) -> tuple[RoutingDecision, any]:
+    def route_question(
+        self, question: str, chat_history: str = ""
+    ) -> tuple[RoutingDecision, Any]:
         """Route a question and return both decision and response for tracking.
+
+        ``chat_history`` lets the router recognise follow-ups ("same for Canada")
+        and keep the previous answer's display format.
 
         Returns:
             Tuple of (RoutingDecision, response) where response contains usage metadata
         """
-        # Prepare full prompt
         messages = self.prompt.format_messages(
-            schema_summary=self.schema_summary, chat_history="", question=question
+            schema_summary=self.schema_summary,
+            chat_history=chat_history.strip() or "(none)",
+            question=question,
         )
 
         # LLM call

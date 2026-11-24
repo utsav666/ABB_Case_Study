@@ -35,8 +35,10 @@ SCHEMA_GRAPH = {
 
 
 class TestRouteAfterRouter:
-    @pytest.mark.parametrize("route", ["sql_query", "sql_and_chart"])
+    @pytest.mark.parametrize("route", ["sql_query", "sql_and_chart", "follow_up"])
     def test_sql_routes_go_to_the_table_resolver_path(self, route: str) -> None:
+        """follow_up included: it used to fall through to `general`, an LLM with
+        no database access, so "at what % are they growing" got invented numbers."""
         assert route_after_router({"route": route}) == "sql_path"
 
     def test_schema_info_has_its_own_path(self) -> None:
@@ -51,7 +53,7 @@ class TestRouteAfterRouter:
         assert route_after_router({"route": "explanation"}) == "explanation"
 
     @pytest.mark.parametrize(
-        "route", ["general_answer", "follow_up", "configuration", "", "nonsense"]
+        "route", ["general_answer", "configuration", "", "nonsense"]
     )
     def test_everything_else_falls_back_to_general(self, route: str) -> None:
         assert route_after_router({"route": route}) == "general"
@@ -101,12 +103,19 @@ class TestRouteAfterExecute:
 
 
 class TestRouteAfterVerify:
-    def test_chart_route_goes_to_the_chart_path(self) -> None:
-        assert route_after_verify({"route": "sql_and_chart"}) == "chart"
+    def test_chart_display_goes_to_the_chart_path(self) -> None:
+        assert route_after_verify({"display": "chart"}) == "chart"
 
-    @pytest.mark.parametrize("route", ["sql_query", "", "explanation"])
-    def test_everything_else_returns_data(self, route: str) -> None:
-        assert route_after_verify({"route": route}) == "data_response"
+    @pytest.mark.parametrize("display", ["table", "value", ""])
+    def test_other_displays_return_data(self, display: str) -> None:
+        assert route_after_verify({"display": display}) == "data_response"
+
+    def test_a_result_issue_regenerates_the_query(self) -> None:
+        assert route_after_verify({"sql_error": "0 rows", "display": ""}) == "retry"
+
+    def test_the_route_alone_no_longer_forces_a_chart(self) -> None:
+        """Regression: every `sql_and_chart` route became a chart, even for lists."""
+        assert route_after_verify({"route": "sql_and_chart"}) == "data_response"
 
 
 class TestValidateSqlNode:
@@ -181,19 +190,50 @@ class TestExecuteSqlNode:
 
 
 class TestVerifyResultNode:
-    def test_returns_no_state_changes(self) -> None:
-        """The node only logs warnings; it must not mutate the result."""
-        state = {"data": [{"a": 1}], "question": "q"}
+    def test_zero_rows_triggers_one_regeneration(self) -> None:
+        result = verify_result_node({"data": [], "question": "q", "retry_count": 0})
 
-        assert verify_result_node(state) == {}
+        assert "0 rows" in result["sql_error"]
+        assert result["result_check_done"] is True
 
-    def test_zero_rows_is_logged_as_a_warning(self, caplog) -> None:
-        import logging
+    def test_repeated_labels_with_different_numbers_trigger_regeneration(self) -> None:
+        """One company twice in the same period means versions/projects were mixed."""
+        data = [
+            {"period": "q3-2026", "company": "ORKA", "headcount": 87},
+            {"period": "q3-2026", "company": "ORKA", "headcount": 75},
+            {"period": "q3-2026", "company": "TNGX", "headcount": 230},
+        ]
 
-        with caplog.at_level(logging.WARNING):
-            verify_result_node({"data": [], "question": "q"})
+        result = verify_result_node({"data": data, "retry_count": 0})
 
-        assert "0 rows" in caplog.text
+        assert "identical" in result["sql_error"]
+        assert "ORKA" in result["sql_error"]
+
+    def test_the_check_runs_only_once(self) -> None:
+        result = verify_result_node(
+            {"data": [], "retry_count": 1, "result_check_done": True}
+        )
+
+        assert result["sql_error"] == ""
+        assert result["display"] == "table"
+
+    def test_no_regeneration_when_the_retry_budget_is_spent(self) -> None:
+        result = verify_result_node({"data": [], "retry_count": 99})
+
+        assert result["sql_error"] == ""
+
+    def test_clean_result_gets_a_display_decision(self) -> None:
+        data = [{"quarter": "q1", "total": 10}, {"quarter": "q2", "total": 12}]
+
+        result = verify_result_node(
+            {"data": data, "retry_count": 0, "display_intent": "table"}
+        )
+
+        assert result == {
+            "sql_error": "",
+            "display": "table",
+            "display_reason": "the user asked for a list or table",
+        }
 
     def test_all_null_column_is_logged(self, caplog) -> None:
         import logging

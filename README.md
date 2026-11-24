@@ -70,7 +70,7 @@ including the exact orchestrator node path, agent module, and model used.
 
 - API endpoint: `app/main.py` -> `@app.post("/chat")`
 - Orchestrator: `app/orchestrator/orch_graph.py` -> `GraphOrchestrator`
-- Input payload fields used: `question` (or `message/query/prompt/text`) and optional `connection_id`
+- Input payload fields used: `question` (or `message/query/prompt/text`), optional `connection_id`, and optional `display` (`"table"` or `"chart"`) to override the automatic display
 
 ### End-to-End Flow Chart
 
@@ -80,7 +80,7 @@ flowchart TD
   B --> C[GraphOrchestrator.executor()]
   C --> D[router_node]
 
-  D -->|sql_query or sql_and_chart| E[table_resolver_node]
+  D -->|sql_query or follow_up| E[table_resolver_node]
   E --> F[generate_sql_node]
   F --> G[cardinality_resolver_node]
   G --> H[validate_sql_node]
@@ -90,8 +90,10 @@ flowchart TD
   I -->|success| J[verify_result_node]
   I -->|error + retries left| F
   I -->|error + max retries| N
-  J -->|chart requested| K[chart_approval_node]
-  J -->|table/text response| N
+  J -->|0 rows or mixed grain, once| F
+  J -->|display = chart| K[chart_approval_node]
+  J -->|display = table or value| N
+  K -->|chart_type none| N
   K --> Z[final_response]
   N --> Z
 
@@ -109,15 +111,16 @@ flowchart TD
 
 | Stage | Orchestrator Node | Agent Module | Model | Notes |
 |---|---|---|---|---|
-| Route intent | `router_node` | `app/router/route_improvisation.py` (`Router`) | `gpt-4o` | Chooses route: SQL, chart, schema, general, GA |
+| Route intent | `router_node` | `app/router/route_improvisation.py` (`Router`) | `gpt-4o` | Chooses route (SQL, follow-up, explanation, schema, general) and display intent (chart, table, value, auto) from the question and chat history |
 | Identify tables | `table_resolver_node` | `app/agent/table_identification_agent.py` (`identify_tables`) | `gpt-4` | Skipped when only one table is available |
 | Generate SQL | `generate_sql_node` | `app/agent/sql_generation_agent.py` (`generate_sql`) | `SQL_GENERATION_MODEL` env, default `gpt-4` | Returns SQL plus token usage and estimated cost |
 | Resolve ambiguous filter values | `cardinality_resolver_node` | `app/agent/value_resolver_agent.py` (`resolve_filter_value`) | `gpt-4o` | Triggers HITL when confidence is low |
-| Validate SQL syntax | `validate_sql_node` | `app/utils/sql_validator.py` | No LLM | SQL parser validation only |
-| Execute SQL | `execute_sql_node` | `app/utils/sql_executor.py` (`SqlExec`) | No LLM | Executes against target DB |
+| Validate SQL | `validate_sql_node` | `app/utils/sql_validator.py` | No LLM | Exactly one read-only query; writes, DDL and data-modifying CTEs are rejected |
+| Execute SQL | `execute_sql_node` | `app/utils/sql_executor.py` (`SqlExec`) | No LLM | Read-only transaction with `DB_STATEMENT_TIMEOUT_MS` (default 8000) on PostgreSQL |
+| Check result + choose display | `verify_result_node` | `app/orchestrator/display_policy.py` | No LLM | Regenerates once on 0 rows or repeated labels; picks chart/table/value from intent + data shape |
 | Schema Q&A | `schema_info_node` | `app/agent/schema_info_agent.py` (`explain_schema`) | `gpt-4` | Used when route is `schema_info` |
 | General fallback | `general_answer_node` | `app/agent/fall_back.py` (`general_answer`) | `gpt-4o` | Non-database questions |
-| Chart decision | `chart_approval_node` | `app/agent/chart_gen_agent.py` (`decide_chart`) | `gpt-4o` | Recommends chart config before render |
+| Chart decision | `chart_approval_node` | `app/agent/chart_gen_agent.py` (`decide_chart`) | `gpt-4o` | Recommends chart config, or `none` to fall back to a table |
 | GA report spec | `ga_agent_node` | `app/agent/ga_query_agent.py` (`generate_ga_report_spec`) | `gpt-4o` | Only for Google Analytics connections |
 
 ### Data Objects Passed Between Nodes
@@ -132,11 +135,47 @@ flowchart TD
 ### Retry and HITL Behavior
 
 - Retry limit: `MAX_RETRIES = 2` in `app/orchestrator/orch_graph.py`
-- SQL retry happens after validation or execution errors
+- SQL retry happens after validation or execution errors, and once more when the result is empty or repeats the same labels with different numbers (mixed versions/scenarios)
 - HITL points:
   - value resolution ambiguity in `cardinality_resolver_node`
   - chart approval path in `chart_approval_node`
 - Resume endpoint for HITL: `POST /chat/resume`
+
+
+### Semantic Profile
+
+The schema graph describes structure; the semantic profile describes what the
+data contains, so SQL uses real filter values instead of guesses. It lives in
+`app/semantic_catalog/connection_profile.py` and is stored inside the
+connection's graph (`settings.schema_graphs.graph.profile`).
+
+- **Facts** (two batched queries per table): row counts, distinct counts,
+  min/max, every value of categorical columns, and values that differ only by
+  case (e.g. `Granted`/`granted`) with the column that separates them.
+- **Inferred semantics** (one LLM call per connection, validated against the
+  facts): each table's grain, metric-as-row columns, scenario columns with
+  their base value, and version columns with the column that orders them.
+- Built when tables are selected (column sync), and on demand with
+  `POST /settings/db-connections/{id}/semantic-profile/refresh`. If missing at
+  chat time, facts are collected and stored automatically (no LLM). View it with
+  `GET /settings/db-connections/{id}/semantic-profile`.
+- The SQL generator adds a `-- Assumptions:` comment (defaults it applied); the
+  answer shows it to the user.
+- Tunables: `PROFILER_VALUE_STORE_LIMIT`, `PROFILER_PROMPT_VALUE_LIMIT`,
+  `PROFILER_QUERY_TIMEOUT_MS`, `SEMANTIC_PROFILE_MODEL`.
+- Profiling currently supports PostgreSQL targets; other engines fall back to
+  name-based value discovery.
+
+### Golden-question evaluation
+
+`scripts/eval_questions.py` runs questions through the full orchestrator
+against a connection (read-only) and checks the answers, not the SQL text:
+
+```bash
+python -m scripts.eval_questions eval/cap_table_questions.json --connection-id <uuid>
+```
+
+The exit code is the number of failed questions.
 
 
 # Basic Flow Diagram

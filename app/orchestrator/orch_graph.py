@@ -46,7 +46,13 @@ from app.orchestrator.chart_formatting import (
     detect_date_granularity,
     detect_number_format,
 )
+from app.orchestrator.display_policy import (
+    decide_display,
+    find_result_issue,
+    format_single_value,
+)
 from app.router.route_improvisation import Router
+from app.semantic_catalog.connection_profile import get_column_values
 from app.utils.char_context import ChartContext
 from app.utils.sql_executor import SqlExec
 from app.utils.sql_parser import extract_where_filters, rewrite_sql_filter  ### HITL
@@ -89,6 +95,11 @@ class GraphState(TypedDict, total=False):
     ### Per-request LLM provider/model override (from agent/workspace settings)
     llm_provider: str | None  # e.g. "openai", "azure_openai", "claude_merck"
     llm_model: str | None  # e.g. "gpt-4o", "claude-opus-4-6-v1"
+    ### Display — how the answer is shown
+    display_intent: str  # chart | table | value | auto (router or UI override)
+    display: str  # final choice after seeing the data
+    display_reason: str
+    result_check_done: bool  # the one result-quality retry has been used
 
 
 # ============================================================
@@ -135,6 +146,12 @@ def _load_schema_graph(connection_id: str | None):
             )
             return None
 
+        from app.semantic_catalog.connection_profile import get_connection_profile
+
+        profile = get_connection_profile(connection_id, graph)
+        if profile is not None and graph.get("profile") is not profile:
+            graph = {**graph, "profile": profile}
+
         tables = [
             n.get("qualified_name") or n.get("table") for n in graph.get("nodes", [])
         ]
@@ -175,7 +192,9 @@ def router_node(state: GraphState) -> GraphState:
     else:
         router = Router(provider=_provider, model=_model)
 
-    decision, response = router.route_question(question)
+    decision, response = router.route_question(
+        question, chat_history=state.get("conversation_history", "")
+    )
 
     # Track LLM call for routing
     if state.get("user_message_id"):
@@ -203,10 +222,17 @@ def router_node(state: GraphState) -> GraphState:
             total_tokens=usage["total_tokens"],
         )
 
-    logger.info("Router: route=%s, reasoning=%s", decision.route, decision.reasoning)
+    logger.info(
+        "Router: route=%s, display=%s, reasoning=%s",
+        decision.route,
+        decision.display,
+        decision.reasoning,
+    )
     return {
         "route": decision.route,
         "route_reasoning": decision.reasoning,
+        # An explicit UI toggle beats the router's reading of the wording.
+        "display_intent": state.get("display_intent") or decision.display,
     }
 
 
@@ -301,9 +327,18 @@ def generate_sql_node(state: GraphState) -> GraphState:
 
         all_tables = [node["qualified_name"] for node in graph.get("nodes", [])]
         selected_tables = tables or all_tables
-        observed_values = discover_column_values(selected_tables, graph)
+        profile = graph.get("profile")
+        # The semantic profile already holds every categorical column's real
+        # values; the name-based live discovery is only a fallback for
+        # connections that could not be profiled (e.g. non-PostgreSQL).
+        observed_values = (
+            {} if profile else discover_column_values(selected_tables, graph)
+        )
         table_structure, _ = render_graph_table_structure(
-            graph, observed_values=observed_values
+            graph,
+            observed_values=observed_values,
+            profile=profile,
+            selected_tables=selected_tables,
         )
         result = generate_sql(
             question,
@@ -433,25 +468,32 @@ def _state_data_to_dataframe(data: Any) -> DataFrame | None:
 
 
 def verify_result_node(state: GraphState) -> GraphState:
-    """Node 6: Verify result makes sense (simple checks, no LLM)."""
-    data = _state_data_to_dataframe(state.get("data"))
-    question = state.get("question", "")
+    """Node 6: Check the result and decide how to display it (no LLM).
 
+    A result that is empty, or that repeats the same labels with different
+    numbers, is almost always a wrong query rather than a true answer. Such a
+    result gets ONE regeneration with the reason as error context; after that
+    it is shown as-is. The display (chart/table/value) is decided from the
+    user's intent and the result's actual shape.
+    """
+    data = state.get("data")
     if data is None:
         return {}
 
-    # Basic sanity checks
-    warnings = []
-    if len(data) == 0:
-        warnings.append("Query returned 0 rows.")
-    if data.isnull().all().any():
-        null_cols = [col for col in data.columns if data[col].isnull().all()]
-        warnings.append(f"Columns entirely NULL: {null_cols}")
+    frame = _state_data_to_dataframe(data)
+    if frame is not None and len(frame) and frame.isnull().all().any():
+        null_columns = [c for c in frame.columns if frame[c].isnull().all()]
+        logger.warning("Result verification: columns entirely NULL: %s", null_columns)
 
-    if warnings:
-        logger.warning("Result verification warnings: %s", warnings)
+    if not state.get("result_check_done") and state.get("retry_count", 0) < MAX_RETRIES:
+        issue = find_result_issue(data)
+        if issue:
+            logger.warning("Result check failed, regenerating once: %s", issue)
+            return {"sql_error": issue, "result_check_done": True}
 
-    return {}
+    display, reason = decide_display(state.get("display_intent"), data)
+    logger.info("Display decision: %s (%s)", display, reason)
+    return {"sql_error": "", "display": display, "display_reason": reason}
 
 
 # NOTE: chart_decision_node replaced by chart_approval_node (### HITL)
@@ -461,6 +503,23 @@ def verify_result_node(state: GraphState) -> GraphState:
 # ============================================================
 # ### HITL — Cardinality Resolver Node
 # ============================================================
+
+
+def _graph_has_column(
+    schema_graph: dict[str, Any] | None, table_name: str, column_name: str
+) -> bool:
+    """True when the table is unknown (can't tell) or really has the column."""
+    wanted = table_name.lower()
+    for node in (schema_graph or {}).get("nodes", []):
+        if wanted in (
+            str(node.get("table", "")).lower(),
+            str(node.get("qualified_name", "")).lower(),
+        ):
+            return any(
+                str(column.get("raw_name", "")).lower() == column_name.lower()
+                for column in node.get("columns", [])
+            )
+    return True
 
 
 def cardinality_resolver_node(state: GraphState) -> GraphState:
@@ -499,6 +558,11 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         if not table_name:
             continue
 
+        # Aliases computed inside the query (e.g. `rn = 1` from ROW_NUMBER())
+        # are not table columns; checking them only costs failing queries.
+        if not _graph_has_column(schema_graph, table_name, col_filter.column):
+            continue
+
         # Get user's filter value as string
         user_value = col_filter.filter_value
         if isinstance(user_value, list):
@@ -511,9 +575,17 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
         # TEXT) and country (TEXT) are all checked identically. An exact match
         # means there is nothing to disambiguate → skip fuzzy/LLM/HITL. Only a
         # miss (typo, alias, wrong casing) falls through to resolution.
-        if value_exists_exactly(
-            table_name, col_filter.column, user_value, schema_graph=schema_graph
-        ):
+        profiled = get_column_values(
+            (schema_graph or {}).get("profile"), table_name, col_filter.column
+        )
+        exact_match = (
+            user_value in profiled[0]
+            if profiled is not None
+            else value_exists_exactly(
+                table_name, col_filter.column, user_value, schema_graph=schema_graph
+            )
+        )
+        if exact_match:
             logger.info(
                 "### HITL — '%s' exact-matches '%s.%s'; no disambiguation needed",
                 user_value,
@@ -522,8 +594,9 @@ def cardinality_resolver_node(state: GraphState) -> GraphState:
             )
             continue
 
-        # No exact match → fetch distinct values to resolve against
-        actual_values, cardinality = get_column_distinct_values(
+        # No exact match → resolve against the column's real values, from the
+        # profile when it holds the full list, otherwise from a live query.
+        actual_values, cardinality = profiled or get_column_distinct_values(
             table_name, col_filter.column, schema_graph=schema_graph
         )
 
@@ -739,7 +812,11 @@ def chart_approval_node(state: GraphState) -> GraphState:
         }
 
     decision = result["chart"]
-    available_columns = list(data.columns)
+    if decision.chart_type == "none":
+        logger.info("Chart agent declined: %s", decision.reasoning)
+        return build_data_response_node(
+            {**state, "display": "table", "display_reason": decision.reasoning}
+        )
 
     # Override chart config for pivoted comparison data
     if is_pivoted:
@@ -777,7 +854,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
 
     # Validate axes exist in data
     # Handle both single y_axis and list (for multi-series charts)
-    y_axes_to_check = y_axis if isinstance(y_axis, list) else [y_axis]
+    y_axes_to_check = list(y_axis) if isinstance(y_axis, list) else [y_axis]
     if y_axis_secondary:
         y_axes_to_check.append(y_axis_secondary)
 
@@ -948,6 +1025,7 @@ def chart_approval_node(state: GraphState) -> GraphState:
             "chart_config": chart_config,
             "data": response_data,  # records (list of dicts)
             "sql": state.get("sql", ""),
+            "message": _compose_message(state, None),
         },
     }
 
@@ -1098,35 +1176,65 @@ def general_answer_node(state: GraphState) -> GraphState:
     return {"final_response": {"type": "error", "message": result["error"]}}
 
 
+def sql_assumptions(sql: str | None) -> str:
+    """Return the text of the generator's leading '-- Assumptions:' comment."""
+    for line in (sql or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("--"):
+            break
+        text = stripped.lstrip("-").strip()
+        if text.lower().startswith("assumptions:"):
+            assumptions = text.split(":", 1)[1].strip()
+            return "" if assumptions.lower().rstrip(".") == "none" else assumptions
+    return ""
+
+
+def _compose_message(state: GraphState, lead: str | None) -> str | None:
+    """Join the answer lead, the assumptions applied, and display notes."""
+    parts = [lead] if lead else []
+    assumptions = sql_assumptions(state.get("sql"))
+    if assumptions:
+        parts.append(f"_Assumptions: {assumptions}_")
+    if state.get("display_intent") == "chart" and state.get("display") != "chart":
+        reason = state.get("display_reason")
+        if reason:
+            parts.append(f"Showing a table instead of a chart because {reason}.")
+    return "\n\n".join(parts) or None
+
+
 def build_data_response_node(state: GraphState) -> GraphState:
     """Node: Package SQL result as final response."""
     data = state.get("data")  # Already list of dicts (records)
     sql = state.get("sql", "")
 
-    if data is not None:
+    if data is None:
+        return {
+            "final_response": {
+                "type": "error",
+                "message": f"Query failed: {state.get('sql_error', 'Unknown error')}",
+            }
+        }
+
+    if len(data) == 0:
         # A zero-row result is a SUCCESS, not an error — but "Here are the query
         # results." with an empty table below it reads as a broken app. Say so
         # explicitly instead, so the user knows the filter matched nothing.
-        row_count = 0 if data is None else len(data)
-        if row_count == 0:
-            return {
-                "final_response": {
-                    "type": "data",
-                    "data": data,
-                    "sql": sql,
-                    "message": (
-                        "The query ran successfully but returned no rows — "
-                        "nothing in the data matches those filters."
-                    ),
-                }
-            }
-        return {"final_response": {"type": "data", "data": data, "sql": sql}}
-    return {
-        "final_response": {
-            "type": "error",
-            "message": f"Query failed: {state.get('sql_error', 'Unknown error')}",
-        }
-    }
+        lead = (
+            "The query ran successfully but returned no rows — "
+            "nothing in the data matches those filters."
+        )
+    elif state.get("display") == "value":
+        lead = format_single_value(data)
+    else:
+        lead = None
+
+    response: dict[str, Any] = {"type": "data", "data": data, "sql": sql}
+    message = _compose_message(state, lead)
+    if message:
+        response["message"] = message
+    return {"final_response": response}
 
 
 def increment_retry_node(state: GraphState) -> GraphState:
@@ -1142,7 +1250,9 @@ def increment_retry_node(state: GraphState) -> GraphState:
 def route_after_router(state: GraphState) -> str:
     """After router: which path to take?"""
     route = state.get("route", "")
-    if route in ("sql_query", "sql_and_chart"):
+    if route in ("sql_query", "sql_and_chart", "follow_up"):
+        # follow_up re-queries with the conversation history in the SQL prompt;
+        # general_answer has no database access and would invent the numbers.
         return "sql_path"
     elif route == "schema_info":
         return "schema_info"
@@ -1176,9 +1286,10 @@ def route_after_execute(state: GraphState) -> str:
 
 
 def route_after_verify(state: GraphState) -> str:
-    """After verification: need chart or return data?"""
-    route = state.get("route", "")
-    if route == "sql_and_chart":
+    """After verification: regenerate, chart, or return data?"""
+    if state.get("sql_error"):
+        return "retry"
+    if state.get("display") == "chart":
         return "chart"
     return "data_response"
 
@@ -1266,6 +1377,7 @@ def build_graph() -> StateGraph:
         "verify_result",
         route_after_verify,
         {
+            "retry": "increment_retry",
             "chart": "chart_approval",  ### HITL — human approves chart
             "data_response": "build_data_response",
         },
@@ -1308,8 +1420,13 @@ class GraphOrchestrator:
         user_message_id: str | None = None,
         llm_provider: str | None = None,
         llm_model: str | None = None,
+        display_override: str | None = None,
     ):
         self.user_question = user_question
+        # Explicit table/chart toggle from the UI; beats the router's guess.
+        self.display_override = (
+            display_override if display_override in ("chart", "table") else ""
+        )
         # ### HITL — thread_id enables state persistence for interrupt/resume
         self.thread_id = thread_id or f"thread-{id(self)}"
         # Optional DB connection that scopes this run to a real schema graph.
@@ -1351,6 +1468,10 @@ class GraphOrchestrator:
             "hitl_triggered": False,
             "hitl_type": "",
             "chart_suggestion": {},
+            "display_intent": self.display_override,
+            "display": "",
+            "display_reason": "",
+            "result_check_done": False,
         }
 
         config = {"configurable": {"thread_id": self.thread_id}}

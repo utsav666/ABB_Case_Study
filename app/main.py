@@ -174,6 +174,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="Workspace ID for conversation persistence.",
     )
+    display: str | None = Field(
+        default=None,
+        description="Optional 'table' or 'chart' to override the automatic display.",
+    )
 
     @model_validator(mode="after")
     def normalize_question(self) -> ChatRequest:
@@ -903,7 +907,11 @@ async def chat(
     connection_id: str | None = None
     thread_id_from_client: str | None = None
     workspace_id: str | None = None
+    display_override: str | None = None
     if isinstance(body_payload, dict):
+        raw_display = body_payload.get("display")
+        if raw_display in ("chart", "table"):
+            display_override = raw_display
         raw_connection_id = body_payload.get("connection_id")
         if isinstance(raw_connection_id, str) and raw_connection_id.strip():
             connection_id = raw_connection_id.strip()
@@ -1028,6 +1036,7 @@ async def chat(
                     user_message_id=user_message_id,
                     llm_provider=llm_provider,
                     llm_model=llm_model,
+                    display_override=display_override,
                 ).executor()
 
         result = await asyncio.to_thread(_run_orchestrator)
